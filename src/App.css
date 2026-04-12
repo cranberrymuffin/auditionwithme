@@ -279,3 +279,18 @@
   opacity: 0.25;
   cursor: not-allowed;
 }
+
+.back-btn {
+  background: transparent;
+  border: none;
+  color: #555;
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: color 0.15s;
+}
+
+.back-btn:hover {
+  color: #888;
+}
