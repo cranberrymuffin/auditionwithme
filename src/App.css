@@ -202,3 +202,80 @@
   word-break: break-word;
   background: #0f0f0f;
 }
+
+.steps-empty {
+  font-size: 0.9rem;
+  color: #555;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.step-viewer {
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #141414;
+}
+
+.step-viewer__counter {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.8rem;
+  color: #555;
+  border-bottom: 1px solid #2a2a2a;
+  letter-spacing: 0.03em;
+}
+
+.step-viewer__content {
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 8rem;
+}
+
+.step-viewer__nonverbal {
+  margin: 0;
+  font-family: "Georgia", serif;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #666;
+  line-height: 1.6;
+}
+
+.step-viewer__verbal {
+  margin: 0.75rem 0 0;
+  font-family: "Georgia", serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f0f0f0;
+  line-height: 1.5;
+}
+
+.step-viewer__controls {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #2a2a2a;
+}
+
+.step-btn {
+  background: transparent;
+  border: 1px solid #333;
+  color: #ccc;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.step-btn:hover:not(:disabled) {
+  border-color: #666;
+  color: #fff;
+}
+
+.step-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
