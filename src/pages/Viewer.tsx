@@ -157,9 +157,8 @@ export default function Viewer() {
 
       <div className="viewer-page">
         <header className="viewer-header">
-          <span className="viewer-header__brand">AuditionWithMe</span>
-          <button className="viewer-home-btn" onClick={() => navigate("/")}>
-            ← Home
+          <button className="viewer-header__brand" onClick={() => navigate("/")}>
+            AuditionWithMe
           </button>
         </header>
 
