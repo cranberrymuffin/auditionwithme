@@ -308,7 +308,7 @@
 
 .home-hero {
   width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   background: #2d3f5a;
   display: flex;
   flex-direction: column;
