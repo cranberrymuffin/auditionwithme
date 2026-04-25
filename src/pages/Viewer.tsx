@@ -116,9 +116,42 @@ export default function Viewer() {
   return (
     <>
       {isLoading && (
-        <div className="loading-state">
-          <div className="spinner" />
-          <p>{loadingText}</p>
+        <div className="home-hero viewer-loading">
+          <div className="home-crescent" />
+          <div className="home-text">
+            <h1 className="home-title">
+              {loading ? (
+                <>READING<br />YOUR SCRIPT</>
+              ) : (
+                <>ALMOST<br />READY</>
+              )}
+            </h1>
+            <p className="home-subtitle">{loadingText}</p>
+          </div>
+          <div className="home-hills">
+            <svg
+              className="home-hill home-hill--back"
+              viewBox="0 0 1440 300"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
+                fill="rgba(232,117,106,0.55)"
+              />
+            </svg>
+            <svg
+              className="home-hill home-hill--front"
+              viewBox="0 0 1440 300"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
+                fill="#E8756A"
+              />
+            </svg>
+          </div>
         </div>
       )}
 
