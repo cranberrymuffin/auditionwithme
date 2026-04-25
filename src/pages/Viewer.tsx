@@ -172,16 +172,19 @@ export default function Viewer() {
 
           {currentStep && (
             <div className="viewer-step">
-              <p className="viewer-step__counter">
-                Step {currentStepIndex + 1} of {steps.length}
-              </p>
-              <div className="viewer-step__content">
-                {currentStep.nonVerbalLines.map((line, i) => (
-                  <p key={i} className="viewer-step__nonverbal">{line}</p>
-                ))}
-                <p className="viewer-step__verbal">{currentStep.verbalLine}</p>
+              <div className="viewer-step__header">
+                <p className="viewer-step__speaker">{currentStep.speaker || "—"}</p>
               </div>
-              <div className="viewer-step__controls">
+              <div className="viewer-step__content">
+                {currentStep.content.map((line, i) =>
+                  line.kind === "verbal" ? (
+                    <p key={i} className="viewer-step__verbal">{line.text}</p>
+                  ) : (
+                    <p key={i} className="viewer-step__nonverbal">{line.text}</p>
+                  )
+                )}
+              </div>
+              <div className="viewer-step__footer">
                 <button
                   className="viewer-btn"
                   onClick={goPrev}
@@ -189,6 +192,9 @@ export default function Viewer() {
                 >
                   ← Prev
                 </button>
+                <p className="viewer-step__counter">
+                  Step {currentStepIndex + 1} of {steps.length}
+                </p>
                 <button
                   className="viewer-btn"
                   onClick={goNext}

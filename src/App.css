@@ -509,7 +509,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  justify-content: space-between;
   max-width: 640px;
   width: 100%;
   box-sizing: border-box;
@@ -518,7 +518,7 @@
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 20px;
-  padding: 2.5rem 2rem;
+  overflow: hidden;
 }
 
 @media (max-width: 480px) {
@@ -527,15 +527,78 @@
   }
 
   .viewer-step {
-    padding: 1.75rem 1.25rem;
+    height: 75vh;
   }
 
-  .viewer-header {
-    order: 3;
-    justify-content: center;
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 1rem;
+  .viewer-page {
+    position: relative;
   }
+
+  .viewer-page .home-hills {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+}
+
+.viewer-step__header {
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.viewer-step__speaker {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.viewer-step__content {
+  width: 100%;
+  flex: 1;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  overflow-y: auto;
+}
+
+.viewer-step__verbal {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.viewer-step__nonverbal {
+  margin: 0;
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.viewer-step__footer {
+  width: 100%;
+  padding: 1rem 5%;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .viewer-step__counter {
@@ -544,34 +607,6 @@
   color: rgba(255, 255, 255, 0.4);
   letter-spacing: 0.1em;
   text-transform: uppercase;
-}
-
-.viewer-step__content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.viewer-step__nonverbal {
-  margin: 0;
-  font-family: "Georgia", serif;
-  font-style: italic;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.5);
-  line-height: 1.6;
-}
-
-.viewer-step__verbal {
-  margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: white;
-  line-height: 1.3;
-}
-
-.viewer-step__controls {
-  display: flex;
-  gap: 1rem;
 }
 
 .viewer-btn {
