@@ -113,6 +113,33 @@ export default function Viewer() {
     ? "Claude is reading your script…"
     : "Preparing step-through view…";
 
+  const hills = (
+    <div className="home-hills">
+      <svg
+        className="home-hill home-hill--back"
+        viewBox="0 0 1440 300"
+        preserveAspectRatio="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
+          fill="rgba(232,117,106,0.55)"
+        />
+      </svg>
+      <svg
+        className="home-hill home-hill--front"
+        viewBox="0 0 1440 300"
+        preserveAspectRatio="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
+          fill="#E8756A"
+        />
+      </svg>
+    </div>
+  );
+
   return (
     <>
       {isLoading && (
@@ -120,93 +147,63 @@ export default function Viewer() {
           <div className="home-crescent" />
           <div className="home-text">
             <h1 className="home-title">
-              {loading ? (
-                <>READING<br />YOUR SCRIPT</>
-              ) : (
-                <>ALMOST<br />READY</>
-              )}
+              {loading ? <>READING<br />YOUR SCRIPT</> : <>ALMOST<br />READY</>}
             </h1>
             <p className="home-subtitle">{loadingText}</p>
           </div>
-          <div className="home-hills">
-            <svg
-              className="home-hill home-hill--back"
-              viewBox="0 0 1440 300"
-              preserveAspectRatio="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
-                fill="rgba(232,117,106,0.55)"
-              />
-            </svg>
-            <svg
-              className="home-hill home-hill--front"
-              viewBox="0 0 1440 300"
-              preserveAspectRatio="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
-                fill="#E8756A"
-              />
-            </svg>
-          </div>
+          {hills}
         </div>
       )}
 
-      {error && (
-        <div className="error-message">
-          {error}
-          <button className="back-btn" onClick={() => navigate("/")}>
-            Try again
+      <div className="viewer-page">
+        <header className="viewer-header">
+          <span className="viewer-header__brand">AuditionWithMe</span>
+          <button className="viewer-home-btn" onClick={() => navigate("/")}>
+            ← Home
           </button>
-        </div>
-      )}
+        </header>
 
-      {stepsError && <div className="error-message">{stepsError}</div>}
+        <div className="viewer-body">
+          {error && <p className="viewer-error">{error}</p>}
+          {stepsError && <p className="viewer-error">{stepsError}</p>}
 
-      {!isLoading && !error && steps.length === 0 && !stepsError && (
-        <div className="steps-empty">No spoken lines detected in this script.</div>
-      )}
+          {!isLoading && !error && steps.length === 0 && !stepsError && (
+            <p className="viewer-empty">No spoken lines detected in this script.</p>
+          )}
 
-      {currentStep && (
-        <div className="step-viewer">
-          <div className="step-viewer__counter">
-            Step {currentStepIndex + 1} of {steps.length}
-          </div>
-          <div className="step-viewer__content">
-            {currentStep.nonVerbalLines.map((line, i) => (
-              <p key={i} className="step-viewer__nonverbal">
-                {line}
+          {currentStep && (
+            <div className="viewer-step">
+              <p className="viewer-step__counter">
+                Step {currentStepIndex + 1} of {steps.length}
               </p>
-            ))}
-            <p className="step-viewer__verbal">{currentStep.verbalLine}</p>
-          </div>
-          <div className="step-viewer__controls">
-            <button
-              className="step-btn"
-              onClick={goPrev}
-              disabled={currentStepIndex === 0}
-            >
-              ← Prev
-            </button>
-            <button
-              className="step-btn"
-              onClick={goNext}
-              disabled={currentStepIndex >= steps.length - 1}
-            >
-              Next →
-            </button>
-          </div>
+              <div className="viewer-step__content">
+                {currentStep.nonVerbalLines.map((line, i) => (
+                  <p key={i} className="viewer-step__nonverbal">{line}</p>
+                ))}
+                <p className="viewer-step__verbal">{currentStep.verbalLine}</p>
+              </div>
+              <div className="viewer-step__controls">
+                <button
+                  className="viewer-btn"
+                  onClick={goPrev}
+                  disabled={currentStepIndex === 0}
+                >
+                  ← Prev
+                </button>
+                <button
+                  className="viewer-btn"
+                  onClick={goNext}
+                  disabled={currentStepIndex >= steps.length - 1}
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
 
-      {!isLoading && (
-        <button className="back-btn" onClick={() => navigate("/")}>
-          ← Upload new script
-        </button>
-      )}
+        {hills}
+      </div>
     </>
   );
 }

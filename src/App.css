@@ -456,3 +456,132 @@
   min-height: unset;
   z-index: 100;
 }
+
+.viewer-page {
+  width: 100%;
+  height: 100vh;
+  background: #2d3f5a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: white;
+}
+
+.viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 2rem;
+  flex-shrink: 0;
+}
+
+.viewer-header__brand {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.viewer-home-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: white;
+  border-radius: 50px;
+  padding: 0.5rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.viewer-home-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.viewer-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  z-index: 1;
+}
+
+.viewer-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 640px;
+  width: 100%;
+}
+
+.viewer-step__counter {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.viewer-step__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.viewer-step__nonverbal {
+  margin: 0;
+  font-family: "Georgia", serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+}
+
+.viewer-step__verbal {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1.3;
+}
+
+.viewer-step__controls {
+  display: flex;
+  gap: 1rem;
+}
+
+.viewer-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 8px;
+  padding: 0.6rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.viewer-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.viewer-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.viewer-error {
+  margin: 0;
+  color: #f08080;
+  font-size: 0.95rem;
+}
+
+.viewer-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.95rem;
+}

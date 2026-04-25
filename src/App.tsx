@@ -5,11 +5,12 @@ import Viewer from "./pages/Viewer";
 
 function Layout() {
   const location = useLocation();
-  const isHome = location.pathname === "/";
+  const isFullPage =
+    location.pathname === "/" || location.pathname === "/viewer";
 
   return (
-    <div className={`app${isHome ? " home-route" : ""}`}>
-      {!isHome && (
+    <div className={`app${isFullPage ? " home-route" : ""}`}>
+      {!isFullPage && (
         <header className="app-header">
           <h1>AuditionWithMe</h1>
           <p>Upload your sides and get a clean, analysis-ready script</p>
