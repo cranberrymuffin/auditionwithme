@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import type { Step } from "../types";
 
 function normalizeSpeaker(name: string): string {
@@ -354,9 +354,12 @@ export default function Viewer() {
 
       <div className="viewer-page">
         <header className="viewer-header">
-          <button className="viewer-header__brand" onClick={() => navigate("/")}>
-            AuditionWithMe
-          </button>
+          <div className="viewer-header__left">
+            <button className="viewer-header__brand" onClick={() => navigate("/")}>
+              AuditionWithMe
+            </button>
+            <Link to="/about" className="site-nav__link">About</Link>
+          </div>
           {selectedRole !== null && speakers.length > 0 && (
             <button
               className="viewer-header__role-btn"

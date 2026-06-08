@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import SiteNav from "../components/SiteNav";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function Home() {
 
   return (
     <div className="home-hero">
-      <div className="home-crescent" />
+      <SiteNav />
 
       <div className="home-text">
         <h1 className="home-title">
