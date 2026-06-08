@@ -31,9 +31,11 @@ Your job:
 8. Do not invent, rewrite, summarize, translate, or reorder any text. Copy lines verbatim.
 9. Do not drop any non-speaker line. Every non-empty, non-speaker line must appear in content.
 10. If the script has zero verbal lines, return an empty steps array.
+11. Also produce a top-level "characters" array listing every unique speaking character exactly once, using their canonical name — strip continuity suffixes such as (CONT'D), (V.O.), (O.S.), (O.C.), (PRE-LAP), etc. Order by first appearance.
 
 Output format: return ONLY valid JSON, no prose, no markdown fences:
 {
+  "characters": ["CHARACTER A", "CHARACTER B"],
   "steps": [
     {
       "speaker": "<character name or empty string>",
@@ -85,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     type RawStep = { speaker: string; verbalLine: string; content: { kind: string; text: string }[] };
-    let parsed: { steps?: RawStep[] };
+    let parsed: { characters?: string[]; steps?: RawStep[] };
     try {
       parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
     } catch {
@@ -97,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Step parsing failed" });
     }
 
-    return res.status(200).json({ steps: parsed.steps });
+    return res.status(200).json({ characters: parsed.characters ?? [], steps: parsed.steps });
   } catch (err) {
     console.error("parse-steps error:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Step parsing failed" });
