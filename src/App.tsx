@@ -3,13 +3,15 @@ import "./App.css";
 import Home from "./pages/Home";
 import Viewer from "./pages/Viewer";
 import About from "./pages/About";
+import Pricing from "./pages/Pricing";
 
 function Layout() {
   const location = useLocation();
   const isFullPage =
     location.pathname === "/" ||
     location.pathname === "/viewer" ||
-    location.pathname === "/about";
+    location.pathname === "/about" ||
+    location.pathname === "/pricing";
 
   return (
     <div className={`app${isFullPage ? " home-route" : ""}`}>
@@ -24,6 +26,7 @@ function Layout() {
           <Route path="/" element={<Home />} />
           <Route path="/viewer" element={<Viewer />} />
           <Route path="/about" element={<About />} />
+          <Route path="/pricing" element={<Pricing />} />
         </Routes>
       </main>
     </div>
