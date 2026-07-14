@@ -1,31 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { fetchVoices } from "./_elevenlabs.js";
 
 const client = new Anthropic();
-
-const VOICES = [
-  { id: "CwhRBWXzGAHq8TQ4Fs17", name: "Roger", gender: "male", age: "middle_aged", accent: "american", description: "Laid-Back, Casual, Resonant" },
-  { id: "EXAVITQu4vr4xnSDxMaL", name: "Sarah", gender: "female", age: "young", accent: "american", description: "Mature, Reassuring, Confident" },
-  { id: "FGY2WhTYpPnrIDTdsKH5", name: "Laura", gender: "female", age: "young", accent: "american", description: "Enthusiast, Quirky Attitude" },
-  { id: "IKne3meq5aSn9XLyUdCD", name: "Charlie", gender: "male", age: "young", accent: "australian", description: "Deep, Confident, Energetic" },
-  { id: "JBFqnCBsd6RMkjVDRZzb", name: "George", gender: "male", age: "middle_aged", accent: "british", description: "Warm, Captivating Storyteller" },
-  { id: "N2lVS1w4EtoT3dr4eOWO", name: "Callum", gender: "male", age: "middle_aged", accent: "american", description: "Husky Trickster" },
-  { id: "SAz9YHcvj6GT2YYXdXww", name: "River", gender: "neutral", age: "middle_aged", accent: "american", description: "Relaxed, Neutral, Informative" },
-  { id: "SOYHLrjzK2X1ezoPC6cr", name: "Harry", gender: "male", age: "young", accent: "american", description: "Fierce Warrior" },
-  { id: "TX3LPaxmHKxFdv7VOQHJ", name: "Liam", gender: "male", age: "young", accent: "american", description: "Energetic, Social Media Creator" },
-  { id: "Xb7hH8MSUJpSbSDYk0k2", name: "Alice", gender: "female", age: "middle_aged", accent: "british", description: "Clear, Engaging Educator" },
-  { id: "XrExE9yKIg1WjnnlVkGX", name: "Matilda", gender: "female", age: "middle_aged", accent: "american", description: "Knowledgeable, Professional" },
-  { id: "bIHbv24MWmeRgasZH58o", name: "Will", gender: "male", age: "young", accent: "american", description: "Relaxed Optimist" },
-  { id: "cgSgspJ2msm6clMCkdW9", name: "Jessica", gender: "female", age: "young", accent: "american", description: "Playful, Bright, Warm" },
-  { id: "cjVigY5qzO86Huf0OWal", name: "Eric", gender: "male", age: "middle_aged", accent: "american", description: "Smooth, Trustworthy" },
-  { id: "hpp4J3VqNfWAUOO0d1Us", name: "Bella", gender: "female", age: "middle_aged", accent: "american", description: "Professional, Bright, Warm" },
-  { id: "iP95p4xoKVk53GoZ742B", name: "Chris", gender: "male", age: "middle_aged", accent: "american", description: "Charming, Down-to-Earth" },
-  { id: "nPczCjzI2devNBz1zQrb", name: "Brian", gender: "male", age: "middle_aged", accent: "american", description: "Deep, Resonant and Comforting" },
-  { id: "onwK4e9ZLuTAKqWW03F9", name: "Daniel", gender: "male", age: "middle_aged", accent: "british", description: "Steady Broadcaster" },
-  { id: "pFZP5JQG7iQjIQuC4Bku", name: "Lily", gender: "female", age: "middle_aged", accent: "british", description: "Velvety Actress" },
-  { id: "pNInz6obpgDQGcFmaJgB", name: "Adam", gender: "male", age: "middle_aged", accent: "american", description: "Dominant, Firm" },
-  { id: "pqHfZKP75CvOlQylNhV4", name: "Bill", gender: "male", age: "old", accent: "american", description: "Wise, Mature, Balanced" },
-];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -34,6 +11,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
+  }
+  const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+  if (!elevenLabsKey) {
+    return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
   const { characters } = req.body as {
@@ -44,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "No characters provided" });
   }
 
+  const VOICES = await fetchVoices(elevenLabsKey);
   const voiceList = VOICES.map(
     (v) => `- ${v.name} (${v.gender}, ${v.age}, ${v.accent}): ${v.description} [id: ${v.id}]`
   ).join("\n");

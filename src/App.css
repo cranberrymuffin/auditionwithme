@@ -682,6 +682,36 @@
   gap: 1.5rem;
 }
 
+/* ── Voice picker ── */
+
+.voice-picker__row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.voice-picker__name {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.voice-picker__select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.voice-picker__select option {
+  background: #2d3f5a;
+  color: white;
+}
+
 /* ── About page ── */
 
 .about-page {
@@ -827,24 +857,43 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* ── Viewer header role chip ── */
+/* ── Voice gate (mandatory, pre-playback) ── */
 
-.viewer-header__role-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+.voice-gate__list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  max-height: 42vh;
+  overflow-y: auto;
+  margin-bottom: 1.75rem;
+  text-align: left;
+}
+
+.voice-gate__start {
+  background: white;
+  color: #1a1a1a;
+  border: none;
   border-radius: 50px;
-  padding: 0.4rem 1rem;
-  font-size: 0.75rem;
+  padding: 0.9rem 2.25rem;
+  font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.viewer-header__role-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
+.voice-gate__start:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+}
+
+.voice-gate__start:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── Your line styling ── */

@@ -2,6 +2,19 @@ import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import type { Step } from "../types";
 
+type Voice = {
+  id: string;
+  name: string;
+  gender: string;
+  age: string;
+  accent: string;
+  description: string;
+};
+
+function describeVoice(v: Voice): string {
+  return [v.gender, v.age, v.accent].filter(Boolean).join(" · ") + (v.description ? ` — ${v.description}` : "");
+}
+
 function normalizeSpeaker(name: string): string {
   return name
     .replace(/\s*\(cont['']?d\.?\)/gi, "")
@@ -50,6 +63,8 @@ export default function Viewer() {
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [characters, setCharacters] = useState<string[]>([]);
   const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
+  const [voices, setVoices] = useState<Voice[]>([]);
+  const [voicesConfirmed, setVoicesConfirmed] = useState(false);
   const [matchedWordCount, setMatchedWordCount] = useState(0);
   const stepsAbortRef = useRef<AbortController | null>(null);
   const didRun = useRef(false);
@@ -58,7 +73,14 @@ export default function Viewer() {
 
   // Derived values used in effect deps — must be computed before effects
   const currentStep = steps[currentStepIndex];
-  const isMyLine = !!selectedRole && normalizeSpeaker(currentStep?.speaker ?? "") === selectedRole;
+  const isLoading = loading || stepsLoading;
+  const speakers = characters;
+  const voiceableSpeakers = speakers.filter(s => s !== selectedRole);
+  // Block playback until every other character has a voice assigned
+  const showVoiceGate =
+    !isLoading && !error && steps.length > 0 && selectedRole !== null && !voicesConfirmed && voiceableSpeakers.length > 0;
+  const isMyLine =
+    !!selectedRole && !showVoiceGate && normalizeSpeaker(currentStep?.speaker ?? "") === selectedRole;
 
   useEffect(() => {
     if (!file) {
@@ -155,9 +177,20 @@ export default function Viewer() {
       body: JSON.stringify({ characters: characterList }),
     })
       .then(res => res.json())
-      .then(data => { if (data.voices) setCharacterVoices(data.voices); })
+      .then(data => {
+        // Merge under any manual picks the user already made while this was in flight
+        if (data.voices) setCharacterVoices(prev => ({ ...data.voices, ...prev }));
+      })
       .catch(err => console.error("Character voice matching error:", err));
   }, [steps]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load the full voice catalog once, so the user can override auto-assigned voices
+  useEffect(() => {
+    fetch("/api/voices")
+      .then(res => res.json())
+      .then(data => { if (data.voices) setVoices(data.voices); })
+      .catch(err => console.error("Voice list fetch error:", err));
+  }, []);
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -172,7 +205,7 @@ export default function Viewer() {
 
   // TTS: auto-play other characters' lines
   useEffect(() => {
-    if (!steps.length || selectedRole === null) return;
+    if (!steps.length || selectedRole === null || showVoiceGate) return;
     const step = steps[currentStepIndex];
     if (!step?.verbalLine?.trim()) return;
     if (selectedRole && step.speaker === selectedRole) return;
@@ -208,7 +241,7 @@ export default function Viewer() {
       controller.abort();
       stopAudio();
     };
-  }, [currentStepIndex, steps, selectedRole, characterVoices]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentStepIndex, steps, selectedRole, characterVoices, showVoiceGate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Word tracking: browser SpeechRecognition with monotonic count (never regresses)
   useEffect(() => {
@@ -272,13 +305,27 @@ export default function Viewer() {
     setCurrentStepIndex((i) => Math.max(i - 1, 0));
   };
 
-  const isLoading = loading || stepsLoading;
   const loadingText = loading
     ? "Claude is reading your script…"
     : "Preparing step-through view…";
 
-  const speakers = characters;
   const showRolePicker = !isLoading && !error && steps.length > 0 && selectedRole === null && speakers.length > 0;
+
+  const chooseRole = (role: string) => {
+    setSelectedRole(role);
+    setVoicesConfirmed(false);
+  };
+
+  const startReading = () => {
+    setCharacterVoices(prev => {
+      const next = { ...prev };
+      voiceableSpeakers.forEach(speaker => {
+        if (!next[speaker] && voices[0]) next[speaker] = voices[0].id;
+      });
+      return next;
+    });
+    setVoicesConfirmed(true);
+  };
 
   const hills = (
     <div className="home-hills">
@@ -335,7 +382,7 @@ export default function Viewer() {
                 <button
                   key={speaker}
                   className="role-picker__btn"
-                  onClick={() => setSelectedRole(speaker)}
+                  onClick={() => chooseRole(speaker)}
                 >
                   {speaker}
                 </button>
@@ -343,9 +390,48 @@ export default function Viewer() {
             </div>
             <button
               className="role-picker__skip"
-              onClick={() => setSelectedRole("")}
+              onClick={() => chooseRole("")}
             >
               Just watch
+            </button>
+          </div>
+          {hills}
+        </div>
+      )}
+
+      {showVoiceGate && (
+        <div className="role-picker">
+          <div className="home-crescent" />
+          <div className="role-picker__content">
+            <h2 className="role-picker__title">
+              CAST THE<br />OTHER<br />VOICES
+            </h2>
+            <p className="role-picker__subtitle">Choose a voice for each character before you start</p>
+            <div className="voice-gate__list">
+              {voiceableSpeakers.map(speaker => (
+                <div className="voice-picker__row" key={speaker}>
+                  <span className="voice-picker__name">{speaker}</span>
+                  <select
+                    className="voice-picker__select"
+                    value={characterVoices[speaker] ?? voices[0]?.id ?? ""}
+                    onChange={(e) =>
+                      setCharacterVoices(prev => ({ ...prev, [speaker]: e.target.value }))
+                    }
+                  >
+                    {voices.length === 0 && <option value="">Loading voices…</option>}
+                    {voices.map(v => (
+                      <option key={v.id} value={v.id}>{describeVoice(v)}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <button
+              className="voice-gate__start"
+              onClick={startReading}
+              disabled={voices.length === 0}
+            >
+              Start Reading
             </button>
           </div>
           {hills}
@@ -360,14 +446,6 @@ export default function Viewer() {
             </button>
             <Link to="/about" className="site-nav__link">About</Link>
           </div>
-          {selectedRole !== null && speakers.length > 0 && (
-            <button
-              className="viewer-header__role-btn"
-              onClick={() => setSelectedRole(null)}
-            >
-              {selectedRole || "Watching"}
-            </button>
-          )}
         </header>
 
         <div className="viewer-body">
