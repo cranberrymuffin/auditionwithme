@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/analyze.ts": {
+    "api/parse-script.ts": {
       "maxDuration": 60
     }
   }

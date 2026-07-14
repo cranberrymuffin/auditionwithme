@@ -55,9 +55,7 @@ export default function Viewer() {
   const file: File | null = location.state?.file ?? null;
 
   const [loading, setLoading] = useState(false);
-  const [stepsLoading, setStepsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [stepsError, setStepsError] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
@@ -66,19 +64,17 @@ export default function Viewer() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
   const [matchedWordCount, setMatchedWordCount] = useState(0);
-  const stepsAbortRef = useRef<AbortController | null>(null);
   const didRun = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
 
   // Derived values used in effect deps — must be computed before effects
   const currentStep = steps[currentStepIndex];
-  const isLoading = loading || stepsLoading;
   const speakers = characters;
   const voiceableSpeakers = speakers.filter(s => s !== selectedRole);
   // Block playback until every other character has a voice assigned
   const showVoiceGate =
-    !isLoading && !error && steps.length > 0 && selectedRole !== null && !voicesConfirmed && voiceableSpeakers.length > 0;
+    !loading && !error && steps.length > 0 && selectedRole !== null && !voicesConfirmed && voiceableSpeakers.length > 0;
   const isMyLine =
     !!selectedRole && !showVoiceGate && normalizeSpeaker(currentStep?.speaker ?? "") === selectedRole;
 
@@ -90,9 +86,16 @@ export default function Viewer() {
     if (didRun.current) return;
     didRun.current = true;
 
+    // No AbortController here on purpose: this fetch is a single, non-restartable
+    // ~30-60s call. Wiring an abort signal in before the fetch starts means React
+    // StrictMode's dev-mode double-invoke (mount -> cleanup -> mount again) aborts
+    // it within the same tick, and the didRun guard then blocks any retry — the
+    // request silently dies before it can ever complete. The original two-call
+    // version avoided this because its abort controller was only created after the
+    // first call had already resolved, by which point StrictMode's synchronous
+    // cleanup had already run and found nothing to abort.
     const run = async () => {
       setLoading(true);
-      let scriptText = "";
 
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
@@ -105,53 +108,28 @@ export default function Viewer() {
           reader.readAsDataURL(file);
         });
 
-        const res = await fetch("/api/analyze", {
+        const res = await fetch("/api/parse-script", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pdfData: base64 }),
         });
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Analysis failed");
-        scriptText = data.script;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-        setLoading(false);
-        return;
-      }
+        if (!res.ok) throw new Error(data.error || "Script parsing failed");
 
-      setLoading(false);
-
-      const controller = new AbortController();
-      stepsAbortRef.current = controller;
-      setStepsLoading(true);
-
-      try {
-        const stepsRes = await fetch("/api/parse-steps", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scriptText }),
-          signal: controller.signal,
-        });
-        if (!stepsRes.ok) throw new Error("Failed to parse steps");
-        const parsed = await stepsRes.json();
-        const parsedSteps: Step[] = parsed.steps ?? [];
-        const parsedCharacters: string[] = parsed.characters ?? [];
+        const parsedSteps: Step[] = data.steps ?? [];
+        const parsedCharacters: string[] = data.characters ?? [];
         setSteps(parsedSteps);
         setCharacters(parsedCharacters);
         if (parsedCharacters.length === 0) setSelectedRole("");
-      } catch (e) {
-        if (e instanceof Error && e.name === "AbortError") return;
-        console.error("parse-steps error:", e);
-        setStepsError("Step-through view unavailable.");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
-        setStepsLoading(false);
+        setLoading(false);
       }
     };
 
     run();
-
-    return () => stepsAbortRef.current?.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Reset word tracking when step changes
@@ -305,11 +283,9 @@ export default function Viewer() {
     setCurrentStepIndex((i) => Math.max(i - 1, 0));
   };
 
-  const loadingText = loading
-    ? "Claude is reading your script…"
-    : "Preparing step-through view…";
+  const loadingText = "Claude is reading your script…";
 
-  const showRolePicker = !isLoading && !error && steps.length > 0 && selectedRole === null && speakers.length > 0;
+  const showRolePicker = !loading && !error && steps.length > 0 && selectedRole === null && speakers.length > 0;
 
   const chooseRole = (role: string) => {
     setSelectedRole(role);
@@ -356,13 +332,11 @@ export default function Viewer() {
 
   return (
     <>
-      {isLoading && (
+      {loading && (
         <div className="home-hero viewer-loading">
           <div className="home-crescent" />
           <div className="home-text">
-            <h1 className="home-title">
-              {loading ? <>READING<br />YOUR SCRIPT</> : <>ALMOST<br />READY</>}
-            </h1>
+            <h1 className="home-title">READING<br />YOUR SCRIPT</h1>
             <p className="home-subtitle">{loadingText}</p>
           </div>
           {hills}
@@ -450,9 +424,8 @@ export default function Viewer() {
 
         <div className="viewer-body">
           {error && <p className="viewer-error">{error}</p>}
-          {stepsError && <p className="viewer-error">{stepsError}</p>}
 
-          {!isLoading && !error && steps.length === 0 && !stepsError && (
+          {!loading && !error && steps.length === 0 && (
             <p className="viewer-empty">No spoken lines detected in this script.</p>
           )}
 

@@ -1,0 +1,152 @@
+import Anthropic from "@anthropic-ai/sdk";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "20mb",
+    },
+  },
+};
+
+const client = new Anthropic();
+
+const SYSTEM_PROMPT = `You are a script processing assistant for an actor's audition practice tool. You will be given a PDF containing audition sides or a script. It may include annotations, strikethroughs, margin notes, highlighted sections, and other markings made by directors, casting agents, or actors.
+
+Your job has two parts.
+
+PART 1 — Produce a clean script.
+1. Identify which lines are ACTIVE — ignore any lines that are struck through or crossed out.
+2. Extract all character names and their dialogue.
+3. Include relevant stage directions.
+4. Note any important annotations that affect how lines should be performed by folding them into the stage directions or dialogue context.
+The clean script should be the definitive version of the script the actor should use for their audition, formatted as:
+
+CHARACTER NAME
+Their dialogue here.
+
+(stage direction)
+
+Next lines continue...
+
+PART 2 — Split the clean script from Part 1 into an ordered sequence of "steps".
+
+Definitions:
+- A VERBAL line is spoken dialogue (what a character says out loud).
+- A NON-VERBAL line is anything not spoken: stage directions, action notes, parentheticals, sound cues, transitions, etc.
+- A SPEAKER label is a character name that precedes dialogue (e.g. "JOHN" or "MARY (V.O.)").
+
+Steps rules:
+1. Walk the clean script top to bottom.
+2. Each verbal line becomes exactly one step.
+3. For each step, identify the speaker — the character name label immediately before the dialogue. If no speaker label is present, use "".
+4. For each step, build a "content" array of every line that belongs to this step, in their original script order. Each element is either:
+   - { "kind": "verbal", "text": "<verbatim spoken line>" }
+   - { "kind": "nonverbal", "text": "<verbatim non-verbal line>" }
+5. Assign non-verbal lines to the step they are most semantically related to. A non-verbal line between two verbal lines goes to whichever it is contextually closer to (e.g. a reaction attaches to the prior verbal; a setup attaches to the next verbal).
+6. Also include the verbal line text as a top-level "verbalLine" field (identical to the verbal content item's text).
+7. Do not include speaker name labels in the content array — extract them as the "speaker" field only.
+8. Do not invent, rewrite, summarize, translate, or reorder any text. Copy lines verbatim from the clean script.
+9. Do not drop any non-speaker line. Every non-empty, non-speaker line must appear in content.
+10. If the clean script has zero verbal lines, return an empty steps array.
+11. Also produce a top-level "characters" array listing every unique speaking character exactly once, using their canonical name — strip continuity suffixes such as (CONT'D), (V.O.), (O.S.), (O.C.), (PRE-LAP), etc. Order by first appearance.
+
+Output format: return ONLY valid JSON, no prose, no markdown fences:
+{
+  "script": "<the full clean script from Part 1, as a single string with \\n newlines>",
+  "characters": ["CHARACTER A", "CHARACTER B"],
+  "steps": [
+    {
+      "speaker": "<character name or empty string>",
+      "verbalLine": "<verbatim spoken line>",
+      "content": [
+        { "kind": "nonverbal", "text": "<verbatim non-verbal line>" },
+        { "kind": "verbal", "text": "<verbatim spoken line>" }
+      ]
+    }
+  ]
+}`;
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
+  }
+
+  const { pdfData } = req.body as { pdfData?: string };
+
+  if (!pdfData) {
+    return res.status(400).json({ error: "No PDF data provided" });
+  }
+
+  try {
+    const stream = client.messages.stream({
+      model: "claude-sonnet-5",
+      max_tokens: 16000,
+      // Sonnet 5 runs adaptive thinking by default, which roughly triples output
+      // tokens and latency on this task (measured: ~53s/6.4K tokens with thinking
+      // vs ~16s/2K tokens without, for near-identical visible output) with no
+      // measurable quality gain on this well-specified extraction/formatting task.
+      thinking: { type: "disabled" },
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: pdfData,
+              },
+            },
+            {
+              type: "text",
+              text: "Process this script PDF as instructed and return the JSON result.",
+            },
+          ],
+        },
+      ],
+    });
+
+    const response = await stream.finalMessage();
+
+    // Sonnet 5 runs adaptive thinking by default, so a `thinking` block
+    // precedes the `text` block — don't assume content[0] is the text block.
+    const textBlock = response.content.find((b) => b.type === "text");
+    const raw = textBlock?.type === "text" ? textBlock.text : "";
+
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start === -1 || end === -1) {
+      return res.status(500).json({ error: "Script parsing failed" });
+    }
+
+    type RawStep = { speaker: string; verbalLine: string; content: { kind: string; text: string }[] };
+    let parsed: { script?: string; characters?: string[]; steps?: RawStep[] };
+    try {
+      parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
+    } catch {
+      console.error("parse-script: malformed JSON from model");
+      return res.status(500).json({ error: "Script parsing failed" });
+    }
+
+    if (typeof parsed.script !== "string" || !Array.isArray(parsed.steps)) {
+      return res.status(500).json({ error: "Script parsing failed" });
+    }
+
+    return res.status(200).json({
+      script: parsed.script,
+      characters: parsed.characters ?? [],
+      steps: parsed.steps,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Claude API error:", message);
+    return res.status(500).json({ error: message });
+  }
+}
