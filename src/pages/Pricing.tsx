@@ -21,32 +21,32 @@ const TIERS: Tier[] = [
       "Hand-pick the voice for every character",
       "Full script practice with word-by-word tracking",
     ],
-    cta: "Get Plus",
+    cta: "3 Sessions For Free",
   },
-  {
-    name: "Premium",
-    price: "Coming soon",
-    cadence: "",
-    tagline: "Practice on camera",
-    features: [
-      "Everything in Plus",
-      "Practice your scenes on video",
-      "Record and store your sessions",
-    ],
-    cta: "Notify me",
-    featured: true,
-  },
-  {
-    name: "Gold",
-    price: "Coming soon",
-    cadence: "",
-    tagline: "Get coached",
-    features: [
-      "Everything in Premium",
-      "AI acting coach feedback on every take",
-    ],
-    cta: "Notify me",
-  },
+  // {
+  //   name: "Premium",
+  //   price: "Coming soon",
+  //   cadence: "",
+  //   tagline: "Practice on camera",
+  //   features: [
+  //     "Everything in Plus",
+  //     "Practice your scenes on video",
+  //     "Record and store your sessions",
+  //   ],
+  //   cta: "Notify me",
+  //   featured: true,
+  // },
+  // {
+  //   name: "Gold",
+  //   price: "Coming soon",
+  //   cadence: "",
+  //   tagline: "Get coached",
+  //   features: [
+  //     "Everything in Premium",
+  //     "AI acting coach feedback on every take",
+  //   ],
+  //   cta: "Notify me",
+  // },
 ];
 
 export default function Pricing() {
@@ -59,7 +59,7 @@ export default function Pricing() {
       <div className="home-text about-text pricing-text">
         <h1 className="home-title about-title">PRICING</h1>
         <p className="home-subtitle pricing-subtitle">
-          Start free. Upgrade when you want more control over your practice sessions.
+          Start free for 3 sessions. Upgrade when you want more.
         </p>
 
         <div className="pricing-grid">
@@ -68,18 +68,23 @@ export default function Pricing() {
               key={tier.name}
               className={`pricing-card${tier.featured ? " pricing-card--featured" : ""}`}
             >
-              <p className="pricing-card__name">{tier.name}</p>
+              {/* <p className="pricing-card__name">{tier.name}</p> */}
               <p className="pricing-card__price">
                 {tier.price}
-                {tier.cadence && <span className="pricing-card__cadence">{tier.cadence}</span>}
+                {tier.cadence && (
+                  <span className="pricing-card__cadence">{tier.cadence}</span>
+                )}
               </p>
-              <p className="pricing-card__tagline">{tier.tagline}</p>
+              {/* <p className="pricing-card__tagline">{tier.tagline}</p> */}
               <ul className="pricing-card__features">
                 {tier.features.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <button className="pricing-card__cta" onClick={() => navigate("/")}>
+              <button
+                className="pricing-card__cta"
+                onClick={() => navigate("/")}
+              >
                 {tier.cta}
               </button>
             </div>
