@@ -1,92 +1,88 @@
-import { useState, useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
+
+const MAX_PDF_BYTES = 14 * 1024 * 1024;
 
 export default function Home() {
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFile = useCallback(
-    (f: File) => {
-      if (f.type !== "application/pdf") {
-        setError("Please upload a PDF file.");
-        return;
-      }
-      navigate("/viewer", { state: { file: f } });
-    },
-    [navigate]
-  );
+  const handleFile = useCallback((file: File) => {
+    if (file.type !== "application/pdf") {
+      setError("That file isn't a PDF — try another one.");
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError("That PDF is over 14 MB. Compress it and try again.");
+      return;
+    }
+    setError("");
+    navigate("/practice", { state: { file } });
+  }, [navigate]);
 
   return (
-    <div className="home-hero">
+    <main
+      className="cinematic-page home-page"
+      onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setDragging(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        const file = event.dataTransfer.files?.[0];
+        if (file) handleFile(file);
+      }}
+    >
+      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 
-      <div className="home-text">
-        <h1 className="home-title">
-          AUDITION
-          <br />
-          WITH ME
-        </h1>
-        <p className="home-subtitle">
-          Upload your audition script and practice with AI-powered line reading
-        </p>
-        {error && <p className="home-error">{error}</p>}
-      </div>
+      <section className="hero-editorial">
+        <div className="hero-copy">
+          <h1 className="hero-title">
+            <span className="hero-title-roman">Own the room</span>
+            <span className="hero-title-italic">
+              before you<span className="hero-mobile-break"><br /></span> enter it.
+            </span>
+          </h1>
+          <p className="hero-description">
+            An intelligent scene partner that reads every role but yours — so
+            you can rehearse the moment, not just memorize the words.
+          </p>
 
-      <div className="home-hills">
-        <svg
-          className="home-hill home-hill--back"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
-            fill="rgba(232,117,106,0.55)"
-          />
-        </svg>
-        <svg
-          className="home-hill home-hill--front"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
-            fill="#E8756A"
-          />
-        </svg>
-
-        <button
-          className="home-upload-btn"
-          onClick={() => document.getElementById("home-file-input")?.click()}
-        >
-          <svg
-            className="home-upload-icon"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <button
+            type="button"
+            className={`upload-cta ${dragging ? "is-dragging" : ""}`}
+            onClick={() => inputRef.current?.click()}
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          UPLOAD PDF SCRIPT
-        </button>
+            <span className="upload-icon" aria-hidden="true">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
+              </svg>
+            </span>
+            <span className="upload-copy">
+              <strong>{dragging ? "Drop your sides" : "Upload your sides"}</strong>
+              <small>PDF · start rehearsing in seconds</small>
+            </span>
+            <span className="upload-arrow" aria-hidden="true">↗</span>
+          </button>
 
-        <input
-          id="home-file-input"
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-          style={{ display: "none" }}
-        />
-      </div>
-    </div>
+          {error && <p className="upload-error" role="alert">{error}</p>}
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) handleFile(file);
+            }}
+          />
+        </div>
+      </section>
+    </main>
   );
 }

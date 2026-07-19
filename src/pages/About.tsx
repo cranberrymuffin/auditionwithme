@@ -1,69 +1,44 @@
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 
+const steps = [
+  ["01", "Upload", "Add your PDF sides."],
+  ["02", "Choose your role", "Select the character you’re rehearsing."],
+  ["03", "Rehearse", "Hear every other role and stay focused on your scene."],
+];
+
 export default function About() {
   const navigate = useNavigate();
 
   return (
-    <div className="home-hero about-page">
+    <main className="cinematic-page about-page-clean">
+      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 
-      <div className="home-text about-text">
-        <h1 className="home-title about-title">ABOUT</h1>
-
-        <div className="about-body">
-          <p>
-            AuditionWithMe is a practice tool for actors preparing for auditions.
-          </p>
-          <p>
-            Upload your sides as a PDF. Claude reads and cleans the script —
-            stripping annotations, crossed-out lines, and formatting noise —
-            so you get a clear version of exactly what to perform.
-          </p>
-          <p>
-            Choose the role you're auditioning for. The other characters' lines
-            are read aloud by AI. When it's your turn, speak your lines — each
-            word lights up as you say it so you can stay in the scene without
-            breaking focus.
-          </p>
-
-          <h2 className="about-steps-title">HOW IT WORKS</h2>
-          <ol className="about-steps">
-            <li>Upload your PDF audition sides</li>
-            <li>Choose the character you're reading for</li>
-            <li>Other characters speak — your lines highlight word by word as you say them</li>
-          </ol>
+      <section className="about-product-layout">
+        <div className="about-product-intro">
+          <p>Built for rehearsal</p>
+          <h1>A better way to get off book</h1>
+          <div>
+            Upload your sides, choose your role, and rehearse with every other
+            character read aloud while your lines follow along on screen.
+          </div>
+          <button onClick={() => navigate("/")}>Upload your sides <span>→</span></button>
+          <small>PDF files supported. Start with three free sessions.</small>
         </div>
-      </div>
 
-      <div className="home-hills">
-        <svg
-          className="home-hill home-hill--back"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
-            fill="rgba(232,117,106,0.55)"
-          />
-        </svg>
-        <svg
-          className="home-hill home-hill--front"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
-            fill="#E8756A"
-          />
-        </svg>
-
-        <button className="home-upload-btn" onClick={() => navigate("/")}>
-          START PRACTICING
-        </button>
-      </div>
-    </div>
+        <section className="about-process-panel" id="how-it-works" aria-labelledby="how-it-works-title">
+          <header><p>Product workflow</p><h2 id="how-it-works-title">How it works</h2></header>
+          <ol>
+            {steps.map(([number, title, detail]) => (
+              <li key={number}>
+                <span>{number}</span>
+                <div><strong>{title}</strong><p>{detail}</p></div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </section>
+    </main>
   );
 }

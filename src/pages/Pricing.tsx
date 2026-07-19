@@ -1,121 +1,68 @@
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 
-type Tier = {
-  name: string;
-  price: string;
-  cadence: string;
-  tagline: string;
-  features: string[];
-  cta: string;
-  featured?: boolean;
-};
+const features = [
+  "Choose a voice for every character",
+  "Rehearse complete scripts",
+  "Follow dialogue word by word",
+  "Save your selected role and setup",
+  "Replay scenes throughout your plan",
+];
 
-const TIERS: Tier[] = [
-  {
-    name: "Plus",
-    price: "$7",
-    cadence: "/mo",
-    tagline: "Cast every character yourself",
-    features: [
-      "Hand-pick the voice for every character",
-      "Full script practice with word-by-word tracking",
-    ],
-    cta: "3 Sessions For Free",
-  },
-  // {
-  //   name: "Premium",
-  //   price: "Coming soon",
-  //   cadence: "",
-  //   tagline: "Practice on camera",
-  //   features: [
-  //     "Everything in Plus",
-  //     "Practice your scenes on video",
-  //     "Record and store your sessions",
-  //   ],
-  //   cta: "Notify me",
-  //   featured: true,
-  // },
-  // {
-  //   name: "Gold",
-  //   price: "Coming soon",
-  //   cadence: "",
-  //   tagline: "Get coached",
-  //   features: [
-  //     "Everything in Premium",
-  //     "AI acting coach feedback on every take",
-  //   ],
-  //   cta: "Notify me",
-  // },
+const questions = [
+  ["What counts as a rehearsal session?", "One uploaded PDF prepared as a new rehearsal. Replaying or revisiting that same rehearsal does not create another session."],
+  ["Do I need a credit card to start?", "No. Your first three rehearsal sessions are included without a credit card."],
+  ["What happens after my free sessions?", "You can continue creating new rehearsals with Audition Plus for $7 per month."],
+  ["Can I cancel anytime?", "Yes. The plan renews monthly, and you can cancel before your next renewal."],
+  ["What files can I upload?", "The rehearsal parser currently accepts PDF audition sides and scripts."],
+  ["How is my script handled?", "Your PDF is processed to identify dialogue, characters, and scene directions needed for the rehearsal."],
 ];
 
 export default function Pricing() {
   const navigate = useNavigate();
 
   return (
-    <div className="home-hero about-page pricing-page">
+    <main className="pricing-page">
       <SiteNav />
 
-      <div className="home-text about-text pricing-text">
-        <h1 className="home-title about-title">PRICING</h1>
-        <p className="home-subtitle pricing-subtitle">
-          Start free for 3 sessions. Upgrade when you want more.
-        </p>
+      <section className="pricing-main">
+        <div className="pricing-intro">
+          <p>One simple plan</p>
+          <h1>Simple pricing for serious rehearsal</h1>
+          <div>Start with three free sessions. Upgrade only when rehearsal becomes part of your routine.</div>
+          <ul className="pricing-reassurance">
+            <li><span>✓</span>No credit card to start</li>
+            <li><span>✓</span>Cancel anytime</li>
+            <li><span>✓</span>PDF scripts supported</li>
+          </ul>
+        </div>
 
-        <div className="pricing-grid">
-          {TIERS.map((tier) => (
-            <div
-              key={tier.name}
-              className={`pricing-card${tier.featured ? " pricing-card--featured" : ""}`}
-            >
-              {/* <p className="pricing-card__name">{tier.name}</p> */}
-              <p className="pricing-card__price">
-                {tier.price}
-                {tier.cadence && (
-                  <span className="pricing-card__cadence">{tier.cadence}</span>
-                )}
-              </p>
-              {/* <p className="pricing-card__tagline">{tier.tagline}</p> */}
-              <ul className="pricing-card__features">
-                {tier.features.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-              <button
-                className="pricing-card__cta"
-                onClick={() => navigate("/")}
-              >
-                {tier.cta}
-              </button>
-            </div>
+        <article className="pricing-card">
+          <header><div><p>Audition Plus</p><span>For regular scene work</span></div><span>One plan</span></header>
+          <p className="plan-description">Everything you need to rehearse complete scenes with a responsive scene partner.</p>
+          <p className="plan-price" aria-label="Seven dollars per month"><strong>$7</strong><span>/month</span></p>
+          <p className="free-allowance">Your first three rehearsal sessions are free.</p>
+          <ul>
+            {features.map((feature) => <li key={feature}><span aria-hidden="true">✓</span>{feature}</li>)}
+          </ul>
+          <button onClick={() => navigate("/")}>Start rehearsing free <span>→</span></button>
+          <footer><strong>3 sessions included.</strong> No credit card required.</footer>
+        </article>
+      </section>
+
+      <section className="pricing-details" aria-labelledby="pricing-questions">
+        <header><p>Before you begin</p><h2 id="pricing-questions">Plan details</h2></header>
+        <div>
+          {questions.map(([question, answer], index) => (
+            <details key={question} open={index === 0}>
+              <summary>{question}<span aria-hidden="true">+</span></summary>
+              <p>{answer}</p>
+            </details>
           ))}
         </div>
-      </div>
+      </section>
 
-      <div className="home-hills">
-        <svg
-          className="home-hill home-hill--back"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,180 C200,80 480,240 720,140 C960,40 1200,160 1440,120 L1440,300 L0,300 Z"
-            fill="rgba(232,117,106,0.55)"
-          />
-        </svg>
-        <svg
-          className="home-hill home-hill--front"
-          viewBox="0 0 1440 300"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,240 C240,180 480,280 720,220 C960,160 1200,260 1440,220 L1440,300 L0,300 Z"
-            fill="#E8756A"
-          />
-        </svg>
-      </div>
-    </div>
+      <footer className="pricing-footer"><span>Audition With Me</span><span>Questions about the plan? Contact support before subscribing.</span></footer>
+    </main>
   );
 }
