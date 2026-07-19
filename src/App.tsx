@@ -1,42 +1,19 @@
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import "./App.css";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
-import Viewer from "./pages/Viewer";
+import Practice from "./pages/Practice";
 import About from "./pages/About";
 import Pricing from "./pages/Pricing";
-
-function Layout() {
-  const location = useLocation();
-  const isFullPage =
-    location.pathname === "/" ||
-    location.pathname === "/viewer" ||
-    location.pathname === "/about" ||
-    location.pathname === "/pricing";
-
-  return (
-    <div className={`app${isFullPage ? " home-route" : ""}`}>
-      {!isFullPage && (
-        <header className="app-header">
-          <h1>AuditionWithMe</h1>
-          <p>Upload your sides and get a clean, analysis-ready script</p>
-        </header>
-      )}
-      <main className="app-main">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/viewer" element={<Viewer />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/pricing" element={<Pricing />} />
-        </Routes>
-      </main>
-    </div>
-  );
-}
 
 function App() {
   return (
     <BrowserRouter>
-      <Layout />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/practice" element={<Practice />} />
+        <Route path="/viewer" element={<Navigate to="/practice" replace />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/pricing" element={<Pricing />} />
+      </Routes>
     </BrowserRouter>
   );
 }

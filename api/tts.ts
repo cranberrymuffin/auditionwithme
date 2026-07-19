@@ -12,14 +12,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { text, voiceId } = req.body as { text?: string; voiceId?: string };
+  const { text, voiceId } = (req.body ?? {}) as { text?: string; voiceId?: string };
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
   }
 
   try {
     const upstream = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId || DEFAULT_VOICE_ID}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId || DEFAULT_VOICE_ID)}`,
       {
         method: "POST",
         headers: {
@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         body: JSON.stringify({
           text,
-          model_id: "eleven_turbo_v2_5",
+          model_id: "eleven_multilingual_v2",
           voice_settings: { stability: 0.5, similarity_boost: 0.75 },
         }),
       }
