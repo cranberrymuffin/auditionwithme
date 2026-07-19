@@ -50,11 +50,14 @@ Steps rules:
 9. Do not drop any non-speaker line. Every non-empty, non-speaker line must appear in content.
 10. If the clean script has zero verbal lines, return an empty steps array.
 11. Also produce a top-level "characters" array listing every unique speaking character exactly once, using their canonical name — strip continuity suffixes such as (CONT'D), (V.O.), (O.S.), (O.C.), (PRE-LAP), etc. Order by first appearance.
+12. Detect the primary spoken language of the dialogue and return its ISO 639-1 code as "languageCode" and its English name as "languageName".
 
 Output format: return ONLY valid JSON, no prose, no markdown fences:
 {
   "script": "<the full clean script from Part 1, as a single string with \\n newlines>",
   "characters": ["CHARACTER A", "CHARACTER B"],
+  "languageCode": "en",
+  "languageName": "English",
   "steps": [
     {
       "speaker": "<character name or empty string>",
@@ -76,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
   }
 
-  const { pdfData } = req.body as { pdfData?: string };
+  const { pdfData } = (req.body ?? {}) as { pdfData?: string };
 
   if (!pdfData) {
     return res.status(400).json({ error: "No PDF data provided" });
@@ -127,7 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     type RawStep = { speaker: string; verbalLine: string; content: { kind: string; text: string }[] };
-    let parsed: { script?: string; characters?: string[]; steps?: RawStep[] };
+    let parsed: { script?: string; characters?: string[]; languageCode?: string; languageName?: string; steps?: RawStep[] };
     try {
       parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
     } catch {
@@ -135,13 +138,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
-    if (typeof parsed.script !== "string" || !Array.isArray(parsed.steps)) {
+    const validSteps = Array.isArray(parsed.steps) && parsed.steps.every((step) =>
+      step &&
+      typeof step.speaker === "string" &&
+      typeof step.verbalLine === "string" &&
+      Array.isArray(step.content) &&
+      step.content.every((line) =>
+        line &&
+        (line.kind === "verbal" || line.kind === "nonverbal") &&
+        typeof line.text === "string"
+      )
+    );
+    const validCharacters = parsed.characters === undefined || (
+      Array.isArray(parsed.characters) && parsed.characters.every((character) => typeof character === "string")
+    );
+
+    if (typeof parsed.script !== "string" || !validSteps || !validCharacters) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
     return res.status(200).json({
       script: parsed.script,
       characters: parsed.characters ?? [],
+      languageCode: typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
+      languageName: typeof parsed.languageName === "string" ? parsed.languageName : "English",
       steps: parsed.steps,
     });
   } catch (err) {

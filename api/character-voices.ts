@@ -17,17 +17,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { characters } = req.body as {
+  const { characters, languageCode = "en" } = (req.body ?? {}) as {
     characters: Array<{ name: string; sampleLines: string[] }>;
+    languageCode?: string;
   };
 
-  if (!characters?.length) {
+  if (!Array.isArray(characters) || !characters.length || characters.some(
+    (character) => !character || typeof character.name !== "string" || !Array.isArray(character.sampleLines)
+  )) {
     return res.status(400).json({ error: "No characters provided" });
   }
 
-  const VOICES = await fetchVoices(elevenLabsKey);
+  let allVoices;
+  try {
+    allVoices = await fetchVoices(elevenLabsKey);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Voice catalog unavailable";
+    console.error("Voice catalog error:", message);
+    return res.status(502).json({ error: "Voice catalog unavailable" });
+  }
+  if (!allVoices.length) {
+    return res.status(502).json({ error: "No voices are available" });
+  }
+  const languageVoices = allVoices.filter((voice) => voice.language === languageCode);
+  const VOICES = languageVoices.length ? languageVoices : allVoices;
   const voiceList = VOICES.map(
-    (v) => `- ${v.name} (${v.gender}, ${v.age}, ${v.accent}): ${v.description} [id: ${v.id}]`
+    (v) => `- ${v.name} (${v.gender}, ${v.age}, ${v.accent}, ${v.tone}) [id: ${v.id}]`
   ).join("\n");
 
   const characterList = characters
@@ -43,6 +58,7 @@ Characters and sample lines:
 ${characterList}
 
 Rules:
+- The script language is ${languageCode}; only choose a voice from the supplied language-compatible list
 - Assign a different voice to each character where possible
 - Prioritise gender match, then age, then personality fit
 - Return only a JSON object mapping character names to voice IDs
@@ -60,7 +76,18 @@ Example output: {"HAMLET": "pNInz6obpgDQGcFmaJgB", "OPHELIA": "pFZP5JQG7iQjIQuC4
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON in response");
 
-    const voices = JSON.parse(jsonMatch[0]);
+    const rawVoices: unknown = JSON.parse(jsonMatch[0]);
+    if (!rawVoices || typeof rawVoices !== "object" || Array.isArray(rawVoices)) {
+      throw new Error("Invalid voice mapping");
+    }
+
+    const characterNames = new Set(characters.map((character) => character.name));
+    const voiceIds = new Set(VOICES.map((voice) => voice.id));
+    const voices = Object.fromEntries(
+      Object.entries(rawVoices).filter(
+        ([character, voiceId]) => characterNames.has(character) && typeof voiceId === "string" && voiceIds.has(voiceId)
+      )
+    );
     return res.status(200).json({ voices });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
