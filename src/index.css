@@ -1,5 +1,93 @@
 @import "tailwindcss";
 
+/* ── Self-hosted webfonts ── */
+@font-face {
+  font-family: "Fitzgerald";
+  src: url("/fonts/Fitzgerald-Regular.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fitzgerald";
+  src: url("/fonts/Fitzgerald-Italic.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fitzgerald";
+  src: url("/fonts/Fitzgerald-Bold.woff2") format("woff2");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fitzgerald";
+  src: url("/fonts/Fitzgerald-BoldItalic.woff2") format("woff2");
+  font-weight: 600 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* NOTE: trial files — replace with licensed Britti Sans webfonts before launch */
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-LightItalic.otf") format("opentype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Regular.otf") format("opentype");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-RegularItalic.otf") format("opentype");
+  font-weight: 400 500;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Semibold.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-SemiboldItalic.otf") format("opentype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Bold.otf") format("opentype");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-BoldItalic.otf") format("opentype");
+  font-weight: 700 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* Class-strategy dark mode: `.dark` on <html> flips every semantic token below */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -86,9 +174,9 @@
   --color-coral-900: #6e2a23;
 
   /* Editorial type system: high-contrast serif caps + copperplate script accent */
-  --font-display: "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
+  --font-display: "Fitzgerald", "Didot", "Bodoni MT", Georgia, serif;
   --font-accent: "Pinyon Script", "Snell Roundhand", cursive;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Britti Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-script: Georgia, "Times New Roman", serif;
 }
 
