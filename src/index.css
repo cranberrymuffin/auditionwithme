@@ -272,8 +272,8 @@ header .flow-back:hover { color: var(--ink); }
 .about-product-intro > p { margin: 0 0 16px; color: #ef9a78; font-size: .9375rem; font-weight: 600; }
 .about-product-intro h1 { max-width: 620px; margin: 0; font-family: var(--font-display); font-size: clamp(4.5rem,6.5vw,5.5rem); font-weight: 500; line-height: 1; letter-spacing: -.03em; }
 .about-product-intro > div { max-width: 580px; margin-top: 24px; color: rgba(248,241,230,.85); font-size: clamp(1.0625rem,1.35vw,1.125rem); line-height: 1.58; }
-.about-product-intro > button { display: flex; min-width: 205px; min-height: 50px; align-items: center; justify-content: center; gap: 12px; margin-top: 30px; padding: 0 21px; border: 1px solid rgba(255,205,183,.58); border-radius: 9px; background: #ef9675; box-shadow: 0 7px 16px rgba(0,0,0,.2); color: #101a28; font-size: 1rem; font-weight: 700; transition: background .2s ease,transform .2s ease; }
-.about-product-intro > button:hover { background: #f3a17f; transform: translateY(-1px); }
+.about-product-intro > button { display: flex; min-width: 205px; min-height: 50px; align-items: center; justify-content: center; gap: 12px; margin-top: 30px; padding: 0 21px; border: 1px solid rgba(255,205,183,.58); border-radius: 9px; background: linear-gradient(135deg,#f4a583,#e98464); box-shadow: 0 8px 18px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.28); color: #101a28; font-size: 1rem; font-weight: 700; transition: filter .2s ease,transform .2s ease; }
+.about-product-intro > button:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .about-product-intro > button span { transition: transform .2s ease; }.about-product-intro > button:hover span { transform: translateX(3px); }
 .about-product-intro > small { display: block; margin-top: 12px; color: rgba(248,241,230,.68); font-size: .875rem; }
 .about-process-panel { width: min(100%,520px); justify-self: end; padding: clamp(34px,3.3vw,46px); border: 1px solid rgba(255,255,255,.17); border-radius: 11px; background: rgba(14,27,43,.96); box-shadow: 0 20px 50px rgba(0,0,0,.23); }
@@ -772,7 +772,8 @@ header .flow-back:hover { color: var(--ink); }
 .rehearsal-controls button:disabled { opacity: .35; }
 .rehearsal-card > footer { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 15px; padding: 16px clamp(24px,3vw,38px); border-top: 1px solid rgba(255,255,255,.12); background: rgba(7,15,26,.22); }
 .rehearsal-card > footer button { min-height: 46px; justify-self: start; padding: 0 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; font-size: .875rem; font-weight: 600; }
-.rehearsal-card > footer button.next-line { justify-self: end; border-color: rgba(239,154,120,.65); background: #ef9a78; color: #101a28; }
+.rehearsal-card > footer button.next-line { justify-self: end; border-color: rgba(255,205,183,.58); background: linear-gradient(135deg,#f4a583,#e98464); box-shadow: 0 8px 18px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.28); color: #101a28; transition: filter .2s ease,transform .2s ease; }
+.rehearsal-card > footer button.next-line:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
 .rehearsal-card > footer button:disabled { cursor: not-allowed; opacity: .35; }
 .rehearsal-card > footer > span { color: rgba(248,241,230,.6); font-size: .8125rem; font-variant-numeric: tabular-nums; }
 .rehearsal-settings { padding: 20px; border-left: 1px solid rgba(255,255,255,.12); background: #101d2c; }
