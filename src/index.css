@@ -217,6 +217,12 @@ header .flow-back:hover { color: var(--ink); }
 }
 .home-page .cinematic-backdrop { height: 100dvh; bottom: auto; }
 
+/* `cover` crops the sides when the viewport is taller than the 16:9 artwork.
+   Anchor that crop to the right so the hillside wordmark always stays in frame. */
+@media (min-width: 721px) and (max-aspect-ratio: 16 / 9) {
+  .home-page .cinematic-backdrop { background-position: right center; }
+}
+
 .cinematic-backdrop {
   position: absolute;
   inset: 0;
@@ -424,6 +430,7 @@ header .flow-back:hover { color: var(--ink); }
 
 @media (max-width: 720px) {
   .cinematic-backdrop { background-position: 66% center; }
+  .home-page .cinematic-backdrop { background-position: 66% center; }
   .cinematic-page::after { background: linear-gradient(0deg, rgba(5,12,21,.97) 0%, rgba(5,12,21,.84) 58%, rgba(5,12,21,.14) 100%); }
   .site-nav { height: 66px; padding: 0 18px; }
   .site-nav-links { gap: 16px; }
