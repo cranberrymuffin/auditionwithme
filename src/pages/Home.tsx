@@ -69,7 +69,7 @@ export default function Home() {
                 <small>PDF supported · Start rehearsing free</small>
               </span>
             </button>
-            <a className="demo-cta" href="#how-it-works">
+            <a className="demo-cta" href="/about#how-it-works">
               <span className="demo-play" aria-hidden="true">▶</span>
               See how it works
             </a>
@@ -86,51 +86,6 @@ export default function Home() {
               if (file) handleFile(file);
             }}
           />
-        </div>
-      </section>
-
-      <section className="how-it-works" id="how-it-works" aria-labelledby="how-title">
-        <header className="how-intro">
-          <p>From page to performance</p>
-          <h2 id="how-title">Your scene partner is always ready.</h2>
-          <span>Turn any PDF into a responsive rehearsal in three simple steps.</span>
-        </header>
-
-        <div className="workflow-preview">
-          <ol className="workflow-steps">
-            <li>
-              <span>01</span>
-              <div><strong>Upload your script</strong><p>Drop in your PDF and we’ll organize the scene.</p></div>
-            </li>
-            <li>
-              <span>02</span>
-              <div><strong>Choose your role</strong><p>Pick your character and cast voices for everyone else.</p></div>
-            </li>
-            <li>
-              <span>03</span>
-              <div><strong>Rehearse the moment</strong><p>Hear every cue, deliver your lines, and run it again.</p></div>
-            </li>
-          </ol>
-
-          <div className="product-preview" aria-label="Rehearsal player preview">
-            <div className="preview-topline">
-              <span>Scene 2 · Kitchen</span>
-              <small>Rehearsing as Maya</small>
-            </div>
-            <div className="preview-cue">
-              <small>JONAH</small>
-              <p>“You knew I’d come back.”</p>
-              <span><i /><i /><i /><i /></span>
-            </div>
-            <div className="preview-line">
-              <small>YOUR LINE</small>
-              <p>Then tell me why you left.</p>
-            </div>
-            <div className="preview-controls">
-              <button type="button" tabIndex={-1}>↺ Again</button>
-              <span>Listening for your line…</span>
-            </div>
-          </div>
         </div>
       </section>
     </main>

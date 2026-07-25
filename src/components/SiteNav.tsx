@@ -16,9 +16,6 @@ export default function SiteNav() {
         <Wordmark />
       </Link>
       <div className="site-nav-links">
-        <a href="/#how-it-works" className="eyebrow site-nav-link">
-          How it works
-        </a>
         <NavLink to="/pricing" className={({ isActive }) => `eyebrow site-nav-link ${isActive ? "is-active" : ""}`}>
           Pricing
         </NavLink>

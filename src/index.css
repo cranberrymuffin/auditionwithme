@@ -344,27 +344,6 @@ header .flow-back:hover { color: var(--ink); }
 .demo-play { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid rgba(255,255,255,.35); border-radius: 50%; font-size: .58rem; text-decoration: none; }
 .upload-error { position: absolute; margin-top: 7px; color: #ffc2b0; font-size: .75rem; }
 
-.how-it-works { position: relative; z-index: 2; min-height: 100dvh; scroll-margin-top: 0; padding: clamp(82px,10vw,130px) clamp(24px,7vw,108px); background: radial-gradient(circle at 78% 24%,rgba(54,75,104,.28),transparent 32%),#101b2a; color: #f8f1e6; }
-.how-intro { max-width: 720px; }
-.how-intro > p { margin: 0 0 13px; color: #ef9a78; font-size: .9rem; font-weight: 600; }
-.how-intro h2 { margin: 0; font-family: var(--font-display); font-size: clamp(3rem,5.2vw,4.9rem); font-weight: 500; line-height: 1.02; letter-spacing: -.025em; }
-.how-intro > span { display: block; margin-top: 18px; color: rgba(248,241,230,.72); font-size: 1.08rem; }
-.workflow-preview { display: grid; grid-template-columns: minmax(320px,.72fr) minmax(440px,1fr); align-items: center; gap: clamp(55px,9vw,130px); margin-top: clamp(48px,7vw,84px); }
-.workflow-steps { display: flex; flex-direction: column; gap: 29px; margin: 0; padding: 0; list-style: none; }
-.workflow-steps li { display: grid; grid-template-columns: 38px 1fr; gap: 17px; padding-bottom: 27px; border-bottom: 1px solid rgba(255,255,255,.13); }
-.workflow-steps li > span { color: #ef9a78; font-size: .75rem; font-weight: 700; }
-.workflow-steps strong { display: block; font-size: 1.05rem; }
-.workflow-steps p { margin: 7px 0 0; color: rgba(248,241,230,.64); font-size: .92rem; line-height: 1.5; }
-.product-preview { overflow: hidden; border: 1px solid rgba(255,255,255,.18); border-radius: 14px; background: linear-gradient(145deg,#1b2c43,#132136); box-shadow: 0 30px 70px rgba(0,0,0,.28); }
-.preview-topline { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 21px; border-bottom: 1px solid rgba(255,255,255,.12); }
-.preview-topline span { font-weight: 600; }.preview-topline small { color: rgba(248,241,230,.55); }
-.preview-cue,.preview-line { padding: clamp(23px,3vw,34px); }.preview-cue { border-bottom: 1px solid rgba(255,255,255,.11); background: rgba(255,255,255,.025); }
-.preview-cue small,.preview-line small { color: #ef9a78; font-size: .72rem; font-weight: 700; letter-spacing: .05em; }
-.preview-cue p { margin: 11px 0 16px; font-size: clamp(1.25rem,2vw,1.7rem); }
-.preview-cue > span { display: flex; height: 18px; align-items: center; gap: 3px; }.preview-cue i { width: 3px; height: 9px; border-radius: 2px; background: #ef9a78; }.preview-cue i:nth-child(2){height:16px}.preview-cue i:nth-child(3){height:12px}.preview-cue i:nth-child(4){height:6px}
-.preview-line p { margin: 11px 0 0; font-family: var(--font-display); font-size: clamp(2rem,3.5vw,3.1rem); line-height: 1.08; }
-.preview-controls { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 21px; border-top: 1px solid rgba(255,255,255,.11); background: rgba(5,11,19,.2); }
-.preview-controls button { min-height: 40px; padding: 0 14px; border: 1px solid rgba(255,255,255,.2); border-radius: 7px; font-size: .82rem; }.preview-controls span { color: rgba(248,241,230,.56); font-size: .78rem; }
 .about-page-clean::after {
   background:
     linear-gradient(90deg,rgba(5,12,21,.96) 0%,rgba(5,12,21,.88) 49%,rgba(5,12,21,.62) 100%),
@@ -444,12 +423,6 @@ header .flow-back:hover { color: var(--ink); }
   .hero-actions { align-items: stretch; flex-direction: column; gap: 8px; margin-top: 18px; }
   .upload-cta { width: 100%; min-height: 58px; margin-top: 0; }
   .demo-cta { justify-content: center; }
-  .how-it-works { min-height: auto; padding: 70px 22px; }
-  .how-intro h2 { font-size: clamp(2.65rem,11.5vw,3.5rem); }
-  .workflow-preview { grid-template-columns: 1fr; gap: 42px; margin-top: 45px; }
-  .workflow-steps { gap: 20px; }
-  .workflow-steps li { padding-bottom: 20px; }
-  .preview-topline { align-items: flex-start; flex-direction: column; gap: 4px; }
 }
 
 @media (max-height: 650px) {
@@ -570,7 +543,6 @@ header .flow-back:hover { color: var(--ink); }
   .site-nav-links .site-nav-link { display: none; }
   .site-nav-cta { min-height: 38px; padding-inline: 12px; font-size: .75rem; }
   .site-nav .script-accent { font-size: 1rem; }
-  .preview-controls { align-items: flex-start; flex-direction: column; gap: 10px; }
 }
 
 /* Dependable application processing state */
