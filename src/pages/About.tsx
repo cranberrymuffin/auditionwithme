@@ -23,7 +23,7 @@ export default function About() {
             Upload your sides, choose your role, and rehearse with every other
             character read aloud while your lines follow along on screen.
           </div>
-          <button onClick={() => navigate("/")}>Upload your sides <span>→</span></button>
+          <button onClick={() => navigate("/#upload")}>Upload your script <span>→</span></button>
           <small>PDF files supported. Start with three free sessions.</small>
         </div>
 
