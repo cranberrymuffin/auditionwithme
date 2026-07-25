@@ -7,7 +7,13 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function ParsingScreen({ file }: { file: File }) {
+export default function ParsingScreen({
+  file,
+  phase,
+}: {
+  file: File;
+  phase: "extracting" | "analyzing";
+}) {
   const navigate = useNavigate();
   const [previewUrl, setPreviewUrl] = useState("");
 
@@ -46,7 +52,14 @@ export default function ParsingScreen({ file }: { file: File }) {
             </li>
             <li className="is-current" aria-current="step">
               <span className="processing-step-icon" aria-label="In progress"><i /></span>
-              <div><strong>Analyzing your script</strong><small>Reading dialogue, characters, and directions.</small></div>
+              <div>
+                <strong>{phase === "extracting" ? "Extracting script text" : "Analyzing your script"}</strong>
+                <small>
+                  {phase === "extracting"
+                    ? "Reading the text layer directly from your PDF."
+                    : "Identifying dialogue, characters, and directions."}
+                </small>
+              </div>
             </li>
             <li className="is-pending">
               <span className="processing-step-icon" aria-label="Pending">○</span>

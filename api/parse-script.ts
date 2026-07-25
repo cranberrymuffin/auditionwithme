@@ -15,7 +15,7 @@ const SYSTEM_PROMPT = `You are a script processing assistant for an actor's audi
 
 Your job has two parts.
 
-PART 1 — Produce a clean script.
+PART 1 — Produce a clean script internally.
 1. Identify which lines are ACTIVE — ignore any lines that are struck through or crossed out.
 2. Extract all character names and their dialogue.
 3. Include relevant stage directions.
@@ -52,9 +52,10 @@ Steps rules:
 11. Also produce a top-level "characters" array listing every unique speaking character exactly once, using their canonical name — strip continuity suffixes such as (CONT'D), (V.O.), (O.S.), (O.C.), (PRE-LAP), etc. Order by first appearance.
 12. Detect the primary spoken language of the dialogue and return its ISO 639-1 code as "languageCode" and its English name as "languageName".
 
+Do not return the full clean script separately. It would duplicate the text in the steps and waste response time.
+
 Output format: return ONLY valid JSON, no prose, no markdown fences:
 {
-  "script": "<the full clean script from Part 1, as a single string with \\n newlines>",
   "characters": ["CHARACTER A", "CHARACTER B"],
   "languageCode": "en",
   "languageName": "English",
@@ -79,13 +80,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
   }
 
-  const { pdfData } = (req.body ?? {}) as { pdfData?: string };
+  const { pdfData, scriptText } = (req.body ?? {}) as { pdfData?: string; scriptText?: string };
 
-  if (!pdfData) {
-    return res.status(400).json({ error: "No PDF data provided" });
+  if (!pdfData && !scriptText?.trim()) {
+    return res.status(400).json({ error: "No script text or PDF data provided" });
+  }
+  if (scriptText && scriptText.length > 250_000) {
+    return res.status(413).json({ error: "Extracted script text is too large" });
   }
 
   try {
+    const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] = scriptText?.trim()
+      ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${scriptText.trim()}\n</SCRIPT>`
+      : [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: pdfData!,
+            },
+          },
+          {
+            type: "text",
+            text: "Process this script PDF as instructed and return the JSON result.",
+          },
+        ];
+    const modelStartedAt = performance.now();
     const stream = client.messages.stream({
       model: "claude-sonnet-5",
       max_tokens: 16000,
@@ -98,25 +119,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       messages: [
         {
           role: "user",
-          content: [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: pdfData,
-              },
-            },
-            {
-              type: "text",
-              text: "Process this script PDF as instructed and return the JSON result.",
-            },
-          ],
+          content: userContent,
         },
       ],
     });
 
     const response = await stream.finalMessage();
+    const modelDurationMs = performance.now() - modelStartedAt;
 
     // Sonnet 5 runs adaptive thinking by default, so a `thinking` block
     // precedes the `text` block — don't assume content[0] is the text block.
@@ -130,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     type RawStep = { speaker: string; verbalLine: string; content: { kind: string; text: string }[] };
-    let parsed: { script?: string; characters?: string[]; languageCode?: string; languageName?: string; steps?: RawStep[] };
+    let parsed: { characters?: string[]; languageCode?: string; languageName?: string; steps?: RawStep[] };
     try {
       parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
     } catch {
@@ -153,16 +162,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       Array.isArray(parsed.characters) && parsed.characters.every((character) => typeof character === "string")
     );
 
-    if (typeof parsed.script !== "string" || !validSteps || !validCharacters) {
+    if (!validSteps || !validCharacters) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
+    res.setHeader("Server-Timing", `model;dur=${modelDurationMs.toFixed(1)}`);
     return res.status(200).json({
-      script: parsed.script,
       characters: parsed.characters ?? [],
       languageCode: typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
       languageName: typeof parsed.languageName === "string" ? parsed.languageName : "English",
       steps: parsed.steps,
+      processingMode: scriptText?.trim() ? "text" : "pdf-fallback",
+      modelDurationMs: Math.round(modelDurationMs),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

@@ -7,6 +7,7 @@ import RolePicker from "../components/practice/RolePicker";
 import VoiceCasting from "../components/practice/VoiceCasting";
 import Rehearsal from "../components/practice/Rehearsal";
 import StageShell from "../components/practice/StageShell";
+import { extractPdfText, fileToBase64 } from "../lib/pdf";
 
 export default function Practice() {
   const location = useLocation();
@@ -14,6 +15,7 @@ export default function Practice() {
   const file: File | null = location.state?.file ?? null;
 
   const [loading, setLoading] = useState(false);
+  const [processingPhase, setProcessingPhase] = useState<"extracting" | "analyzing">("extracting");
   const [error, setError] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [characters, setCharacters] = useState<string[]>([]);
@@ -44,20 +46,22 @@ export default function Practice() {
       setLoading(true);
 
       try {
-        const base64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(",")[1]);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+        let requestBody: { scriptText: string } | { pdfData: string };
+        try {
+          const extracted = await extractPdfText(file);
+          requestBody = extracted.usable
+            ? { scriptText: extracted.text }
+            : { pdfData: await fileToBase64(file) };
+        } catch (extractionError) {
+          console.warn("PDF text extraction failed; using document fallback.", extractionError);
+          requestBody = { pdfData: await fileToBase64(file) };
+        }
+        setProcessingPhase("analyzing");
 
         const res = await fetch("/api/parse-script", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pdfData: base64 }),
+          body: JSON.stringify(requestBody),
         });
 
         const responseText = await res.text();
@@ -162,7 +166,7 @@ export default function Practice() {
     setVoicesConfirmed(true);
   };
 
-  if (loading) return <ParsingScreen file={file!} />;
+  if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
 
   if (error) {
     return (
