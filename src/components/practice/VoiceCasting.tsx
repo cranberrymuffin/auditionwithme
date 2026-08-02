@@ -10,6 +10,7 @@ import {
 } from "../../lib/script";
 import { useTtsPlayer } from "../../hooks/useTtsPlayer";
 import { Wordmark } from "../SiteNav";
+import { useToast } from "../../lib/toast";
 
 type FilterKey = "accent" | "gender" | "age" | "tone";
 
@@ -38,6 +39,7 @@ export default function VoiceCasting({
   onBack: () => void;
 }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const { play, stop } = useTtsPlayer();
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
   const [previewing, setPreviewing] = useState(false);
@@ -106,6 +108,7 @@ export default function VoiceCasting({
       await play(previewLine, currentVoice.id, { onEnded: () => setPreviewing(false) });
     } catch {
       setPreviewing(false);
+      toast("That voice preview couldn't be played. Try again.");
     }
   };
 

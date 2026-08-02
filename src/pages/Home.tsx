@@ -1,27 +1,29 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
+import { useToast } from "../lib/toast";
 
-const MAX_PDF_BYTES = 14 * 1024 * 1024;
+// Scanned PDFs are rendered to page images client-side (never uploaded whole),
+// so the cap only guards browser memory.
+const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
 export default function Home() {
   const navigate = useNavigate();
-  const [error, setError] = useState("");
+  const toast = useToast();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFile = useCallback((file: File) => {
     if (file.type !== "application/pdf") {
-      setError("That file isn't a PDF — try another one.");
+      toast("That file isn't a PDF — try another one.");
       return;
     }
     if (file.size > MAX_PDF_BYTES) {
-      setError("That PDF is over 14 MB. Compress it and try again.");
+      toast("That PDF is over 50 MB. Compress it and try again.");
       return;
     }
-    setError("");
     navigate("/practice", { state: { file } });
-  }, [navigate]);
+  }, [navigate, toast]);
 
   return (
     <main
@@ -75,7 +77,6 @@ export default function Home() {
             </a>
           </div>
 
-          {error && <p className="upload-error" role="alert">{error}</p>}
           <input
             ref={inputRef}
             type="file"
