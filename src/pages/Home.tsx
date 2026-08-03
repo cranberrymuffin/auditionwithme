@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
+import { useEntitlement } from "../hooks/useEntitlement";
 import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 
@@ -15,6 +16,20 @@ export default function Home() {
   const toast = useToast();
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { entitlement } = useEntitlement();
+  const freeSessionsRemaining = entitlement
+    ? Math.max(
+        entitlement.free_sessions_limit - entitlement.free_sessions_used,
+        0,
+      )
+    : 0;
+  const isSubscribed = entitlement?.subscription_status === "active";
+  const isOutOfFreeSessions =
+    !!entitlement && !isSubscribed && freeSessionsRemaining === 0;
+
+  const uploadHint = isSubscribed
+    ? "PDF supported"
+    : "PDF supported · Start rehearsing free";
 
   const handleFile = useCallback(
     async (file: File) => {
@@ -84,60 +99,49 @@ export default function Home() {
           </p>
 
           <div className="hero-actions">
-            {user ? (
-              <button
-                type="button"
-                className={`upload-cta ${dragging ? "is-dragging" : ""}`}
-                onClick={() => inputRef.current?.click()}
-              >
-                <span className="upload-icon" aria-hidden="true">
-                  <svg
-                    width="19"
-                    height="19"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
-                  </svg>
-                </span>
-                <span className="upload-copy">
-                  <strong>
-                    {dragging ? "Drop your script" : "Upload your script"}
-                  </strong>
-                  <small>PDF supported · Start rehearsing free</small>
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="upload-cta"
-                onClick={() => navigate("/login")}
-              >
-                <span className="upload-icon" aria-hidden="true">
-                  <svg
-                    width="19"
-                    height="19"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
-                  </svg>
-                </span>
-                <span className="upload-copy">
-                  <strong>Start rehearsing</strong>
-                  <small>Log in to upload your script</small>
-                </span>
-              </button>
-            )}
+            {user &&
+              (isOutOfFreeSessions ? (
+                <button
+                  type="button"
+                  className="upload-cta"
+                  onClick={() => navigate("/pricing")}
+                >
+                  <span className="upload-copy">
+                    <strong>Subscribe to keep rehearsing</strong>
+                    <small>Free sessions exhausted</small>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`upload-cta ${dragging ? "is-dragging" : ""}`}
+                  onClick={() => inputRef.current?.click()}
+                >
+                  <span className="upload-icon" aria-hidden="true">
+                    <svg
+                      width="19"
+                      height="19"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
+                    </svg>
+                  </span>
+                  <span className="upload-copy">
+                    <strong>
+                      {dragging ? "Drop your script" : "Upload your script"}
+                    </strong>
+                    <small>{uploadHint}</small>
+                  </span>
+                </button>
+              ))}
             <a className="demo-cta" href="/about#how-it-works">
               <span className="demo-play" aria-hidden="true">
                 ▶
               </span>
-              See how it works
+              <span className="demo-cta-text">See how it works</span>
             </a>
           </div>
 

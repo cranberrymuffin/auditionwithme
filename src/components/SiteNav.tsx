@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useEntitlement } from "../hooks/useEntitlement";
 import { supabase } from "../lib/supabase";
 
 export function Wordmark({ className = "" }: { className?: string }) {
@@ -19,7 +20,11 @@ export function Wordmark({ className = "" }: { className?: string }) {
 
 export default function SiteNav() {
   const { user, loading } = useAuth();
+  const { entitlement } = useEntitlement();
   const navigate = useNavigate();
+
+  const showPricing =
+    !loading && (!user || entitlement?.subscription_status !== "active");
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -32,22 +37,26 @@ export default function SiteNav() {
         <Wordmark />
       </Link>
       <div className="site-nav-links">
-        <NavLink
-          to="/pricing"
-          className={({ isActive }) =>
-            `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-          }
-        >
-          Pricing
-        </NavLink>
-        <NavLink
-          to="/about"
-          className={({ isActive }) =>
-            `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-          }
-        >
-          About
-        </NavLink>
+        {showPricing && (
+          <NavLink
+            to="/pricing"
+            className={({ isActive }) =>
+              `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
+            }
+          >
+            Pricing
+          </NavLink>
+        )}
+        {!loading && !user && (
+          <NavLink
+            to="/about"
+            className={({ isActive }) =>
+              `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
+            }
+          >
+            About
+          </NavLink>
+        )}
         {!loading &&
           (user ? (
             <>
@@ -63,16 +72,14 @@ export default function SiteNav() {
               </button>
             </>
           ) : (
-            <>
-              <NavLink
-                to="/login"
-                className={({ isActive }) =>
-                  `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-                }
-              >
-                Log in
-              </NavLink>
-            </>
+            <NavLink
+              to="/signup"
+              className={({ isActive }) =>
+                `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
+              }
+            >
+              Sign up
+            </NavLink>
           ))}
       </div>
     </nav>
