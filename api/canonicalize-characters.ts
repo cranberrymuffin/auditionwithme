@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireAuthRateLimited } from "./_entitlement.js";
 
 // Chunked scanned-page parsing (parse-pages.ts) transcribes speaker names as
 // printed, so the same character surfaces under several spellings across
@@ -25,6 +26,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const auth = await requireAuthRateLimited(req, res);
+  if (!auth) return;
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
   }

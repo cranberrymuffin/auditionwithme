@@ -1,4 +1,6 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
@@ -10,6 +12,14 @@ export function Wordmark({ className = "" }: { className?: string }) {
 }
 
 export default function SiteNav() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate("/");
+  }
+
   return (
     <nav className="site-nav">
       <Link to="/" aria-label="AuditionWithMe home">
@@ -22,6 +32,23 @@ export default function SiteNav() {
         <NavLink to="/about" className={({ isActive }) => `eyebrow site-nav-link ${isActive ? "is-active" : ""}`}>
           About
         </NavLink>
+        {!loading && (user ? (
+          <>
+            <span className="eyebrow site-nav-user" title={user.email ?? ""}>{user.email}</span>
+            <button type="button" className="eyebrow site-nav-link" onClick={handleLogout}>
+              Log out
+            </button>
+          </>
+        ) : (
+          <>
+            <NavLink to="/login" className={({ isActive }) => `eyebrow site-nav-link ${isActive ? "is-active" : ""}`}>
+              Log in
+            </NavLink>
+            <NavLink to="/signup" className={({ isActive }) => `eyebrow site-nav-link ${isActive ? "is-active" : ""}`}>
+              Sign up
+            </NavLink>
+          </>
+        ))}
         <Link to="/#upload" className="site-nav-cta">Start rehearsing free</Link>
       </div>
     </nav>

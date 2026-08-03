@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 type LocalRequest = IncomingMessage & {
   body?: unknown;
+  bodyRaw?: Buffer;
   query?: Record<string, string>;
 };
 
@@ -43,8 +44,9 @@ function localVercelApi(): Plugin {
           }
 
           const localRequest = request as LocalRequest;
-          const rawBody = Buffer.concat(chunks).toString("utf8");
-          localRequest.body = rawBody ? JSON.parse(rawBody) : {};
+          const rawBody = Buffer.concat(chunks);
+          localRequest.bodyRaw = rawBody;
+          localRequest.body = rawBody.length ? JSON.parse(rawBody.toString("utf8")) : {};
           localRequest.query = Object.fromEntries(url.searchParams.entries());
 
           const localResponse = response as LocalResponse;

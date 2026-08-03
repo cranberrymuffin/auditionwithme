@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { buildSteps, collectSpeakerCandidates } from "./_screenplay.js";
 import { cleanLayoutLines, flattenLayout, parseScreenplayLayout, type LayoutLineTuple } from "./_layout.js";
 import { detectLanguage } from "./_language.js";
+import { requireRehearsalGrant } from "./_entitlement.js";
 
 export const config = {
   api: {
@@ -229,6 +230,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const auth = await requireRehearsalGrant(req, res);
+  if (!auth) return;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });

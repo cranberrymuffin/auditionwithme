@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 import { useToast } from "../lib/toast";
+import { apiFetch } from "../lib/api";
 
 // Scanned PDFs are rendered to page images client-side (never uploaded whole),
 // so the cap only guards browser memory.
@@ -13,7 +14,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleFile = useCallback((file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     if (file.type !== "application/pdf") {
       toast("That file isn't a PDF — try another one.");
       return;
@@ -22,7 +23,28 @@ export default function Home() {
       toast("That PDF is over 50 MB. Compress it and try again.");
       return;
     }
-    navigate("/practice", { state: { file } });
+
+    // Consumes exactly one free session (or confirms an active subscription)
+    // for this upload. Every downstream parse call reuses this grant
+    // read-only — see api/_entitlement.ts and the auth-subscriptions plan.
+    let grant: string;
+    try {
+      const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
+      if (res.status === 402) {
+        toast("You're out of free sessions — subscribe to keep rehearsing.");
+        navigate("/pricing");
+        return;
+      }
+      if (!res.ok) throw new Error("start-rehearsal failed");
+      const data = (await res.json()) as { grant?: string };
+      if (!data.grant) throw new Error("No grant returned");
+      grant = data.grant;
+    } catch {
+      toast("Couldn't start a new rehearsal. Please try again.");
+      return;
+    }
+
+    navigate("/practice", { state: { file, rehearsalGrant: grant } });
   }, [navigate, toast]);
 
   return (

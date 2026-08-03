@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireRehearsalGrant } from "./_entitlement.js";
 
 // Parses a chunk of scanned script pages (rendered to JPEGs client-side) with
 // vision. Scanned PDFs have no text layer, so the fast text path in
@@ -48,6 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const auth = await requireRehearsalGrant(req, res);
+  if (!auth) return;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });

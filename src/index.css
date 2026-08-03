@@ -455,6 +455,7 @@ header .flow-back:hover { color: var(--ink); }
 .plan-price strong { font-family: var(--font-display); font-size: clamp(3.5rem,5vw,4rem); font-weight: 500; line-height: 1; letter-spacing: -.035em; }
 .plan-price span { color: rgba(248,241,230,.72); font-size: 1.0625rem; }
 .free-allowance { margin: 10px 0 0; color: #f3a17e; font-size: .9375rem; font-weight: 600; }
+.plan-error { margin: 12px 0 0; color: #ffb1a0; font-size: .875rem; text-align: center; }
 .pricing-card > ul { display: flex; flex-direction: column; gap: 12px; margin: 25px 0 0; padding: 22px 0 0; border-top: 1px solid rgba(255,255,255,.13); list-style: none; }
 .pricing-card > ul li { display: flex; align-items: flex-start; gap: 11px; color: rgba(248,241,230,.85); font-size: .9375rem; line-height: 1.45; }
 .pricing-card > ul span { color: #ef9a78; font-weight: 700; }
@@ -493,6 +494,28 @@ header .flow-back:hover { color: var(--ink); }
   .plan-price strong { font-size: 3.4rem; }
   .pricing-details { width: calc(100% - 40px); }
   .pricing-footer { align-items: flex-start; flex-direction: column; justify-content: center; padding: 18px 20px; }
+}
+
+/* Account entry — login / signup */
+.site-nav-user { max-width: 190px; overflow: hidden; color: rgba(248,241,230,.66); text-overflow: ellipsis; white-space: nowrap; }
+.auth-layout { display: flex; height: calc(100dvh - clamp(68px, 10vh, 92px)); align-items: center; justify-content: center; padding: 24px clamp(22px, 5vw, 76px) clamp(32px, 6vh, 60px); }
+.auth-card { display: flex; width: min(420px,100%); flex-direction: column; padding: clamp(28px,3vw,38px); border: 1px solid rgba(255,255,255,.18); border-radius: 11px; background: linear-gradient(145deg,rgba(29,45,67,.94),rgba(20,34,54,.94)); box-shadow: 0 22px 55px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.04); }
+.auth-card > header p { margin: 0 0 8px; color: #ef9a78; font-size: .9375rem; font-weight: 600; }
+.auth-card > header h1 { margin: 0 0 26px; font-family: var(--font-display); font-size: clamp(2.25rem,3.4vw,2.75rem); font-weight: 500; line-height: 1.05; letter-spacing: -.025em; }
+.auth-card label { margin-bottom: 7px; color: rgba(248,241,230,.76); font-size: .875rem; font-weight: 600; }
+.auth-card input { min-height: 46px; margin-bottom: 18px; padding: 0 13px; border: 1px solid rgba(255,255,255,.2); border-radius: 8px; background: rgba(8,16,27,.5); color: #f8f1e6; font-size: 1rem; transition: border-color .2s ease; }
+.auth-card input:focus { border-color: rgba(239,154,120,.72); outline: none; }
+.auth-error { margin: -6px 0 16px; color: #f3a17e; font-size: .875rem; line-height: 1.45; }
+.auth-card > button { display: flex; min-height: 50px; align-items: center; justify-content: center; gap: 12px; margin-top: 4px; border: 1px solid rgba(255,205,183,.55); border-radius: 9px; background: linear-gradient(135deg,#f4a583,#e98464); box-shadow: 0 8px 18px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.28); color: #101a28; font-size: 1rem; font-weight: 700; transition: filter .2s ease,transform .2s ease; }
+.auth-card > button:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
+.auth-card > button:disabled { cursor: default; opacity: .65; }
+.auth-card > footer { margin-top: 18px; color: rgba(248,241,230,.66); font-size: .875rem; text-align: center; }
+.auth-card > footer a { color: #f3a17e; font-weight: 600; }
+.auth-card > footer a:hover { color: #f8f1e6; }
+
+@media (max-width: 520px) {
+  .auth-layout { height: auto; padding-inline: 20px; padding-top: 34px; }
+  .auth-card { padding: 26px 22px; }
 }
 
 /* Editorial display caps — high-contrast serif, tastefully tracked */

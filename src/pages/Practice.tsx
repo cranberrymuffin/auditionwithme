@@ -10,6 +10,8 @@ import StageShell from "../components/practice/StageShell";
 import { extractPdfLayout, loadPdf, type LayoutLineTuple } from "../lib/pdf";
 import { parseScannedPdf } from "../lib/scannedScript";
 import { useToast } from "../lib/toast";
+import { apiFetch } from "../lib/api";
+import { ApiError } from "../lib/apiError";
 
 type ParseData = {
   steps?: Step[];
@@ -29,6 +31,10 @@ export default function Practice() {
   const location = useLocation();
   const navigate = useNavigate();
   const file: File | null = location.state?.file ?? null;
+  // Issued once by Home.tsx's start-rehearsal call; reused read-only by every
+  // parse call below (including retries and the bilingual re-parse) — never
+  // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
+  const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
 
   const [loading, setLoading] = useState(false);
   const [processingPhase, setProcessingPhase] = useState<"extracting" | "analyzing">("extracting");
@@ -59,7 +65,7 @@ export default function Practice() {
   const voiceableSpeakers = characters.filter((s) => s !== selectedRole);
 
   useEffect(() => {
-    if (!file) {
+    if (!file || !rehearsalGrant) {
       navigate("/", { replace: true });
       return;
     }
@@ -91,11 +97,16 @@ export default function Practice() {
 
         let data: ParseData;
         if (extractedLines !== null) {
-          const res = await fetch("/api/parse-script", {
+          const res = await apiFetch("/api/parse-script", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "x-rehearsal-grant": rehearsalGrant },
             body: JSON.stringify({ layout: { lines: extractedLines } }),
           });
+
+          if (res.status === 401 || res.status === 403) {
+            const body = await res.json().catch(() => ({}) as { error?: string });
+            throw new ApiError(res.status, body.error ?? "Session or rehearsal grant is no longer valid");
+          }
 
           const responseText = await res.text();
           let payload: { error?: string } & typeof data = {};
@@ -115,7 +126,7 @@ export default function Practice() {
           data = payload;
         } else {
           // Image-only PDF (scan) — render pages and parse chunks with vision.
-          data = await parseScannedPdf(file, undefined, pdfDocument);
+          data = await parseScannedPdf(file, rehearsalGrant, undefined, pdfDocument);
         }
 
         if (data.unreadableOriginalLanguage && (data.steps?.length ?? 0) > 0) {
@@ -125,6 +136,15 @@ export default function Practice() {
           applyParseResult(data);
         }
       } catch (err) {
+        if (err instanceof ApiError && err.status === 401) {
+          navigate("/login", { replace: true });
+          return;
+        }
+        if (err instanceof ApiError && err.status === 403) {
+          toast("Your rehearsal session expired — please re-upload your script.");
+          navigate("/", { replace: true });
+          return;
+        }
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
         setLoading(false);
@@ -153,7 +173,7 @@ export default function Practice() {
 
     void (async () => {
       try {
-        const response = await fetch("/api/character-voices", {
+        const response = await apiFetch("/api/character-voices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ characters: characterList, languageCode: scriptLanguage.code }),
@@ -178,7 +198,7 @@ export default function Practice() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch("/api/voices");
+        const response = await apiFetch("/api/voices");
         const data = await response.json() as { voices?: Voice[]; error?: string };
         if (!response.ok) throw new Error(data.error || "Voice list fetch failed");
         if (!cancelled && Array.isArray(data.voices)) setVoices(data.voices);
@@ -202,16 +222,27 @@ export default function Practice() {
   };
 
   const rehearseOriginalLanguage = async () => {
-    if (!file) return;
+    if (!file || !rehearsalGrant) return;
     setLanguageChoice(null);
     setLoading(true);
     setProcessingPhase("analyzing");
     try {
-      const result = await parseScannedPdf(file, undefined, undefined, {
+      // Reuses the same grant as the initial parse — this is a re-parse of
+      // the same upload, not a new billable session.
+      const result = await parseScannedPdf(file, rehearsalGrant, undefined, undefined, {
         preferOriginalLanguage: true,
       });
       applyParseResult(result);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      if (err instanceof ApiError && err.status === 403) {
+        toast("Your rehearsal session expired — please re-upload your script.");
+        navigate("/", { replace: true });
+        return;
+      }
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);

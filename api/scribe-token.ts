@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { requireAuthRateLimited } from "./_entitlement.js";
 
 // Mints a short-lived single-use token so the browser can open the
 // Scribe v2 Realtime WebSocket without ever seeing the API key.
@@ -6,6 +7,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const auth = await requireAuthRateLimited(req, res);
+  if (!auth) return;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
