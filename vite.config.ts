@@ -37,7 +37,9 @@ function localVercelApi(): Plugin {
             if (bodyBytes > MAX_LOCAL_API_BODY_BYTES) {
               response.statusCode = 413;
               response.setHeader("Content-Type", "application/json");
-              response.end(JSON.stringify({ error: "Request body is too large" }));
+              response.end(
+                JSON.stringify({ error: "Request body is too large" }),
+              );
               return;
             }
             chunks.push(buffer);
@@ -46,7 +48,9 @@ function localVercelApi(): Plugin {
           const localRequest = request as LocalRequest;
           const rawBody = Buffer.concat(chunks);
           localRequest.bodyRaw = rawBody;
-          localRequest.body = rawBody.length ? JSON.parse(rawBody.toString("utf8")) : {};
+          localRequest.body = rawBody.length
+            ? JSON.parse(rawBody.toString("utf8"))
+            : {};
           localRequest.query = Object.fromEntries(url.searchParams.entries());
 
           const localResponse = response as LocalResponse;
@@ -63,14 +67,15 @@ function localVercelApi(): Plugin {
             localResponse.end(
               typeof value === "string" || Buffer.isBuffer(value)
                 ? value
-                : JSON.stringify(value)
+                : JSON.stringify(value),
             );
             return localResponse;
           };
 
           const module = await server.ssrLoadModule(`/api/${match[1]}.ts`);
           const handler = module.default as ApiHandler | undefined;
-          if (!handler) throw new Error(`No API handler found for ${url.pathname}`);
+          if (!handler)
+            throw new Error(`No API handler found for ${url.pathname}`);
           await handler(localRequest, localResponse);
         } catch (error) {
           console.error(`Local API error (${url.pathname}):`, error);
@@ -79,7 +84,12 @@ function localVercelApi(): Plugin {
             response.setHeader("Content-Type", "application/json");
           }
           if (!response.writableEnded) {
-            response.end(JSON.stringify({ error: error instanceof Error ? error.message : "Local API failed" }));
+            response.end(
+              JSON.stringify({
+                error:
+                  error instanceof Error ? error.message : "Local API failed",
+              }),
+            );
           }
         }
       });

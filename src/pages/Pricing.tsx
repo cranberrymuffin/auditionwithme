@@ -157,7 +157,6 @@ export default function Pricing() {
               <p>Audition Plus</p>
               <span>For regular scene work</span>
             </div>
-            <span>One plan</span>
           </header>
           <p className="plan-description">
             Everything you need to rehearse complete scenes with a responsive
@@ -201,6 +200,10 @@ export default function Pricing() {
               disabled={busy}
             >
               {freeSessionCopy} <span>→</span>
+            </button>
+          ) : !user ? (
+            <button type="button" onClick={() => navigate("/signup")}>
+              Try 3 rehearsals for Free <span>→</span>
             </button>
           ) : (
             <button

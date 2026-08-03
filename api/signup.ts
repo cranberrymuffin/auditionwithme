@@ -48,15 +48,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Email and password are required." });
   }
 
-  const origin = process.env.SITE_URL ?? req.headers.origin;
-  const redirectTo = origin ? `${origin}/login` : undefined;
-
   try {
     const supabase = serviceClient();
     const { error } = await supabase.auth.admin.createUser({
       email,
       password,
-      emailRedirectTo: redirectTo,
+      email_confirm: true,
     });
 
     if (error) {

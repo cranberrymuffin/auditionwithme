@@ -10,7 +10,9 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 // can read/write the caller's entitlements row server-side.
 function serviceClient() {
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+    throw new Error(
+      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
+    );
   }
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -38,7 +40,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!priceId.startsWith("price_")) {
     console.error("Invalid STRIPE_PRICE_ID:", priceId);
-    return res.status(500).json({ error: "Billing price ID is invalid. Use a Stripe price ID starting with price_." });
+    return res
+      .status(500)
+      .json({
+        error:
+          "Billing price ID is invalid. Use a Stripe price ID starting with price_.",
+      });
   }
 
   const origin = process.env.SITE_URL ?? req.headers.origin;
@@ -71,10 +78,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (writeError) {
         // The customer exists in Stripe but we couldn't remember it. Fail here
         // rather than proceeding — the webhook matches on stripe_customer_id.
-        console.error("entitlements stripe_customer_id write failed:", writeError.message);
-        return res.status(500).json({ error: "Could not save billing account" });
+        console.error(
+          "entitlements stripe_customer_id write failed:",
+          writeError.message,
+        );
+        return res
+          .status(500)
+          .json({ error: "Could not save billing account" });
       }
-      console.log(`stripe customer created ${customerId} for user ${auth.userId}`);
+      console.log(
+        `stripe customer created ${customerId} for user ${auth.userId}`,
+      );
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -90,6 +104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error("create-checkout-session failed:", error);
     const message = error instanceof Error ? error.message : String(error);
-    return res.status(500).json({ error: `Could not start checkout: ${message}` });
+    return res
+      .status(500)
+      .json({ error: `Could not start checkout: ${message}` });
   }
 }

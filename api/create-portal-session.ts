@@ -9,7 +9,9 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 // Same service-role client pattern as api/_entitlement.ts.
 function serviceClient() {
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+    throw new Error(
+      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
+    );
   }
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
