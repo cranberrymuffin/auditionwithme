@@ -8,12 +8,12 @@ export default function Signup() {
   const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [confirmationSent, setConfirmationSent] = useState(false);
+  const [accountCreated, setAccountCreated] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setConfirmationSent(false);
+    setAccountCreated(false);
     setSubmitting(true);
 
     const response = await fetch("/api/signup", {
@@ -23,7 +23,9 @@ export default function Signup() {
     });
 
     const payload = await response.json().catch(() => null);
-    const signUpError = !response.ok ? payload?.error || "Could not create account." : null;
+    const signUpError = !response.ok
+      ? payload?.error || "Could not create account."
+      : null;
 
     if (signUpError) {
       setSubmitting(false);
@@ -32,7 +34,7 @@ export default function Signup() {
     }
 
     setSubmitting(false);
-    setConfirmationSent(true);
+    setAccountCreated(true);
   }
 
   return (
@@ -47,13 +49,10 @@ export default function Signup() {
             <h1>Create your account</h1>
           </header>
 
-          {confirmationSent ? (
+          {accountCreated ? (
             <div className="auth-success" role="status">
-              <p>Check your email to confirm your account.</p>
-              <p>
-                Once you confirm it, come back here and log in with your new
-                credentials.
-              </p>
+              <p>Your account has been created.</p>
+              <p>Log in with your new credentials to continue.</p>
             </div>
           ) : (
             <>
@@ -96,7 +95,7 @@ export default function Signup() {
             </p>
           )}
 
-          {!confirmationSent && (
+          {!accountCreated && (
             <button type="submit" disabled={submitting}>
               {submitting ? "Creating account…" : "Sign up"}{" "}
               <span aria-hidden="true">→</span>
@@ -104,15 +103,7 @@ export default function Signup() {
           )}
 
           <footer>
-            {confirmationSent ? (
-              <>
-                Already confirmed? <Link to="/login">Log in</Link>
-              </>
-            ) : (
-              <>
-                Already have an account? <Link to="/login">Log in</Link>
-              </>
-            )}
+            Already have an account? <Link to="/login">Log in</Link>
           </footer>
         </form>
       </section>

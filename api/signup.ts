@@ -7,7 +7,9 @@ const signupSecret = process.env.SIGNUP_SECRET;
 
 function serviceClient() {
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+    throw new Error(
+      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
+    );
   }
   return createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -21,7 +23,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!signupSecret) {
     console.error("SIGNUP_SECRET is not configured");
-    return res.status(500).json({ error: "Account creation is temporarily disabled." });
+    return res.status(500).json({
+      error:
+        "Account creation is temporarily disabled because SIGNUP_SECRET is not configured in production.",
+    });
   }
 
   const { email, password, secret } = req.body as {
@@ -34,7 +39,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: "Invalid signup secret." });
   }
 
-  if (!email || !password || typeof email !== "string" || typeof password !== "string") {
+  if (
+    !email ||
+    !password ||
+    typeof email !== "string" ||
+    typeof password !== "string"
+  ) {
     return res.status(400).json({ error: "Email and password are required." });
   }
 
@@ -57,7 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ status: "ok" });
   } catch (error) {
     console.error("signup failed:", error);
-    const message = error instanceof Error ? error.message : "Could not create account.";
+    const message =
+      error instanceof Error ? error.message : "Could not create account.";
     return res.status(500).json({ error: message });
   }
 }
