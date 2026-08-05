@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { countMatchedWords } from "../lib/script";
+import { apiFetch } from "../lib/api";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
@@ -56,12 +57,12 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     const start = async () => {
       try {
         const [tokenRes, mic] = await Promise.all([
-          fetch("/api/scribe-token", { method: "POST" }),
+          apiFetch("/api/scribe-token", { method: "POST" }),
           navigator.mediaDevices.getUserMedia({ audio: true }),
         ]);
         stream = mic;
         const tokenData = await tokenRes.json();
-        if (!tokenRes.ok || !tokenData.token) throw new Error("No Scribe token");
+        if (!tokenRes.ok || !tokenData.token) throw new Error(tokenData.error || "No Scribe token");
         if (state.closed) return cleanup();
 
         const params = new URLSearchParams({

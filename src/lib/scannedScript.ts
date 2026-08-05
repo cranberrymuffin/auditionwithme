@@ -1,6 +1,8 @@
 import type { Step } from "../types";
 import { loadPdf, renderPdfPageToJpeg } from "./pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { apiFetch } from "./api";
+import { throwIfError } from "./apiError";
 
 // Scanned (image-only) PDFs have no text layer, so the fast text parse can't
 // run. Instead: render pages to JPEGs in the browser, send them to
@@ -26,7 +28,12 @@ type ChunkResult = {
   error?: string;
 };
 
-export type ScannedProgress = { renderedPages: number; parsedChunks: number; totalPages: number; totalChunks: number };
+export type ScannedProgress = {
+  renderedPages: number;
+  parsedChunks: number;
+  totalPages: number;
+  totalChunks: number;
+};
 
 export type ScannedParseOptions = {
   /** Bilingual editions: transcribe the original language, not the translation */
@@ -35,14 +42,23 @@ export type ScannedParseOptions = {
 
 export async function parseScannedPdf(
   file: File,
+  /** Rehearsal grant from api/start-rehearsal.ts — reused read-only by every
+   * chunk and retry for this upload, never re-requested here. See
+   * api/_entitlement.ts and the auth-subscriptions plan's Decision 2. */
+  grant: string,
   onProgress?: (progress: ScannedProgress) => void,
   loadedDocument?: PDFDocumentProxy,
-  options?: ScannedParseOptions
+  options?: ScannedParseOptions,
 ): Promise<ScannedParseResult> {
   const document = loadedDocument ?? (await loadPdf(file));
   const totalPages = document.numPages;
   const totalChunks = Math.ceil(totalPages / PAGES_PER_CHUNK);
-  const progress: ScannedProgress = { renderedPages: 0, parsedChunks: 0, totalPages, totalChunks };
+  const progress: ScannedProgress = {
+    renderedPages: 0,
+    parsedChunks: 0,
+    totalPages,
+    totalChunks,
+  };
 
   // Render sequentially (rendering shares the main thread) but fire each
   // chunk's parse request as soon as its pages are ready, so network/model time
@@ -57,11 +73,11 @@ export async function parseScannedPdf(
       onProgress?.({ ...progress });
     }
     chunkPromises.push(
-      parseChunk(images, options).then((result) => {
+      parseChunk(images, grant, options).then((result) => {
         progress.parsedChunks += 1;
         onProgress?.({ ...progress });
         return result;
-      })
+      }),
     );
   }
 
@@ -74,15 +90,21 @@ export async function parseScannedPdf(
  * Collapse per-chunk speaker-name variants ("WIDOW T" vs "WIDOW TWANKEY") into
  * one canonical name per character. Non-fatal: on failure the raw names stay.
  */
-async function canonicalizeCharacters(result: ScannedParseResult): Promise<ScannedParseResult> {
+async function canonicalizeCharacters(
+  result: ScannedParseResult,
+): Promise<ScannedParseResult> {
   if (result.characters.length < 2) return result;
   try {
-    const response = await fetch("/api/canonicalize-characters", {
+    // Auth-only (rate-limited), not grant-gated — this is bookkeeping for an
+    // already-granted upload, not a new billable session (plan Decision 3).
+    const response = await apiFetch("/api/canonicalize-characters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ characters: result.characters }),
     });
-    const data = (await response.json()) as { canonical?: Record<string, string> };
+    const data = (await response.json()) as {
+      canonical?: Record<string, string>;
+    };
     if (!response.ok || !data.canonical) return result;
     const canonical = data.canonical;
 
@@ -100,7 +122,10 @@ async function canonicalizeCharacters(result: ScannedParseResult): Promise<Scann
       })),
     };
   } catch (error) {
-    console.warn("Character canonicalization failed; keeping raw names.", error);
+    console.warn(
+      "Character canonicalization failed; keeping raw names.",
+      error,
+    );
     return result;
   }
 }
@@ -109,28 +134,31 @@ const CHUNK_MAX_ATTEMPTS = 3; // upstream content filtering is stochastic — re
 
 async function parseChunk(
   images: string[],
+  grant: string,
   options?: ScannedParseOptions,
-  attempt = 0
+  attempt = 0,
 ): Promise<ChunkResult> {
-  const response = await fetch("/api/parse-pages", {
+  const response = await apiFetch("/api/parse-pages", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ images, preferOriginalLanguage: options?.preferOriginalLanguage }),
+    headers: { "Content-Type": "application/json", "x-rehearsal-grant": grant },
+    body: JSON.stringify({
+      images,
+      preferOriginalLanguage: options?.preferOriginalLanguage,
+    }),
   });
-  let data: ChunkResult = {};
-  try {
-    data = (await response.json()) as ChunkResult;
-  } catch {
-    // fall through to the status check below
+  // An expired/invalid session or grant won't clear on retry — surface it
+  // immediately so the caller can redirect instead of burning 3 attempts.
+  if (response.status === 401 || response.status === 403) {
+    await throwIfError(response, "A section of the script could not be read.");
   }
   if (!response.ok) {
     if (attempt < CHUNK_MAX_ATTEMPTS - 1) {
       await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
-      return parseChunk(images, options, attempt + 1);
+      return parseChunk(images, grant, options, attempt + 1);
     }
-    throw new Error(data.error || "A section of the script could not be read.");
+    await throwIfError(response, "A section of the script could not be read.");
   }
-  return data;
+  return (await response.json()) as ChunkResult;
 }
 
 export function mergeChunkResults(results: ChunkResult[]): ScannedParseResult {
@@ -160,7 +188,9 @@ export function mergeChunkResults(results: ChunkResult[]): ScannedParseResult {
     if (steps.length && chunkSteps.length && !chunkSteps[0].speaker) {
       const previous = steps[steps.length - 1];
       const continuation = chunkSteps[0];
-      previous.verbalLine = [previous.verbalLine, continuation.verbalLine].filter(Boolean).join(" ");
+      previous.verbalLine = [previous.verbalLine, continuation.verbalLine]
+        .filter(Boolean)
+        .join(" ");
       previous.content = [...previous.content, ...continuation.content];
       chunkSteps = chunkSteps.slice(1);
     }

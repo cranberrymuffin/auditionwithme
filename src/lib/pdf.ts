@@ -43,10 +43,10 @@ export async function extractPdfLayout(
     const content = await page.getTextContent();
 
     // Group items into visual lines by y position (2pt tolerance).
-    type Row = { y: number; items: { x: number; width: number; text: string }[] };
+    type Row = { y: number; items: { x: number; width: number; height: number; text: string }[] };
     const rows: Row[] = [];
     for (const item of content.items) {
-      if (!("str" in item) || !item.str.trim()) continue;
+      if (!("str" in item)) continue;
       const x = item.transform[4];
       const y = item.transform[5];
       let row = rows.find((r) => Math.abs(r.y - y) <= 2);
@@ -54,7 +54,7 @@ export async function extractPdfLayout(
         row = { y, items: [] };
         rows.push(row);
       }
-      row.items.push({ x, width: item.width ?? 0, text: item.str });
+      row.items.push({ x, width: item.width ?? 0, height: item.height || 10, text: item.str });
     }
 
     rows.sort((a, b) => b.y - a.y); // top of page first
@@ -72,7 +72,16 @@ export async function extractPdfLayout(
         }
         if (!segment) segment = { x: item.x, end: item.x + item.width, text: item.text };
         else {
-          segment.text += ` ${item.text}`;
+          // Some PDFs emit one item per glyph (including the space glyph
+          // itself), so a real inter-word space is already in `item.text` —
+          // adding another one here would space out every single letter.
+          // Only synthesize a space for a real positional gap (word-spacing
+          // encoded purely via cursor movement, no dedicated space glyph),
+          // and never when either side already carries whitespace.
+          const gap = item.x - segment.end;
+          const alreadySpaced = /\s$/.test(segment.text) || /^\s/.test(item.text);
+          const needsSpace = !alreadySpaced && gap > item.height * 0.15;
+          segment.text += (needsSpace ? " " : "") + item.text;
           segment.end = Math.max(segment.end, item.x + item.width);
         }
       }
