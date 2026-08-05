@@ -301,14 +301,14 @@ header .flow-back:hover { color: var(--ink); }
 .hero-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(3.25rem, 5.9vw, 6.35rem);
+  font-size: clamp(2.85rem, 5.2vw, 5.6rem);
   font-weight: 400;
   line-height: var(--leading-hero);
   letter-spacing: -.025em;
   text-wrap: balance;
 }
 .hero-title .hero-title-roman { display: block; color: #fff8ed; font-style: normal; font-weight: 700; }
-.hero-title .hero-title-italic { display: block; color: #f2b08f; font-style: italic; font-weight: 500; letter-spacing: -.015em; line-height: 1.01; }
+.hero-title .hero-title-italic { display: block; color: #f2b08f; font-style: italic; font-weight: 500; font-size: .96em; letter-spacing: -.015em; line-height: 1.01; }
 .hero-mobile-break { display: none !important; }
 .hero-description {
   width: min(38rem, 100%);
@@ -415,7 +415,7 @@ header .flow-back:hover { color: var(--ink); }
   .site-nav .eyebrow { font-size: 1rem; letter-spacing: 0; }
   .hero-editorial { min-height: calc(100dvh - 66px); justify-content: flex-end; padding: 0 22px max(24px, env(safe-area-inset-bottom)); }
   .hero-copy { width: 100%; }
-  .hero-title { max-width: 100%; font-size: clamp(2.75rem, 12vw, 3.45rem); line-height: .96; }
+  .hero-title { max-width: 100%; font-size: clamp(2.4rem, 10.5vw, 3.05rem); line-height: .96; }
   .hero-title .hero-title-italic { line-height: 1.02; }
   .hero-mobile-break { display: inline !important; }
   .hero-description { width: 100%; margin-top: 16px; font-size: clamp(1rem, 4.3vw, 1.125rem); line-height: 1.55; }
@@ -426,7 +426,7 @@ header .flow-back:hover { color: var(--ink); }
 
 @media (max-height: 650px) {
   .hero-kicker { margin-bottom: 12px; }
-  .hero-title { font-size: clamp(2.7rem, 10vh, 5rem); }
+  .hero-title { font-size: clamp(2.4rem, 8.8vh, 4.4rem); }
   .hero-description { margin-top: 14px; line-height: 1.4; }
   .hero-actions { margin-top: 15px; }
   .upload-cta { padding-top: 9px; padding-bottom: 9px; }
@@ -535,7 +535,7 @@ header .flow-back:hover { color: var(--ink); }
       linear-gradient(0deg, rgba(5,11,19,.58), transparent 52%);
   }
   .hero-copy { width: min(43rem, 67vw); }
-  .hero-title { font-size: clamp(4.5rem, 8vw, 5.5rem); }
+  .hero-title { font-size: clamp(3.95rem, 7vw, 4.85rem); }
 }
 
 @media (max-width: 460px) {
