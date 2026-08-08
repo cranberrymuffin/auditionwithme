@@ -8,6 +8,17 @@ export type Step = {
   content: ContentLine[];
 };
 
+export type SavedScript = {
+  id: string;
+  title: string;
+  language_code: string;
+  language_name: string;
+  characters: string[];
+  steps: Step[];
+  pdf_path: string | null;
+  created_at: string;
+};
+
 export type Entitlement = {
   user_id: string;
   subscription_status: "free" | "active" | "past_due" | "canceled";

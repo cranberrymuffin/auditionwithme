@@ -12,6 +12,19 @@ import { parseScannedPdf } from "../lib/scannedScript";
 import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { ApiError } from "../lib/apiError";
+import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../lib/supabase";
+
+// Passed via navigate("/practice", { state: { replayScript } }) from My
+// Account — re-launches practice from a script that's already been parsed,
+// so no parse-script AI call happens for this session.
+type ReplayScript = {
+  title: string;
+  steps: Step[];
+  characters: string[];
+  languageCode: string;
+  languageName: string;
+};
 
 type ParseData = {
   steps?: Step[];
@@ -30,11 +43,13 @@ const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
 export default function Practice() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const file: File | null = location.state?.file ?? null;
   // Issued once by Home.tsx's start-rehearsal call; reused read-only by every
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
+  const replayScript: ReplayScript | null = location.state?.replayScript ?? null;
 
   const [loading, setLoading] = useState(false);
   const [processingPhase, setProcessingPhase] = useState<"extracting" | "analyzing">("extracting");
@@ -62,9 +77,61 @@ export default function Practice() {
     if (parsedCharacters.length === 0) setSelectedRole("");
   };
 
+  // Auto-saves every fresh AI parse to the account so it shows up on My
+  // Account. Never called on the replay path (replayScript) — that data is
+  // already saved, and re-saving it would duplicate the entry.
+  const persistScript = async (data: ParseData) => {
+    if (!user) return;
+    const title = (file?.name ?? "Untitled script").replace(/\.pdf$/i, "");
+    // Generated client-side so the PDF upload path and the row insert can
+    // share the same id without a round trip in between.
+    const id = crypto.randomUUID();
+
+    let pdfPath: string | null = null;
+    if (file) {
+      pdfPath = `${user.id}/${id}.pdf`;
+      const { error: uploadError } = await supabase.storage
+        .from("scripts")
+        .upload(pdfPath, file, { contentType: "application/pdf" });
+      if (uploadError) {
+        console.error("Failed to upload script PDF:", uploadError.message);
+        pdfPath = null;
+      }
+    }
+
+    const { error } = await supabase.from("scripts").insert({
+      id,
+      user_id: user.id,
+      title,
+      steps: data.steps ?? [],
+      characters: data.characters ?? [],
+      language_code: data.languageCode ?? "en",
+      language_name: data.languageName ?? "English",
+      pdf_path: pdfPath,
+    });
+    if (error) console.error("Failed to save script to account:", error.message);
+  };
+
+  const finalizeParse = (data: ParseData) => {
+    applyParseResult(data);
+    void persistScript(data);
+  };
+
   const voiceableSpeakers = characters.filter((s) => s !== selectedRole);
 
+  // Replay path: launch straight from a previously saved parse, no AI call.
   useEffect(() => {
+    if (!replayScript) return;
+    applyParseResult({
+      steps: replayScript.steps,
+      characters: replayScript.characters,
+      languageCode: replayScript.languageCode,
+      languageName: replayScript.languageName,
+    });
+  }, [replayScript]);
+
+  useEffect(() => {
+    if (replayScript) return;
     if (!file || !rehearsalGrant) {
       navigate("/", { replace: true });
       return;
@@ -133,7 +200,7 @@ export default function Practice() {
           // Bilingual edition — let the user pick a language before rehearsing.
           setLanguageChoice(data);
         } else {
-          applyParseResult(data);
+          finalizeParse(data);
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -232,7 +299,7 @@ export default function Practice() {
       const result = await parseScannedPdf(file, rehearsalGrant, undefined, undefined, {
         preferOriginalLanguage: true,
       });
-      applyParseResult(result);
+      finalizeParse(result);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         navigate("/login", { replace: true });
@@ -295,7 +362,7 @@ export default function Practice() {
               type="button"
               className="stage-error-retry"
               onClick={() => {
-                applyParseResult(languageChoice);
+                finalizeParse(languageChoice);
                 setLanguageChoice(null);
               }}
             >
@@ -325,7 +392,7 @@ export default function Practice() {
       <RolePicker
         characters={characters}
         steps={steps}
-        fileName={file?.name ?? "Uploaded script"}
+        fileName={file?.name ?? replayScript?.title ?? "Uploaded script"}
         initialSelected={roleDraft}
         onChoose={(role) => {
           setRoleDraft(role || null);
@@ -370,7 +437,7 @@ export default function Practice() {
         }
       }}
       languageCode={scriptLanguage.code}
-      fileName={file?.name ?? "Rehearsal"}
+      fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
     />
   );
 }

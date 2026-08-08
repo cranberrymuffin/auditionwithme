@@ -60,6 +60,14 @@ export default function SiteNav() {
         {!loading &&
           (user ? (
             <>
+              <NavLink
+                to="/account"
+                className={({ isActive }) =>
+                  `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
+                }
+              >
+                My account
+              </NavLink>
               <span className="eyebrow site-nav-user" title={user.email ?? ""}>
                 {user.email}
               </span>

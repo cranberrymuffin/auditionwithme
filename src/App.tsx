@@ -5,6 +5,7 @@ import About from "./pages/About";
 import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import MyAccount from "./pages/MyAccount";
 import RequireAuth from "./components/RequireAuth";
 import ToastProvider from "./components/ToastProvider";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -27,6 +28,14 @@ function App() {
             <Route
               path="/viewer"
               element={<Navigate to="/practice" replace />}
+            />
+            <Route
+              path="/account"
+              element={
+                <RequireAuth>
+                  <MyAccount />
+                </RequireAuth>
+              }
             />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
