@@ -161,23 +161,6 @@ export default function VoiceCasting({
             <span>{dialogue.length} {dialogue.length === 1 ? "dialogue turn" : "dialogue turns"}</span>
           </header>
 
-          <div className="selected-voice">
-            <div className="selected-voice-heading"><span>Selected voice</span><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
-            {currentVoice && <p>{describeVoice(currentVoice)}</p>}
-            <select
-              aria-label={`Selected voice for ${activeSpeaker}`}
-              value={currentVoice?.id ?? ""}
-              onChange={(event) => onPick(activeSpeaker, event.target.value)}
-            >
-              {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
-            </select>
-            <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
-              <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
-              {previewing ? "Pause preview" : "Preview voice"}
-            </button>
-            <q>{previewLine}</q>
-          </div>
-
           <div className="voice-filter-bar">
             <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
             <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
@@ -206,6 +189,23 @@ export default function VoiceCasting({
               No additional voices match this combination. Your selected voice is unchanged.
             </p>
           )}
+
+          <div className="selected-voice">
+            <div className="selected-voice-heading"><span>Selected voice</span><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
+            {currentVoice && <p>{describeVoice(currentVoice)}</p>}
+            <select
+              aria-label={`Selected voice for ${activeSpeaker}`}
+              value={currentVoice?.id ?? ""}
+              onChange={(event) => onPick(activeSpeaker, event.target.value)}
+            >
+              {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
+            </select>
+            <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
+              <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
+              {previewing ? "Pause preview" : "Preview voice"}
+            </button>
+            <q>{previewLine}</q>
+          </div>
 
           <button className="start-rehearsal" disabled={!currentVoice} onClick={() => { stop(); onStart(); }}>
             Start rehearsal <span>→</span>
