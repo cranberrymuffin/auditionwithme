@@ -179,7 +179,7 @@ export default function VoiceCasting({
           </div>
 
           <div className="voice-filter-bar">
-            <div><strong>Refine voices</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
+            <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
             <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
           </div>
           <div className="voice-setup-filters">
