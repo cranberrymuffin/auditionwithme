@@ -156,14 +156,14 @@ export default function Home() {
 
       <section className="hero-editorial">
         <div className="hero-copy" id="upload">
-          <p className="hero-kicker">AI rehearsal partner for actors</p>
+          <p className="hero-kicker">A rehearsal partner for actors</p>
           <h1 className="hero-title">
             <span className="hero-title-roman">Own the room</span>
             <span className="hero-title-italic">before you walk in.</span>
           </h1>
           <p className="hero-description">
             Upload your script, choose your character, and rehearse every scene
-            with responsive AI scene partners.
+            with responsive scene partners.
           </p>
 
           <div className="hero-actions">
