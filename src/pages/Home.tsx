@@ -5,6 +5,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
+import { supabase } from "../lib/supabase";
+import { hashFile } from "../lib/scriptHash";
+import type { SavedScript } from "../types";
 
 // Scanned PDFs are rendered to page images client-side (never uploaded whole),
 // so the cap only guards browser memory.
@@ -72,6 +75,38 @@ export default function Home() {
       }
       if (file.size > MAX_PDF_BYTES) {
         toast("That PDF is over 50 MB. Compress it and try again.");
+        return;
+      }
+
+      // Re-uploading a script already parsed for this account should reuse
+      // the stored steps instead of paying for another AI parse (and,
+      // matching the My Account "practice again" path, shouldn't burn a
+      // free session/rehearsal grant for it either).
+      const contentHash = await hashFile(file);
+      const { data: existing } = await supabase
+        .from("scripts")
+        .select(
+          "title,language_code,language_name,characters,steps,content_hash",
+        )
+        .eq("user_id", user.id)
+        .eq("content_hash", contentHash)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        const saved = existing as SavedScript;
+        navigate("/practice", {
+          state: {
+            replayScript: {
+              title: saved.title,
+              steps: saved.steps,
+              characters: saved.characters,
+              languageCode: saved.language_code,
+              languageName: saved.language_name,
+            },
+          },
+        });
         return;
       }
 

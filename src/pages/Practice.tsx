@@ -14,6 +14,7 @@ import { apiFetch } from "../lib/api";
 import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { hashFile } from "../lib/scriptHash";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
 // Account — re-launches practice from a script that's already been parsed,
@@ -113,6 +114,11 @@ export default function Practice() {
       }
     }
 
+    // Fingerprints this upload so re-uploading the same PDF later (Home.tsx's
+    // handleFile) can be recognized and served from this saved row instead
+    // of triggering another parse-script call.
+    const contentHash = file ? await hashFile(file) : null;
+
     const { error } = await supabase.from("scripts").insert({
       id,
       user_id: user.id,
@@ -122,6 +128,7 @@ export default function Practice() {
       language_code: data.languageCode ?? "en",
       language_name: data.languageName ?? "English",
       pdf_path: pdfPath,
+      content_hash: contentHash,
     });
     if (error)
       console.error("Failed to save script to account:", error.message);

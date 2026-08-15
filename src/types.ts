@@ -16,6 +16,7 @@ export type SavedScript = {
   characters: string[];
   steps: Step[];
   pdf_path: string | null;
+  content_hash: string | null;
   created_at: string;
 };
 
