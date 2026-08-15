@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
+import { useAuth } from "../contexts/AuthContext";
 
 const steps = [
   ["01", "Upload", "Add your PDF sides."],
@@ -9,6 +10,7 @@ const steps = [
 
 export default function About() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <main className="cinematic-page about-page-clean">
@@ -26,11 +28,20 @@ export default function About() {
           <button
             type="button"
             className="upload-cta about-cta-button"
-            onClick={() => navigate("/signup")}
+            onClick={() => navigate(user ? "/" : "/signup")}
           >
             <span className="upload-copy">
-              <strong>Sign up</strong>
-              <small>Three rehersals for free</small>
+              {user ? (
+                <>
+                  <strong>Upload your script</strong>
+                  <small>Rehearse your next scene</small>
+                </>
+              ) : (
+                <>
+                  <strong>Sign up</strong>
+                  <small>Three rehearsals for free</small>
+                </>
+              )}
             </span>
             <span aria-hidden="true">→</span>
           </button>
