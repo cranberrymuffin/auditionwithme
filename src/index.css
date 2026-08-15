@@ -1179,6 +1179,22 @@ header .flow-back:hover {
 .pricing-card > button:hover span {
   transform: translateX(3px);
 }
+.pricing-card > button.plan-free-link {
+  min-height: 0;
+  margin-top: 14px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pricing-card > button.plan-free-link:hover {
+  filter: none;
+  transform: none;
+  color: #f3a17e;
+}
 .pricing-card > footer {
   margin-top: 13px;
   color: rgba(248, 241, 230, 0.62);
