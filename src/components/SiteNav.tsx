@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
@@ -29,17 +29,40 @@ export default function SiteNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
 
-  const showPricing =
-    !loading && (!user || entitlement?.subscription_status !== "active");
+  const isSubscriber = !!user && entitlement?.subscription_status === "active";
+  const subscriptionLabel = isSubscriber ? "Manage subscription" : "Pricing";
 
-  // Close the mobile menu on any route change.
+  // Logged-in users get pricing/subscription access via the "My account"
+  // dropdown instead of a top-level nav link.
+  const showPricing = !loading && !user;
+
+  // Close the mobile menu and account dropdown on any route change.
   useEffect(() => {
     setMenuOpen(false);
+    setAccountMenuOpen(false);
   }, [location.pathname, location.hash]);
+
+  // Close the account dropdown on outside click.
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    function handleClick(event: MouseEvent) {
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(event.target as Node)
+      ) {
+        setAccountMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [accountMenuOpen]);
 
   async function handleLogout() {
     setMenuOpen(false);
+    setAccountMenuOpen(false);
     await supabase.auth.signOut();
     navigate("/");
   }
@@ -70,11 +93,66 @@ export default function SiteNav() {
     </>
   );
 
+  const isAccountAreaActive =
+    location.pathname === "/account" || location.pathname === "/pricing";
+
+  const accountDropdown = (
+    <div className="site-nav-account" ref={accountMenuRef}>
+      <button
+        type="button"
+        className={`eyebrow site-nav-link site-nav-account-trigger ${
+          isAccountAreaActive ? "is-active" : ""
+        }`}
+        aria-haspopup="menu"
+        aria-expanded={accountMenuOpen}
+        onClick={() => setAccountMenuOpen((open) => !open)}
+      >
+        My account
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className="site-nav-account-caret"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {accountMenuOpen && (
+        <div className="site-nav-account-menu" role="menu">
+          <NavLink
+            to="/pricing"
+            role="menuitem"
+            className={({ isActive }) =>
+              `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
+            }
+            onClick={() => setAccountMenuOpen(false)}
+          >
+            {subscriptionLabel}
+          </NavLink>
+          <NavLink
+            to="/account"
+            role="menuitem"
+            className={({ isActive }) =>
+              `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
+            }
+            onClick={() => setAccountMenuOpen(false)}
+          >
+            My scripts
+          </NavLink>
+        </div>
+      )}
+    </div>
+  );
+
   const authLinks = loading ? null : user ? (
     <>
-      <NavLink to="/account" className={navLinkClass} onClick={closeMenu}>
-        My account
-      </NavLink>
+      {accountDropdown}
       <button
         type="button"
         className="eyebrow site-nav-link"
@@ -142,12 +220,24 @@ export default function SiteNav() {
           {sharedLinks}
           {loading ? null : user ? (
             <>
+              <span className="site-nav-drawer-heading">My account</span>
               <NavLink
-                to="/account"
-                className={navLinkClass}
+                to="/pricing"
+                className={({ isActive }) =>
+                  `${navLinkClass({ isActive })} site-nav-drawer-sublink`
+                }
                 onClick={closeMenu}
               >
-                My account
+                {subscriptionLabel}
+              </NavLink>
+              <NavLink
+                to="/account"
+                className={({ isActive }) =>
+                  `${navLinkClass({ isActive })} site-nav-drawer-sublink`
+                }
+                onClick={closeMenu}
+              >
+                My scripts
               </NavLink>
               <button
                 type="button"

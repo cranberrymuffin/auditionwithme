@@ -425,6 +425,64 @@ header .flow-back:hover {
 .site-nav-drawer .site-nav-cta {
   margin-top: 10px;
 }
+.site-nav-drawer-heading {
+  padding: 12px 0 0;
+  color: rgba(255, 248, 237, 0.55);
+  font-size: var(--type-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.site-nav-drawer-sublink {
+  padding-left: 14px !important;
+}
+
+.site-nav-account {
+  position: relative;
+}
+.site-nav-account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.site-nav-account-caret {
+  transition: transform 0.2s ease;
+}
+.site-nav-account-trigger[aria-expanded="true"] .site-nav-account-caret {
+  transform: rotate(180deg);
+}
+.site-nav-account-menu {
+  position: absolute;
+  top: calc(100% + 14px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  min-width: 190px;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(8, 15, 25, 0.97);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 32px rgba(5, 11, 19, 0.4);
+}
+.site-nav-account-menu-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #fff8ed;
+  font-size: var(--type-label);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background 0.15s ease;
+}
+.site-nav-account-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.site-nav-account-menu-item.is-active {
+  color: #f2a080;
+}
 
 .hero-editorial {
   min-height: calc(100dvh - clamp(68px, 10vh, 92px));
