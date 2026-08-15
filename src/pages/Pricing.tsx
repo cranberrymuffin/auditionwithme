@@ -65,16 +65,62 @@ export default function Pricing() {
         0,
       )
     : 0;
-  const hasFreeSessions = entitlement
-    ? entitlement.subscription_status === "active" || freeSessionsRemaining > 0
-    : false;
-  const freeSessionCopy = loading
-    ? "Checking your free sessions…"
-    : entitlement
-      ? entitlement.subscription_status === "active"
-        ? "You have an active subscription."
-        : `${freeSessionsRemaining} session${freeSessionsRemaining === 1 ? "" : "s"} left`
-      : "3 sessions included. No credit card required.";
+  const sessionsExhausted =
+    !!entitlement &&
+    entitlement.subscription_status !== "active" &&
+    freeSessionsRemaining === 0;
+
+  // The intro reads differently depending on who's looking at it: a visitor
+  // gets acquisition copy, a signed-in user gets their real session count, a
+  // subscriber (including the post-checkout confirming window) gets plan info.
+  const intro = isSubscribed
+    ? {
+        eyebrow: "Your plan",
+        title: "You're on Audition Plus",
+        sub: confirming
+          ? "We're confirming your subscription with Stripe — this usually takes a few seconds."
+          : "New rehearsals are unlimited while your plan is active. Manage billing anytime from the card below.",
+        reassurance: [
+          "Cancel anytime",
+          "Billing handled securely by Stripe",
+          "PDF scripts supported",
+        ],
+      }
+    : user && sessionsExhausted
+      ? {
+          eyebrow: "One simple plan",
+          title: `You've used all ${entitlement.free_sessions_limit} free sessions`,
+          sub: "Subscribe to Audition Plus to keep creating new rehearsals and pick up right where you left off.",
+          reassurance: [
+            "Cancel anytime",
+            "Your saved scripts stay available",
+            "PDF scripts supported",
+          ],
+        }
+      : user && entitlement
+        ? {
+            eyebrow: "One simple plan",
+            title: `You have ${freeSessionsRemaining} of ${entitlement.free_sessions_limit} free sessions left`,
+            sub: "Keep rehearsing free, or subscribe now — new rehearsals become unlimited the moment you do.",
+            reassurance: [
+              "Cancel anytime",
+              "Unused free sessions stay yours",
+              "PDF scripts supported",
+            ],
+          }
+        : {
+            eyebrow: "One simple plan",
+            title: "Simple pricing for serious rehearsal",
+            sub:
+              user && loading
+                ? "Checking your free sessions…"
+                : "Start with three free sessions. Upgrade only when rehearsal becomes part of your routine.",
+            reassurance: [
+              "No credit card to start",
+              "Cancel anytime",
+              "PDF scripts supported",
+            ],
+          };
 
   const refreshRef = useRef(refresh);
   useEffect(() => {
@@ -132,22 +178,16 @@ export default function Pricing() {
 
       <section className="pricing-main">
         <div className="pricing-intro">
-          <p>One simple plan</p>
-          <h1>Simple pricing for serious rehearsal</h1>
-          <div>
-            Start with three free sessions. Upgrade only when rehearsal becomes
-            part of your routine.
-          </div>
+          <p>{intro.eyebrow}</p>
+          <h1>{intro.title}</h1>
+          <div>{intro.sub}</div>
           <ul className="pricing-reassurance">
-            <li>
-              <span>✓</span>No credit card to start
-            </li>
-            <li>
-              <span>✓</span>Cancel anytime
-            </li>
-            <li>
-              <span>✓</span>PDF scripts supported
-            </li>
+            {intro.reassurance.map((item) => (
+              <li key={item}>
+                <span>✓</span>
+                {item}
+              </li>
+            ))}
           </ul>
         </div>
 
@@ -193,38 +233,48 @@ export default function Pricing() {
                 </>
               )}
             </button>
-          ) : hasFreeSessions ? (
-            <button
-              type="button"
-              onClick={() => navigate("/#upload")}
-              disabled={busy}
-            >
-              {freeSessionCopy} <span>→</span>
-            </button>
           ) : !user ? (
             <button type="button" onClick={() => navigate("/signup")}>
               Try 3 rehearsals for Free <span>→</span>
             </button>
           ) : (
-            <button
-              onClick={() =>
-                redirectToStripe(
-                  "/api/create-checkout-session",
-                  "Could not start checkout. Please try again.",
-                )
-              }
-              disabled={busy || confirming}
-            >
-              {confirming ? (
-                "Confirming your subscription…"
-              ) : busy ? (
-                "Redirecting…"
-              ) : (
-                <>
-                  Subscribe to keep rehearsing <span>→</span>
-                </>
+            <>
+              <button
+                onClick={() =>
+                  redirectToStripe(
+                    "/api/create-checkout-session",
+                    "Could not start checkout. Please try again.",
+                  )
+                }
+                disabled={busy || confirming}
+              >
+                {confirming ? (
+                  "Confirming your subscription…"
+                ) : busy ? (
+                  "Redirecting…"
+                ) : sessionsExhausted ? (
+                  <>
+                    Subscribe to keep rehearsing <span>→</span>
+                  </>
+                ) : (
+                  <>
+                    Subscribe — $7/month <span>→</span>
+                  </>
+                )}
+              </button>
+              {freeSessionsRemaining > 0 && (
+                <button
+                  type="button"
+                  className="plan-free-link"
+                  onClick={() => navigate("/#upload")}
+                  disabled={busy}
+                >
+                  You still have {freeSessionsRemaining} free session
+                  {freeSessionsRemaining === 1 ? "" : "s"} — rehearse free{" "}
+                  <span>→</span>
+                </button>
               )}
-            </button>
+            </>
           )}
           {error && (
             <p className="plan-error" role="alert">

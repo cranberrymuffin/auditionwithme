@@ -34,13 +34,12 @@ export default function Home() {
   const isOutOfFreeSessions =
     !!entitlement && !isSubscribed && freeSessionsRemaining === 0;
 
-  const uploadHint = isSubscribed
-    ? "PDF supported"
-    : entitlement
-      ? `PDF supported · ${freeSessionsRemaining} free ${
-          freeSessionsRemaining === 1 ? "session" : "sessions"
-        } left`
-      : "PDF supported";
+  const sessionsStatus = entitlement
+    ? `${entitlement.free_sessions_limit} free session${entitlement.free_sessions_limit === 1 ? "" : "s"} (${freeSessionsRemaining} left)`
+    : null;
+  // The hero trust line right below the CTA carries the session count, so
+  // the button hint stays minimal to avoid saying it twice.
+  const uploadHint = "PDF supported";
 
   // A visitor who clicked the upload CTA while signed out lands back here
   // after authenticating — draw their eye straight to the upload flow.
@@ -177,7 +176,7 @@ export default function Home() {
                 >
                   <span className="upload-copy">
                     <strong>Subscribe to keep rehearsing</strong>
-                    <small>Free sessions exhausted</small>
+                    <small>{sessionsStatus}</small>
                   </span>
                 </button>
               ) : (
@@ -232,18 +231,21 @@ export default function Home() {
                 </span>
               </button>
             )}
-            <a className="demo-cta" href="/about#how-it-works">
-              <span className="demo-play" aria-hidden="true">
-                ▶
-              </span>
-              <span className="demo-cta-text">See how it works</span>
-            </a>
+            {!user && (
+              <a className="demo-cta" href="/about#how-it-works">
+                <span className="demo-play" aria-hidden="true">
+                  ▶
+                </span>
+                <span className="demo-cta-text">See how it works</span>
+              </a>
+            )}
           </div>
 
           {!isSubscribed && (
             <p className="hero-trust">
-              PDF scripts — typed or scanned · 3 free sessions · No credit card
-              required
+              {sessionsStatus
+                ? `PDF scripts — typed or scanned · ${sessionsStatus}`
+                : "PDF scripts — typed or scanned · 3 free sessions · No credit card required"}
             </p>
           )}
 
