@@ -68,9 +68,6 @@ export default function SiteNav() {
               >
                 My account
               </NavLink>
-              <span className="eyebrow site-nav-user" title={user.email ?? ""}>
-                {user.email}
-              </span>
               <button
                 type="button"
                 className="eyebrow site-nav-link"

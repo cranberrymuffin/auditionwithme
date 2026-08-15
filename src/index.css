@@ -1272,6 +1272,11 @@ header .flow-back:hover {
   font-weight: 500;
   letter-spacing: -0.025em;
 }
+.account-email {
+  margin: 10px 0 0;
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.9375rem;
+}
 .account-subtitle {
   max-width: 520px;
   margin: 16px 0 0;
@@ -1386,14 +1391,6 @@ header .flow-back:hover {
   }
 }
 
-/* Account entry — login / signup */
-.site-nav-user {
-  max-width: 190px;
-  overflow: hidden;
-  color: rgba(248, 241, 230, 0.66);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .auth-layout {
   display: flex;
   height: calc(100dvh - clamp(68px, 10vh, 92px));

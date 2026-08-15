@@ -69,6 +69,7 @@ export default function MyAccount() {
         <header className="account-header">
           <p className="eyebrow">My account</p>
           <h1>Your scripts</h1>
+          {user?.email && <p className="account-email">{user.email}</p>}
           <p className="account-subtitle">
             Scripts you've uploaded before. Jump back into practice without
             re-processing the script.
