@@ -48,13 +48,15 @@ export default function SiteNav() {
 
   const sharedLinks = (
     <>
-      <a
-        className="eyebrow site-nav-link"
-        href="/about#how-it-works"
-        onClick={closeMenu}
-      >
-        How it works
-      </a>
+      {!loading && !user && (
+        <a
+          className="eyebrow site-nav-link"
+          href="/about#how-it-works"
+          onClick={closeMenu}
+        >
+          How it works
+        </a>
+      )}
       {showPricing && (
         <NavLink to="/pricing" className={navLinkClass} onClick={closeMenu}>
           Pricing
