@@ -105,7 +105,7 @@ export default function VoiceCasting({
     if (!currentVoice) return;
     setPreviewing(true);
     try {
-      await play(previewLine, currentVoice.id, { onEnded: () => setPreviewing(false) });
+      await play({ text: previewLine, voiceId: currentVoice.id }, { onEnded: () => setPreviewing(false) });
     } catch {
       setPreviewing(false);
       toast("That voice preview couldn't be played. Try again.");
