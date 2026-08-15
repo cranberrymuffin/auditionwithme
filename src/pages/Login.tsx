@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 import { supabase } from "../lib/supabase";
 
-type RedirectState = { from?: { pathname?: string } } | null;
+type RedirectState = { from?: { pathname?: string }; intent?: string } | null;
 
 export default function Login() {
   const navigate = useNavigate();
@@ -13,20 +13,29 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // RequireAuth forwards the page the user was originally headed to.
-  const destination = (location.state as RedirectState)?.from?.pathname ?? "/";
+  // RequireAuth forwards the page the user was originally headed to; the
+  // home hero also passes an intent (e.g. "upload") so the visitor's original
+  // action resumes after authentication.
+  const redirectState = location.state as RedirectState;
+  const destination = redirectState?.from?.pathname ?? "/";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (signInError) {
       setSubmitting(false);
       setError(signInError.message);
       return;
     }
-    navigate(destination, { replace: true });
+    navigate(destination, {
+      replace: true,
+      state: redirectState?.intent ? { intent: redirectState.intent } : null,
+    });
   }
 
   return (
@@ -61,14 +70,22 @@ export default function Login() {
             onChange={(event) => setPassword(event.target.value)}
           />
 
-          {error && <p className="auth-error" role="alert">{error}</p>}
+          {error && (
+            <p className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
 
           <button type="submit" disabled={submitting}>
-            {submitting ? "Logging in…" : "Log in"} <span aria-hidden="true">→</span>
+            {submitting ? "Logging in…" : "Log in"}{" "}
+            <span aria-hidden="true">→</span>
           </button>
 
           <footer>
-            New to Audition With Me? <Link to="/signup">Create an account</Link>
+            New to Audition With Me?{" "}
+            <Link to="/signup" state={redirectState}>
+              Create an account
+            </Link>
           </footer>
         </form>
       </section>

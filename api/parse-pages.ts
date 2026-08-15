@@ -32,6 +32,13 @@ Rules:
 4b. MUSICAL NUMBERS: do NOT transcribe song lyrics — not even one line. This includes sections marked "MUSIC #", and any sung verse formatted like dialogue (stacked short rhyming lines under speaker labels, often a parody of a well-known song), including songs continuing from a previous page. Replace each song with ONE step: "speaker": "", empty "line", and a "direction" summarizing it, e.g. "MUSIC #4 — In The Navy parody, sung by EVERYBODY". Resume normal steps at the first spoken (non-sung) dialogue after the song.
 5. "direction" (optional) holds the non-spoken text attached to this step: stage directions or scene descriptions immediately before the speech, plus any parentheticals inside it. Omit the field when there is none.
 6. Transcribe what is printed — do not invent, rewrite, summarize, or translate. Ignore handwritten annotations, crossed-out lines, page headers, footers, and page numbers.
+6b. AUDITION SIDES MARKUP — these pages may be audition sides with production markup. Apply it:
+   - Content crossed out by strikethrough lines, diagonal slashes, or X boxes is CUT — exclude it from steps entirely.
+   - START/END (or Start/Stop, often with arrows) margin cues bound the selection: exclude content before a START cue and after an END cue, until the next START. "Sc. 1"/"Scene 2" labels next to cues just number the selections.
+   - Sections marked FYI or set off by a vertical margin line are context only — exclude them from steps.
+   - Margin notes with acting instructions (often colored or handwritten) go into the adjacent step's "direction".
+   - Page furniture ("Role: X", "PG 1 OF 7", "1/4", sides service watermarks) is not content.
+   - Two dialogue columns printed side by side are simultaneous speeches — output the left column's speech as one step, then the right column's as the next.
 7. "characters": every unique speaking character on THESE pages, canonical name, in order of first appearance.
 8. Detect the primary spoken language of the dialogue: ISO 639-1 "languageCode" plus English "languageName".
 
@@ -62,11 +69,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     preferOriginalLanguage?: boolean;
   };
 
-  if (!Array.isArray(images) || images.length === 0 || !images.every((i) => typeof i === "string" && i)) {
+  if (
+    !Array.isArray(images) ||
+    images.length === 0 ||
+    !images.every((i) => typeof i === "string" && i)
+  ) {
     return res.status(400).json({ error: "No page images provided" });
   }
   if (images.length > MAX_IMAGES_PER_CHUNK) {
-    return res.status(413).json({ error: `Too many pages in one chunk (max ${MAX_IMAGES_PER_CHUNK})` });
+    return res
+      .status(413)
+      .json({
+        error: `Too many pages in one chunk (max ${MAX_IMAGES_PER_CHUNK})`,
+      });
   }
 
   try {
@@ -109,9 +124,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (response.stop_reason === "max_tokens") {
       console.error(
-        `parse-pages: output truncated at max_tokens (images=${images.length}, output=${response.usage.output_tokens})`
+        `parse-pages: output truncated at max_tokens (images=${images.length}, output=${response.usage.output_tokens})`,
       );
-      return res.status(500).json({ error: "These pages hold too much text to process in one chunk." });
+      return res
+        .status(500)
+        .json({
+          error: "These pages hold too much text to process in one chunk.",
+        });
     }
 
     const textBlock = response.content.find((b) => b.type === "text");
@@ -125,7 +144,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Compact wire schema from the model ("line"/"direction") to halve output
     // tokens; expand to the app's verbalLine/content step shape here.
     type RawStep = { speaker?: string; line?: string; direction?: string };
-    let parsed: { characters?: string[]; languageCode?: string; languageName?: string; steps?: RawStep[] };
+    let parsed: {
+      characters?: string[];
+      languageCode?: string;
+      languageName?: string;
+      steps?: RawStep[];
+    };
     try {
       parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
     } catch {
@@ -133,15 +157,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
-    const validSteps = Array.isArray(parsed.steps) && parsed.steps.every((step) =>
-      step &&
-      (step.speaker === undefined || typeof step.speaker === "string") &&
-      (step.line === undefined || typeof step.line === "string") &&
-      (step.direction === undefined || typeof step.direction === "string")
-    );
-    const validCharacters = parsed.characters === undefined || (
-      Array.isArray(parsed.characters) && parsed.characters.every((character) => typeof character === "string")
-    );
+    const validSteps =
+      Array.isArray(parsed.steps) &&
+      parsed.steps.every(
+        (step) =>
+          step &&
+          (step.speaker === undefined || typeof step.speaker === "string") &&
+          (step.line === undefined || typeof step.line === "string") &&
+          (step.direction === undefined || typeof step.direction === "string"),
+      );
+    const validCharacters =
+      parsed.characters === undefined ||
+      (Array.isArray(parsed.characters) &&
+        parsed.characters.every((character) => typeof character === "string"));
 
     if (!validSteps || !validCharacters) {
       return res.status(500).json({ error: "Script parsing failed" });
@@ -155,8 +183,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           speaker: step.speaker?.trim() ?? "",
           verbalLine,
           content: [
-            ...(direction ? [{ kind: "nonverbal" as const, text: direction }] : []),
-            ...(verbalLine ? [{ kind: "verbal" as const, text: verbalLine }] : []),
+            ...(direction
+              ? [{ kind: "nonverbal" as const, text: direction }]
+              : []),
+            ...(verbalLine
+              ? [{ kind: "verbal" as const, text: verbalLine }]
+              : []),
           ],
         };
       })
@@ -165,8 +197,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Server-Timing", `model;dur=${modelDurationMs.toFixed(1)}`);
     return res.status(200).json({
       characters: parsed.characters ?? [],
-      languageCode: typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
-      languageName: typeof parsed.languageName === "string" ? parsed.languageName : "English",
+      languageCode:
+        typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
+      languageName:
+        typeof parsed.languageName === "string"
+          ? parsed.languageName
+          : "English",
       steps,
       modelDurationMs: Math.round(modelDurationMs),
     });

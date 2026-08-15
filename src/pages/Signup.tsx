@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 
 export default function Signup() {
+  // Carries the visitor's original destination/intent (e.g. the home upload
+  // flow) through to login so their action resumes after authenticating.
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [secret, setSecret] = useState("");
@@ -52,7 +55,12 @@ export default function Signup() {
           {accountCreated ? (
             <div className="auth-success" role="status">
               <p>Your account has been created.</p>
-              <p>Log in with your new credentials to continue.</p>
+              <p>
+                <Link to="/login" state={location.state}>
+                  Log in
+                </Link>{" "}
+                with your new credentials to continue.
+              </p>
             </div>
           ) : (
             <>
@@ -103,7 +111,10 @@ export default function Signup() {
           )}
 
           <footer>
-            Already have an account? <Link to="/login">Log in</Link>
+            Already have an account?{" "}
+            <Link to="/login" state={location.state}>
+              Log in
+            </Link>
           </footer>
         </form>
       </section>

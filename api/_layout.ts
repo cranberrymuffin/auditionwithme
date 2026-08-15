@@ -15,7 +15,11 @@
 // exhibit screenplay layout, parseScreenplayLayout returns null and the caller
 // falls through to the next strategy (labeled-text classifier, full model).
 
-import { type ParsedStep, type StepContent, splitSpeech } from "./_screenplay.js";
+import {
+  type ParsedStep,
+  type StepContent,
+  splitSpeech,
+} from "./_screenplay.js";
 
 /** [page, x, text] — the compact wire format the client sends. */
 export type LayoutLineTuple = [number, number, string];
@@ -27,10 +31,14 @@ const MIN_SPEECHES = 10;
 const PAGE_NUMBER = /^-?\d{1,4}\.?-?$/;
 const CONTINUATION_MARKER = /^\(\s*(MORE|CONT'?D|CONTINUED)\s*\)$/i;
 const CONTD_SUFFIX = /\((CONT'?D|CONTINUED)\)/i;
-const HEADING = /^(INT|EXT|INT\/EXT|I\/E|FADE|CUT|DISSOLVE|SMASH|SCENE|ACT|MONTAGE|TITLE)\b/i;
+const HEADING =
+  /^(INT|EXT|INT\/EXT|I\/E|FADE|CUT|DISSOLVE|SMASH|SCENE|ACT|MONTAGE|TITLE)\b/i;
 
 function normalizeLabel(label: string): string {
-  return label.replace(/\s*\([^)]*\)\s*$/, "").replace(/[:.]\s*$/, "").trim();
+  return label
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .replace(/[:.]\s*$/, "")
+    .trim();
 }
 
 /** Mostly-uppercase short line — a speaker name, transition, or heading. */
@@ -52,18 +60,25 @@ type LineClass =
 
 type Classifier = (line: Line, index: number) => LineClass;
 
-function buildLayoutSteps(lines: Line[], classify: Classifier): {
+function buildLayoutSteps(
+  lines: Line[],
+  classify: Classifier,
+): {
   steps: ParsedStep[];
   characters: string[];
 } {
   const steps: ParsedStep[] = [];
   let pendingDirections: { text: string; page: number }[] = [];
   type Part = { kind: "dialogue" | "paren"; text: string };
-  let current: { speaker: string; leadIns: string[]; parts: Part[] } | null = null;
+  let current: { speaker: string; leadIns: string[]; parts: Part[] } | null =
+    null;
 
   const flush = () => {
     if (!current) return;
-    const content: StepContent[] = current.leadIns.map((text) => ({ kind: "nonverbal", text }));
+    const content: StepContent[] = current.leadIns.map((text) => ({
+      kind: "nonverbal",
+      text,
+    }));
     const verbalParts: string[] = [];
     let buffer: string[] = [];
     const emitBuffer = () => {
@@ -82,7 +97,11 @@ function buildLayoutSteps(lines: Line[], classify: Classifier): {
     }
     emitBuffer();
     if (content.length) {
-      steps.push({ speaker: current.speaker, verbalLine: verbalParts.join(" "), content });
+      steps.push({
+        speaker: current.speaker,
+        verbalLine: verbalParts.join(" "),
+        content,
+      });
     }
     current = null;
   };
@@ -106,7 +125,10 @@ function buildLayoutSteps(lines: Line[], classify: Classifier): {
         current = {
           speaker: cls.label,
           leadIns: pendingDirections
-            .filter((d) => d.page >= line.page - 1 && !(d.page === 1 && line.page > 1))
+            .filter(
+              (d) =>
+                d.page >= line.page - 1 && !(d.page === 1 && line.page > 1),
+            )
             .map((d) => d.text),
           parts: [],
         };
@@ -133,7 +155,10 @@ function buildLayoutSteps(lines: Line[], classify: Classifier): {
 
   if (pendingDirections.length && steps.length) {
     steps[steps.length - 1].content.push(
-      ...pendingDirections.map((d): StepContent => ({ kind: "nonverbal", text: d.text }))
+      ...pendingDirections.map((d): StepContent => ({
+        kind: "nonverbal",
+        text: d.text,
+      })),
     );
   }
 
@@ -158,9 +183,14 @@ function buildLayoutSteps(lines: Line[], classify: Classifier): {
 
 // ── Variant 1: fixed-column screenplay layout ──
 
-type Cluster = { x: number; count: number; caps: number; followedByLeft: number };
+type Cluster = {
+  x: number;
+  count: number;
+  caps: number;
+  followedByLeft: number;
+};
 
-function classifyFixed(lines: Line[]): Classifier | null {
+function classifyFixed(lines: Line[], minSpeeches: number): Classifier | null {
   const clusters: Cluster[] = [];
   const clusterOf = (x: number): Cluster => {
     let cluster = clusters.find((c) => Math.abs(c.x - x) <= X_TOLERANCE);
@@ -184,7 +214,12 @@ function classifyFixed(lines: Line[]): Classifier | null {
   // lines (their dialogue). Transitions are caps too, but nothing sits
   // left-indented under them as consistently.
   const speakerCluster = clusters
-    .filter((c) => c.count >= MIN_SPEECHES && c.caps / c.count >= 0.6 && c.followedByLeft / c.count >= 0.5)
+    .filter(
+      (c) =>
+        c.count >= minSpeeches &&
+        c.caps / c.count >= 0.6 &&
+        c.followedByLeft / c.count >= 0.5,
+    )
     .sort((a, b) => b.count - a.count)[0];
   if (!speakerCluster) return null;
   const speakerX = speakerCluster.x;
@@ -194,7 +229,11 @@ function classifyFixed(lines: Line[]): Classifier | null {
   const successorCounts = new Map<number, number>();
   const parenCounts = new Map<number, number>();
   for (let i = 0; i < lines.length - 1; i++) {
-    if (Math.abs(lines[i].x - speakerX) > X_TOLERANCE || !isCapsShort(lines[i].text)) continue;
+    if (
+      Math.abs(lines[i].x - speakerX) > X_TOLERANCE ||
+      !isCapsShort(lines[i].text)
+    )
+      continue;
     const next = lines[i + 1];
     if (next.x >= lines[i].x - X_TOLERANCE) continue;
     const target = next.text.startsWith("(") ? parenCounts : successorCounts;
@@ -207,14 +246,20 @@ function classifyFixed(lines: Line[]): Classifier | null {
   if (dialogueX === null || dialogueX >= speakerX) return null;
   const parenX = modeOf(parenCounts);
 
-  const near = (x: number, target: number | null) => target !== null && Math.abs(x - target) <= X_TOLERANCE;
+  const near = (x: number, target: number | null) =>
+    target !== null && Math.abs(x - target) <= X_TOLERANCE;
 
   return (line) => {
     if (near(line.x, speakerX) && isCapsShort(line.text)) {
       const label = normalizeLabel(line.text);
-      if (label) return { type: "speaker", label, contd: CONTD_SUFFIX.test(line.text) };
+      if (label)
+        return { type: "speaker", label, contd: CONTD_SUFFIX.test(line.text) };
     }
-    if (line.text.startsWith("(") && (near(line.x, parenX) || (line.x > dialogueX - X_TOLERANCE && line.x < speakerX))) {
+    if (
+      line.text.startsWith("(") &&
+      (near(line.x, parenX) ||
+        (line.x > dialogueX - X_TOLERANCE && line.x < speakerX))
+    ) {
       return { type: "paren" };
     }
     if (near(line.x, dialogueX)) return { type: "dialogue" };
@@ -233,7 +278,9 @@ function classifyCentered(lines: Line[]): Classifier | null {
   // Action margin: the leftmost x cluster carrying a substantial share of lines.
   const counts = new Map<number, number>();
   for (const line of lines) {
-    const key = [...counts.keys()].find((x) => Math.abs(x - line.x) <= X_TOLERANCE) ?? line.x;
+    const key =
+      [...counts.keys()].find((x) => Math.abs(x - line.x) <= X_TOLERANCE) ??
+      line.x;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   const threshold = Math.max(20, lines.length * 0.1);
@@ -252,7 +299,8 @@ function classifyCentered(lines: Line[]): Classifier | null {
         const next = lines[index + 1];
         if (next && indented(next.x) && !isCapsShort(next.text)) {
           const label = normalizeLabel(text);
-          if (label) return { type: "speaker", label, contd: CONTD_SUFFIX.test(text) };
+          if (label)
+            return { type: "speaker", label, contd: CONTD_SUFFIX.test(text) };
         }
       }
       // Indented caps that isn't a speaker: transition ("FADE TO BLACK:"),
@@ -268,20 +316,31 @@ function classifyCentered(lines: Line[]): Classifier | null {
  * Parse screenplay-formatted layout lines into rehearsal steps, or return null
  * when the document doesn't look like an indent-formatted screenplay. Tries
  * each layout variant and keeps the one that explains more of the script.
+ *
+ * `relaxed` lowers the statistical minimums — used for cue-trimmed audition
+ * sides, where a valid selection can be a single short scene.
  */
-export function parseScreenplayLayout(tuples: LayoutLineTuple[]): {
+export function parseScreenplayLayout(
+  tuples: LayoutLineTuple[],
+  options?: { relaxed?: boolean },
+): {
   steps: ParsedStep[];
   characters: string[];
 } | null {
+  const minLines = options?.relaxed ? 20 : 50;
+  const minSpeeches = options?.relaxed ? 4 : MIN_SPEECHES;
   const lines: Line[] = tuples
     .map(([page, x, text]) => ({ page, x, text: String(text).trim() }))
     .filter((line) => line.text);
-  if (lines.length < 50) return null;
+  if (lines.length < minLines) return null;
 
-  const results = [classifyFixed(lines), classifyCentered(lines)]
+  const results = [classifyFixed(lines, minSpeeches), classifyCentered(lines)]
     .filter((classifier): classifier is Classifier => classifier !== null)
     .map((classifier) => buildLayoutSteps(lines, classifier))
-    .filter((result) => result.steps.length >= MIN_SPEECHES && result.characters.length > 0);
+    .filter(
+      (result) =>
+        result.steps.length >= minSpeeches && result.characters.length > 0,
+    );
   if (!results.length) return null;
 
   // Prefer the variant that recovered the most speeches — a wrong variant
@@ -303,9 +362,44 @@ const JUNK_LINES: RegExp[] = [
 // enough hits marks a line as unrecoverable and it's dropped (a readable
 // translation column, when present, survives).
 const KRUTIDEV_TOKENS = new Set([
-  "gS", "gSa", "dh", "ds", "dks", "ls", "esa", "vkSj", "ugha", "rks", "Fkk", "Fkh", "Fks",
-  ";g", "og", "D;k", "eSa", "ij", "Hkh", "dj", "us", "gks", "djus", "fy,", "x;k", "x;h",
-  "jgk", "jgs", "jgh", "rqe", "eq>s", "D;ksa", "dqN", "cgqr", "vc", "fQj", "vki", "ge",
+  "gS",
+  "gSa",
+  "dh",
+  "ds",
+  "dks",
+  "ls",
+  "esa",
+  "vkSj",
+  "ugha",
+  "rks",
+  "Fkk",
+  "Fkh",
+  "Fks",
+  ";g",
+  "og",
+  "D;k",
+  "eSa",
+  "ij",
+  "Hkh",
+  "dj",
+  "us",
+  "gks",
+  "djus",
+  "fy,",
+  "x;k",
+  "x;h",
+  "jgk",
+  "jgs",
+  "jgh",
+  "rqe",
+  "eq>s",
+  "D;ksa",
+  "dqN",
+  "cgqr",
+  "vc",
+  "fQj",
+  "vki",
+  "ge",
 ]);
 
 function isMojibakeWord(word: string): boolean {
@@ -324,7 +418,9 @@ function looksMojibake(text: string): boolean {
   for (const word of words) if (isMojibakeWord(word)) hits++;
   // Fully garbled short lines, any line with several hits, or mixed
   // bilingual-column rows where garbled tokens make up much of the line.
-  return hits >= 2 || (hits >= 1 && words.length <= 4) || hits / words.length >= 0.4;
+  return (
+    hits >= 2 || (hits >= 1 && words.length <= 4) || hits / words.length >= 0.4
+  );
 }
 
 /** Rejoin ligature glyphs that extract with a spurious space ("Th e", "fi rst"). */
@@ -362,7 +458,8 @@ export function flattenLayout(tuples: LayoutLineTuple[]): string {
   const parts: string[] = [];
   let lastPage: number | null = null;
   for (const [page, , text] of tuples) {
-    if (lastPage !== null && page !== lastPage) parts.push("\n--- PAGE BREAK ---\n");
+    if (lastPage !== null && page !== lastPage)
+      parts.push("\n--- PAGE BREAK ---\n");
     lastPage = page;
     parts.push(String(text));
   }

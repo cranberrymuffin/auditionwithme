@@ -1,4 +1,5 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { supabase } from "../lib/supabase";
@@ -18,53 +19,131 @@ export function Wordmark({ className = "" }: { className?: string }) {
   );
 }
 
+function navLinkClass({ isActive }: { isActive: boolean }) {
+  return `eyebrow site-nav-link ${isActive ? "is-active" : ""}`;
+}
+
 export default function SiteNav() {
   const { user, loading } = useAuth();
   const { entitlement } = useEntitlement();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const showPricing =
     !loading && (!user || entitlement?.subscription_status !== "active");
 
+  // Close the mobile menu on any route change.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname, location.hash]);
+
   async function handleLogout() {
+    setMenuOpen(false);
     await supabase.auth.signOut();
     navigate("/");
   }
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const sharedLinks = (
+    <>
+      <a
+        className="eyebrow site-nav-link"
+        href="/about#how-it-works"
+        onClick={closeMenu}
+      >
+        How it works
+      </a>
+      {showPricing && (
+        <NavLink to="/pricing" className={navLinkClass} onClick={closeMenu}>
+          Pricing
+        </NavLink>
+      )}
+      {!loading && !user && (
+        <NavLink to="/about" end className={navLinkClass} onClick={closeMenu}>
+          About
+        </NavLink>
+      )}
+    </>
+  );
+
+  const authLinks = loading ? null : user ? (
+    <>
+      <NavLink to="/account" className={navLinkClass} onClick={closeMenu}>
+        My account
+      </NavLink>
+      <button
+        type="button"
+        className="eyebrow site-nav-link"
+        onClick={handleLogout}
+      >
+        Log out
+      </button>
+    </>
+  ) : (
+    <>
+      <NavLink to="/login" className={navLinkClass} onClick={closeMenu}>
+        Log in
+      </NavLink>
+      <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
+        Start free
+      </Link>
+    </>
+  );
 
   return (
     <nav className="site-nav">
       <Link to="/" aria-label="AuditionWithMe home">
         <Wordmark />
       </Link>
+
       <div className="site-nav-links">
-        {showPricing && (
-          <NavLink
-            to="/pricing"
-            className={({ isActive }) =>
-              `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-            }
-          >
-            Pricing
-          </NavLink>
-        )}
+        {sharedLinks}
+        {authLinks}
+      </div>
+
+      <div className="site-nav-mobile">
         {!loading && !user && (
-          <NavLink
-            to="/about"
-            className={({ isActive }) =>
-              `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-            }
-          >
-            About
-          </NavLink>
+          <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
+            Start free
+          </Link>
         )}
-        {!loading &&
-          (user ? (
+        <button
+          type="button"
+          className="site-nav-menu"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            {menuOpen ? (
+              <path d="M5 5l14 14M19 5L5 19" />
+            ) : (
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            )}
+          </svg>
+        </button>
+      </div>
+
+      {menuOpen && (
+        <div className="site-nav-drawer">
+          {sharedLinks}
+          {loading ? null : user ? (
             <>
               <NavLink
                 to="/account"
-                className={({ isActive }) =>
-                  `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-                }
+                className={navLinkClass}
+                onClick={closeMenu}
               >
                 My account
               </NavLink>
@@ -77,16 +156,17 @@ export default function SiteNav() {
               </button>
             </>
           ) : (
-            <NavLink
-              to="/signup"
-              className={({ isActive }) =>
-                `eyebrow site-nav-link ${isActive ? "is-active" : ""}`
-              }
-            >
-              Sign up
-            </NavLink>
-          ))}
-      </div>
+            <>
+              <NavLink to="/login" className={navLinkClass} onClick={closeMenu}>
+                Log in
+              </NavLink>
+              <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
+                Start free
+              </Link>
+            </>
+          )}
+        </div>
+      )}
     </nav>
   );
 }

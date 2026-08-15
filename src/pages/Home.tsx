@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
@@ -10,11 +10,15 @@ import { apiFetch } from "../lib/api";
 // so the cap only guards browser memory.
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
+type HomeState = { intent?: string } | null;
+
 export default function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const [dragging, setDragging] = useState(false);
+  const [pulsing, setPulsing] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { entitlement } = useEntitlement();
   const freeSessionsRemaining = entitlement
@@ -29,10 +33,39 @@ export default function Home() {
 
   const uploadHint = isSubscribed
     ? "PDF supported"
-    : "PDF supported · Start rehearsing free";
+    : entitlement
+      ? `PDF supported · ${freeSessionsRemaining} free ${
+          freeSessionsRemaining === 1 ? "session" : "sessions"
+        } left`
+      : "PDF supported";
+
+  // A visitor who clicked the upload CTA while signed out lands back here
+  // after authenticating — draw their eye straight to the upload flow.
+  useEffect(() => {
+    if (user && (location.state as HomeState)?.intent === "upload") {
+      navigate(location.pathname, { replace: true, state: null });
+      document
+        .getElementById("upload")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setPulsing(true);
+      const timer = setTimeout(() => setPulsing(false), 2800);
+      return () => clearTimeout(timer);
+    }
+  }, [user, location.state, location.pathname, navigate]);
+
+  const requestAuthForUpload = useCallback(() => {
+    navigate("/signup", {
+      state: { from: { pathname: "/" }, intent: "upload" },
+    });
+  }, [navigate]);
 
   const handleFile = useCallback(
     async (file: File) => {
+      if (!user) {
+        toast("Create a free account to start rehearsing.");
+        requestAuthForUpload();
+        return;
+      }
       if (file.type !== "application/pdf") {
         toast("That file isn't a PDF — try another one.");
         return;
@@ -64,7 +97,7 @@ export default function Home() {
 
       navigate("/practice", { state: { file, rehearsalGrant: grant } });
     },
-    [navigate, toast],
+    [user, navigate, toast, requestAuthForUpload],
   );
 
   return (
@@ -89,18 +122,19 @@ export default function Home() {
 
       <section className="hero-editorial">
         <div className="hero-copy" id="upload">
+          <p className="hero-kicker">AI rehearsal partner for actors</p>
           <h1 className="hero-title">
             <span className="hero-title-roman">Own the room</span>
             <span className="hero-title-italic">before you walk in.</span>
           </h1>
           <p className="hero-description">
-            Upload your script. Hear every other character read aloud. Rehearse
-            your scenes anytime.
+            Upload your script, choose your character, and rehearse every scene
+            with responsive AI scene partners.
           </p>
 
           <div className="hero-actions">
-            {user &&
-              (isOutOfFreeSessions ? (
+            {user ? (
+              isOutOfFreeSessions ? (
                 <button
                   type="button"
                   className="upload-cta"
@@ -114,7 +148,9 @@ export default function Home() {
               ) : (
                 <button
                   type="button"
-                  className={`upload-cta ${dragging ? "is-dragging" : ""}`}
+                  className={`upload-cta ${dragging ? "is-dragging" : ""} ${
+                    pulsing ? "is-pulsing" : ""
+                  }`}
                   onClick={() => inputRef.current?.click()}
                 >
                   <span className="upload-icon" aria-hidden="true">
@@ -136,7 +172,31 @@ export default function Home() {
                     <small>{uploadHint}</small>
                   </span>
                 </button>
-              ))}
+              )
+            ) : (
+              <button
+                type="button"
+                className={`upload-cta ${dragging ? "is-dragging" : ""}`}
+                onClick={requestAuthForUpload}
+              >
+                <span className="upload-icon" aria-hidden="true">
+                  <svg
+                    width="19"
+                    height="19"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
+                  </svg>
+                </span>
+                <span className="upload-copy">
+                  <strong>Start rehearsing free</strong>
+                  <small>Upload a script to begin</small>
+                </span>
+              </button>
+            )}
             <a className="demo-cta" href="/about#how-it-works">
               <span className="demo-play" aria-hidden="true">
                 ▶
@@ -144,6 +204,13 @@ export default function Home() {
               <span className="demo-cta-text">See how it works</span>
             </a>
           </div>
+
+          {!isSubscribed && (
+            <p className="hero-trust">
+              PDF scripts — typed or scanned · 3 free sessions · No credit card
+              required
+            </p>
+          )}
 
           <input
             ref={inputRef}
