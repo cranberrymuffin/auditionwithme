@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 type LocalRequest = IncomingMessage & {
@@ -101,6 +102,66 @@ export default defineConfig(({ mode }) => {
   Object.assign(process.env, loadEnv(mode, process.cwd(), ""));
 
   return {
-    plugins: [localVercelApi(), react(), tailwindcss()],
+    plugins: [
+      localVercelApi(),
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: "autoUpdate",
+        includeAssets: [
+          "icons/favicon-16x16.png",
+          "icons/favicon-32x32.png",
+          "icons/apple-touch-icon.png",
+        ],
+        manifest: {
+          name: "AuditionWithMe",
+          short_name: "Audition",
+          description:
+            "Practice your audition scripts with an on-demand reading partner.",
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          background_color: "#131824",
+          theme_color: "#131824",
+          icons: [
+            {
+              src: "/icons/pwa-192x192.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: "/icons/pwa-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: "/icons/maskable-icon-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
+            },
+          ],
+        },
+        workbox: {
+          globPatterns: ["**/*.{js,css,html,woff,woff2,svg,ico}"],
+          navigateFallbackDenylist: [/^\/api\//],
+          runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.destination === "image",
+              handler: "CacheFirst",
+              options: {
+                cacheName: "images",
+                expiration: {
+                  maxEntries: 40,
+                  maxAgeSeconds: 30 * 24 * 60 * 60,
+                },
+              },
+            },
+          ],
+        },
+      }),
+    ],
   };
 });
