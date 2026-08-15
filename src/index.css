@@ -250,14 +250,6 @@ header .flow-back:hover {
   bottom: auto;
 }
 
-/* `cover` crops the sides when the viewport is taller than the 16:9 artwork.
-   Anchor that crop to the right so the hillside wordmark always stays in frame. */
-@media (min-width: 721px) and (max-aspect-ratio: 16 / 9) {
-  .home-page .cinematic-backdrop {
-    background-position: right center;
-  }
-}
-
 .cinematic-backdrop {
   position: absolute;
   inset: 0;
@@ -267,6 +259,27 @@ header .flow-back:hover {
   background-position: center center;
   filter: saturate(0.84) contrast(1.04);
   transform: scale(1.002);
+}
+
+/* Responsive art direction: each composition keeps the complete hillside sign
+   inside a crop-safe area instead of forcing the wide artwork into every shape. */
+.home-page .cinematic-backdrop {
+  background-image: url("/images/hollywood-hills-hero-wide.png");
+  background-position: center center;
+}
+
+@media (max-aspect-ratio: 7 / 5) {
+  .home-page .cinematic-backdrop {
+    background-image: url("/images/hollywood-hills-hero-tablet.png");
+    background-position: center top;
+  }
+}
+
+@media (max-aspect-ratio: 4 / 5) {
+  .home-page .cinematic-backdrop {
+    background-image: url("/images/hollywood-hills-hero-portrait.png");
+    background-position: center top;
+  }
 }
 
 .cinematic-page::after {
@@ -952,7 +965,7 @@ header .flow-back:hover {
     background-position: 66% center;
   }
   .home-page .cinematic-backdrop {
-    background-position: 66% center;
+    background-position: center top;
   }
   .cinematic-page::after {
     background: linear-gradient(
@@ -1019,6 +1032,30 @@ header .flow-back:hover {
   }
   .demo-cta {
     justify-content: center;
+  }
+}
+
+/* Portrait tablets are desktop-width devices with phone-like vertical geometry. */
+@media (min-width: 721px) and (max-aspect-ratio: 4 / 5) {
+  .home-page::after {
+    background:
+      linear-gradient(
+        0deg,
+        rgba(5, 12, 21, 0.97) 0%,
+        rgba(5, 12, 21, 0.84) 52%,
+        rgba(5, 12, 21, 0.12) 78%
+      ),
+      linear-gradient(90deg, rgba(6, 14, 24, 0.7), transparent 72%);
+  }
+  .hero-editorial {
+    justify-content: flex-end;
+    padding-bottom: max(7vh, env(safe-area-inset-bottom));
+  }
+  .hero-copy {
+    width: min(43rem, 78vw);
+  }
+  .hero-title {
+    font-size: clamp(3.5rem, 7vw, 4.75rem);
   }
 }
 
@@ -3417,6 +3454,20 @@ header .flow-back:hover {
 }
 .rehearsal-settings input {
   accent-color: #ef9a78;
+}
+.voice-speed-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
+}
+.voice-speed-setting label {
+  font-size: 0.875rem;
+}
+.voice-speed-setting input[type="range"] {
+  width: 100%;
 }
 .shortcut-help {
   display: flex;

@@ -65,6 +65,7 @@ Rules:
 - The script language is ${languageCode}; only choose a voice from the supplied language-compatible list
 - Assign a different voice to each character where possible
 - Prioritise gender match, then age, then personality fit
+- These voices act out scenes opposite a human, so prefer voices whose tone/description suggests expressive, emotionally versatile delivery (conversational, characterful) over flat narration or meditation voices
 - Return only a JSON object mapping character names to voice IDs
 
 Example output: {"HAMLET": "pNInz6obpgDQGcFmaJgB", "OPHELIA": "pFZP5JQG7iQjIQuC4Bku"}`;

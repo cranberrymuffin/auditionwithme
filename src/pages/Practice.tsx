@@ -20,11 +20,17 @@ import { hashFile } from "../lib/scriptHash";
 // Account — re-launches practice from a script that's already been parsed,
 // so no parse-script AI call happens for this session.
 type ReplayScript = {
+  /** Saved row id — present so casting/direction updates land on the row. */
+  id?: string;
   title: string;
   steps: Step[];
   characters: string[];
   languageCode: string;
   languageName: string;
+  /** Casting confirmed in a past rehearsal, speaker → voice id. */
+  characterVoices?: Record<string, string> | null;
+  /** AI-director delivery tags from a past parse, aligned with steps. */
+  deliveryTags?: (string | null)[] | null;
 };
 
 type ParseData = {
@@ -65,6 +71,14 @@ export default function Practice() {
   const [characterVoices, setCharacterVoices] = useState<
     Record<string, string>
   >({});
+  // Saved scripts row backing this session, when the user is signed in —
+  // casting and delivery tags are written back to it as they settle.
+  const [scriptId, setScriptId] = useState<string | null>(null);
+  // Per-line delivery tags from the AI director (api/direct-lines), aligned
+  // by index with steps. null until the pass finishes (or fails silently).
+  const [deliveryTags, setDeliveryTags] = useState<(string | null)[] | null>(
+    null,
+  );
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
   const [scriptLanguage, setScriptLanguage] = useState({
@@ -130,8 +144,11 @@ export default function Practice() {
       pdf_path: pdfPath,
       content_hash: contentHash,
     });
-    if (error)
+    if (error) {
       console.error("Failed to save script to account:", error.message);
+    } else {
+      setScriptId(id);
+    }
   };
 
   const finalizeParse = (data: ParseData) => {
@@ -142,6 +159,8 @@ export default function Practice() {
   const voiceableSpeakers = characters.filter((s) => s !== selectedRole);
 
   // Replay path: launch straight from a previously saved parse, no AI call.
+  // Saved casting and delivery tags seed state so the auto-cast and director
+  // effects below can skip their model calls.
   useEffect(() => {
     if (!replayScript) return;
     applyParseResult({
@@ -150,6 +169,11 @@ export default function Practice() {
       languageCode: replayScript.languageCode,
       languageName: replayScript.languageName,
     });
+    if (replayScript.id) setScriptId(replayScript.id);
+    if (replayScript.characterVoices && Object.keys(replayScript.characterVoices).length) {
+      setCharacterVoices(replayScript.characterVoices);
+    }
+    if (replayScript.deliveryTags) setDeliveryTags(replayScript.deliveryTags);
   }, [replayScript]);
 
   useEffect(() => {
@@ -279,6 +303,12 @@ export default function Practice() {
     const uniqueSpeakers = [
       ...new Set(steps.map((s) => normalizeSpeaker(s.speaker)).filter(Boolean)),
     ];
+    // Replays with a complete saved casting keep their scene partners —
+    // don't re-run auto-casting and risk recasting voices.
+    const savedVoices = replayScript?.characterVoices;
+    if (savedVoices && uniqueSpeakers.every((name) => savedVoices[name])) {
+      return;
+    }
     const characterList = uniqueSpeakers.map((name) => ({
       name,
       sampleLines: steps
@@ -319,7 +349,57 @@ export default function Practice() {
     return () => {
       cancelled = true;
     };
-  }, [steps, scriptLanguage.code, toast]);
+  }, [steps, scriptLanguage.code, replayScript, toast]);
+
+  // AI director pass: annotate each line with a delivery tag (how the scene
+  // partner should read it) once steps load. Purely an enhancement — failures
+  // are silent and the rehearsal reads lines untagged.
+  useEffect(() => {
+    if (!steps.length || deliveryTags) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await apiFetch("/api/direct-lines", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lines: steps.map((step) => ({
+              speaker: normalizeSpeaker(step.speaker),
+              text: step.verbalLine,
+            })),
+          }),
+        });
+        const data = (await response.json()) as {
+          tags?: (string | null)[];
+          error?: string;
+        };
+        if (!response.ok) throw new Error(data.error || "Line direction failed");
+        if (!cancelled && Array.isArray(data.tags)) setDeliveryTags(data.tags);
+      } catch (err) {
+        console.error("Line direction error:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [steps, deliveryTags]);
+
+  // Write freshly generated delivery tags back to the saved row so replays
+  // skip the director call. Guarded so it fires once per session.
+  const persistedTagsRef = useRef(false);
+  useEffect(() => {
+    if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
+    persistedTagsRef.current = true;
+    if (replayScript?.deliveryTags) return; // already stored on the row
+    void supabase
+      .from("scripts")
+      .update({ delivery_tags: deliveryTags })
+      .eq("id", scriptId)
+      .then(({ error }) => {
+        if (error)
+          console.error("Failed to save delivery tags:", error.message);
+      });
+  }, [user, scriptId, deliveryTags, replayScript]);
 
   // Full voice catalog, so the user can override auto-assigned voices
   useEffect(() => {
@@ -348,14 +428,24 @@ export default function Practice() {
   }, [toast]);
 
   const startReading = () => {
-    setCharacterVoices((prev) => {
-      const next = { ...prev };
-      voiceableSpeakers.forEach((speaker) => {
-        if (!next[speaker] && voices[0]) next[speaker] = voices[0].id;
-      });
-      return next;
+    const next = { ...characterVoices };
+    voiceableSpeakers.forEach((speaker) => {
+      if (!next[speaker] && voices[0]) next[speaker] = voices[0].id;
     });
+    setCharacterVoices(next);
     setVoicesConfirmed(true);
+    // Persist the confirmed casting so replaying this script keeps the same
+    // scene partner instead of re-running auto-casting.
+    if (user && scriptId) {
+      void supabase
+        .from("scripts")
+        .update({ character_voices: next })
+        .eq("id", scriptId)
+        .then(({ error }) => {
+          if (error)
+            console.error("Failed to save voice casting:", error.message);
+        });
+    }
   };
 
   const rehearseOriginalLanguage = async () => {
@@ -532,6 +622,7 @@ export default function Practice() {
       steps={steps}
       selectedRole={selectedRole ?? ""}
       characterVoices={characterVoices}
+      deliveryTags={deliveryTags ?? []}
       onBack={() => {
         if (voiceableSpeakers.length > 0) {
           setVoicesConfirmed(false);

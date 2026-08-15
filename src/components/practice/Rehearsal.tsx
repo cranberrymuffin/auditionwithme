@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
-import { useTtsPlayer } from "../../hooks/useTtsPlayer";
+import { deliveryTagFromContent } from "../../lib/delivery";
+import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import TrackedWords from "../TrackedWords";
 import ScriptRail from "./ScriptRail";
@@ -10,10 +11,11 @@ import ScriptRail from "./ScriptRail";
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "first" | "hidden";
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, onBack, languageCode, fileName }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
+  deliveryTags: (string | null)[];
   onBack: () => void;
   languageCode: string;
   fileName: string;
@@ -25,9 +27,38 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
   const [lineMode, setLineMode] = useState<LineMode>("full");
   const [railOpen, setRailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [intensity, setIntensity] = useState<TtsIntensity>("natural");
+  const [voiceSpeed, setVoiceSpeed] = useState(1);
   const autoAdvanceRef = useRef(autoAdvance);
   autoAdvanceRef.current = autoAdvance;
-  const { play, prefetch, stop } = useTtsPlayer();
+  // Refs so mid-line updates (AI delivery tags arriving, slider drags) don't
+  // restart the audio effect below.
+  const deliveryTagsRef = useRef(deliveryTags);
+  deliveryTagsRef.current = deliveryTags;
+  const voiceSpeedRef = useRef(voiceSpeed);
+  const { play, prefetch, stop, setPlaybackRate } = useTtsPlayer();
+
+  useEffect(() => {
+    voiceSpeedRef.current = voiceSpeed;
+    setPlaybackRate(voiceSpeed);
+  }, [voiceSpeed, setPlaybackRate]);
+
+  // Builds the full synthesis request for a step: surrounding lines condition
+  // the prosody, and an explicit script parenthetical outranks the AI
+  // director's inferred tag.
+  const ttsLine = useCallback((index: number): TtsLine | null => {
+    const step = steps[index];
+    if (!step?.verbalLine.trim()) return null;
+    const before = [...steps.slice(0, index)].reverse().find((item) => item.verbalLine.trim());
+    const after = steps.slice(index + 1).find((item) => item.verbalLine.trim());
+    return {
+      text: step.verbalLine,
+      voiceId: characterVoices[normalizeSpeaker(step.speaker)],
+      previousText: before?.verbalLine,
+      nextText: after?.verbalLine,
+      deliveryTag: deliveryTagFromContent(step.content) ?? deliveryTagsRef.current[index] ?? undefined,
+    };
+  }, [steps, characterVoices]);
 
   const speakers = useMemo(() => [...new Set(steps.map((step) => normalizeSpeaker(step.speaker)).filter(Boolean))], [steps]);
   const currentStep = steps[currentStepIndex];
@@ -56,16 +87,23 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
       setPlaybackState("ready");
       return;
     }
-    const next = steps.slice(currentStepIndex + 1).find((item) => item.verbalLine.trim() && (!selectedRole || normalizeSpeaker(item.speaker) !== selectedRole));
-    if (next) prefetch(next.verbalLine, characterVoices[normalizeSpeaker(next.speaker)]);
+    const nextIndex = steps.findIndex((item, index) => index > currentStepIndex && item.verbalLine.trim() && (!selectedRole || normalizeSpeaker(item.speaker) !== selectedRole));
+    if (nextIndex !== -1) {
+      const nextLine = ttsLine(nextIndex);
+      if (nextLine) prefetch(nextLine, intensity);
+    }
     if (!step.verbalLine.trim()) {
       setPlaybackState("ready");
       const timer = setTimeout(() => { if (autoAdvanceRef.current) goNextRef.current(); }, 1200);
       return () => clearTimeout(timer);
     }
+    const line = ttsLine(currentStepIndex);
+    if (!line) return;
     const controller = new AbortController();
     setPlaybackState("playing");
-    play(step.verbalLine, characterVoices[speaker], {
+    play(line, {
+      intensity,
+      speed: voiceSpeedRef.current,
       signal: controller.signal,
       onEnded: () => {
         setPlaybackState("ready");
@@ -75,7 +113,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
       if (error?.name !== "AbortError") setPlaybackState("error");
     });
     return () => { controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, characterVoices, paused, play, prefetch, stop]);
+  }, [currentStepIndex, steps, selectedRole, paused, intensity, ttsLine, play, prefetch, stop]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -95,15 +133,21 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
       ? steps.slice(currentStepIndex + 1).find((step) => normalizeSpeaker(step.speaker) === selectedRole)
       : null;
 
-  const replayCue = useCallback(() => {
-    if (!cueStep?.verbalLine.trim()) return;
+  // fresh=true busts the audio cache — "give me a different take" on the cue.
+  const replayCue = useCallback((fresh = false) => {
+    if (cueIndex === undefined) return;
+    const line = ttsLine(cueIndex);
+    if (!line) return;
     stop();
     setPaused(false);
     setPlaybackState("playing");
-    play(cueStep.verbalLine, characterVoices[cueSpeaker], {
+    play(line, {
+      intensity,
+      speed: voiceSpeedRef.current,
+      fresh,
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch(() => setPlaybackState("error"));
-  }, [cueStep, cueSpeaker, characterVoices, isMyLine, play, stop]);
+  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
 
   const togglePause = useCallback(() => {
     setPaused((value) => {
@@ -185,7 +229,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
               <div><strong>{status.title}</strong><span>{status.detail}</span></div>
             </div>
             <div className="rehearsal-controls">
-              <button onClick={replayCue} disabled={!cueStep}>↻ Replay cue</button>
+              <button onClick={() => replayCue()} disabled={!cueStep}>↻ Replay cue</button>
+              <button onClick={() => replayCue(true)} disabled={!cueStep} title="Regenerate the cue for a different read">✦ New take</button>
               <button onClick={() => setLineMode((mode) => mode === "full" ? "hidden" : "full")}>{lineMode === "hidden" ? "Show line" : "Hide line"}</button>
               <button onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
             </div>
@@ -198,6 +243,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, onBack
           <h2>Rehearsal controls</h2>
           <div className="autoflow-setting"><div><strong>Auto-flow: {autoAdvance ? "On" : "Off"}</strong><span>{autoAdvance ? "Advances after your line is detected." : "Use Next to advance each line."}</span></div><button role="switch" aria-checked={autoAdvance} onClick={() => setAutoAdvance((value) => !value)}><i /></button></div>
           <fieldset><legend>Line help</legend>{(["full", "first", "hidden"] as LineMode[]).map((mode) => <label key={mode}><input type="radio" name="line-mode" checked={lineMode === mode} onChange={() => setLineMode(mode)} />{mode === "full" ? "Show full line" : mode === "first" ? "Show first words" : "Hide line"}</label>)}</fieldset>
+          <fieldset><legend>Delivery style</legend>{(["subtle", "natural", "dramatic"] as TtsIntensity[]).map((level) => <label key={level}><input type="radio" name="delivery-intensity" checked={intensity === level} onChange={() => setIntensity(level)} />{level === "subtle" ? "Subtle — steady, restrained reads" : level === "natural" ? "Natural — balanced expression" : "Dramatic — big, emotional reads"}</label>)}</fieldset>
+          <div className="voice-speed-setting">
+            <label htmlFor="voice-speed"><strong>Voice speed: {voiceSpeed.toFixed(2)}×</strong></label>
+            <input id="voice-speed" type="range" min={0.85} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />
+          </div>
           <div className="shortcut-help"><strong>Keyboard shortcuts</strong><span>Space Pause / resume</span><span>R Replay cue</span><span>← → Previous / next</span><span>H Hide / reveal line</span></div>
         </aside>
       </div>
