@@ -3,6 +3,7 @@ import Home from "./pages/Home";
 import Practice from "./pages/Practice";
 import About from "./pages/About";
 import Pricing from "./pages/Pricing";
+import Billing from "./pages/Billing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import MyAccount from "./pages/MyAccount";
@@ -41,6 +42,14 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/about" element={<About />} />
             <Route path="/pricing" element={<Pricing />} />
+            <Route
+              path="/billing"
+              element={
+                <RequireAuth>
+                  <Billing />
+                </RequireAuth>
+              }
+            />
           </Routes>
         </AuthProvider>
       </ToastProvider>

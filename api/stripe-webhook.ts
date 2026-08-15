@@ -51,13 +51,14 @@ type SubscriptionStatus = Entitlement["subscription_status"];
 function mapStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
   if (status === "active" || status === "trialing") return "active";
   if (status === "past_due" || status === "unpaid") return "past_due";
+  // Never successfully paid — distinct from an actual cancellation.
+  if (status === "incomplete" || status === "incomplete_expired") return "free";
   return "canceled";
 }
 
 function periodEnd(subscription: Stripe.Subscription): string | null {
-  return subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
-    : null;
+  const end = subscription.items.data[0]?.current_period_end;
+  return end ? new Date(end * 1000).toISOString() : null;
 }
 
 function idOf(
@@ -126,30 +127,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object;
-        const customerId = idOf(session.customer);
-        const subscriptionId = idOf(session.subscription);
-        if (!customerId || !subscriptionId) {
-          console.log(
-            `webhook ${event.type} ${event.id}: no subscription on session, ignored`,
-          );
-          break;
-        }
-        const subscription =
-          await stripe.subscriptions.retrieve(subscriptionId);
-        const status = mapStatus(subscription.status);
-        await writeState(customerId, {
-          subscription_status: status,
-          stripe_subscription_id: subscription.id,
-          current_period_end: periodEnd(subscription),
-        });
-        console.log(
-          `webhook ${event.type} ${event.id}: customer ${customerId} -> ${status}, period_end ${periodEnd(subscription)}`,
-        );
-        break;
-      }
-
+      // A subscription created via api/create-subscription.ts (payment_behavior:
+      // "default_incomplete") fires "created" immediately in status
+      // "incomplete", then "updated" again once the embedded Payment Element
+      // confirms the PaymentIntent and status flips to "active". Both are
+      // handled identically — state is always derived fresh from the
+      // subscription object, so it doesn't matter which event lands last.
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object;
         const customerId = idOf(subscription.customer);

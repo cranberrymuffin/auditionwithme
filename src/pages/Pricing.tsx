@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
+import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
@@ -52,8 +53,14 @@ export default function Pricing() {
   const { entitlement, loading, refresh } = useEntitlement();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // "checkout=success" covered the old Checkout redirect; "redirect_status"
+  // is what Stripe appends to return_url for payment methods that require an
+  // actual browser redirect (e.g. some 3DS bank flows) even under
+  // redirect: "if_required".
   const [confirming, setConfirming] = useState(
-    searchParams.get("checkout") === "success",
+    searchParams.get("checkout") === "success" ||
+      searchParams.get("redirect_status") === "succeeded",
   );
   const [pendingSubscription, setPendingSubscription] = useState(false);
 
@@ -148,9 +155,9 @@ export default function Pricing() {
     }
   }, [isSubscribed]);
 
-  // Both CTAs work the same way: ask the server for a Stripe-hosted URL, then
-  // hand the browser over to Stripe.
-  async function redirectToStripe(path: string, fallbackMessage: string) {
+  // Starts a subscription server-side and reveals the embedded Payment
+  // Element inline — the user never leaves this page.
+  async function startSubscription() {
     if (!user) {
       navigate("/login", { state: { from: "/pricing" } });
       return;
@@ -158,16 +165,19 @@ export default function Pricing() {
     setBusy(true);
     setError(null);
     try {
-      const response = await apiFetch(path, { method: "POST" });
+      const response = await apiFetch("/api/billing?action=create-subscription", {
+        method: "POST",
+      });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !payload?.url) {
-        setError(payload?.error ?? fallbackMessage);
+      if (!response.ok || !payload?.clientSecret) {
+        setError(payload?.error ?? "Could not start checkout. Please try again.");
         setBusy(false);
         return;
       }
-      window.location.href = payload.url;
+      setClientSecret(payload.clientSecret);
+      setBusy(false);
     } catch {
-      setError(fallbackMessage);
+      setError("Could not start checkout. Please try again.");
       setBusy(false);
     }
   }
@@ -216,42 +226,32 @@ export default function Pricing() {
             ))}
           </ul>
           {isSubscribed ? (
-            <button
-              onClick={() =>
-                redirectToStripe(
-                  "/api/billing-session?action=portal",
-                  "Could not open the billing portal. Please try again.",
-                )
-              }
-              disabled={busy}
-            >
-              {busy ? (
-                "Opening…"
-              ) : (
-                <>
-                  Manage subscription <span>→</span>
-                </>
-              )}
+            <button type="button" onClick={() => navigate("/billing")}>
+              Manage subscription <span>→</span>
             </button>
           ) : !user ? (
             <button type="button" onClick={() => navigate("/signup")}>
               Try 3 rehearsals for Free <span>→</span>
             </button>
+          ) : clientSecret ? (
+            <StripeElementsForm
+              clientSecret={clientSecret}
+              kind="payment"
+              submitLabel="Subscribe — $7/month"
+              returnPath="/pricing"
+              onCancel={() => setClientSecret(null)}
+              onConfirmed={() => {
+                setClientSecret(null);
+                setConfirming(true);
+              }}
+            />
           ) : (
             <>
-              <button
-                onClick={() =>
-                  redirectToStripe(
-                    "/api/billing-session?action=checkout",
-                    "Could not start checkout. Please try again.",
-                  )
-                }
-                disabled={busy || confirming}
-              >
+              <button onClick={startSubscription} disabled={busy || confirming}>
                 {confirming ? (
                   "Confirming your subscription…"
                 ) : busy ? (
-                  "Redirecting…"
+                  "Starting…"
                 ) : sessionsExhausted ? (
                   <>
                     Subscribe to keep rehearsing <span>→</span>

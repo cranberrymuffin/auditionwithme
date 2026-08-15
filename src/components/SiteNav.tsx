@@ -34,6 +34,7 @@ export default function SiteNav() {
 
   const isSubscriber = !!user && entitlement?.subscription_status === "active";
   const subscriptionLabel = isSubscriber ? "Manage subscription" : "Pricing";
+  const subscriptionPath = isSubscriber ? "/billing" : "/pricing";
 
   // Logged-in users get pricing/subscription access via the "My account"
   // dropdown instead of a top-level nav link.
@@ -94,7 +95,9 @@ export default function SiteNav() {
   );
 
   const isAccountAreaActive =
-    location.pathname === "/account" || location.pathname === "/pricing";
+    location.pathname === "/account" ||
+    location.pathname === "/pricing" ||
+    location.pathname === "/billing";
 
   const accountDropdown = (
     <div className="site-nav-account" ref={accountMenuRef}>
@@ -126,7 +129,7 @@ export default function SiteNav() {
       {accountMenuOpen && (
         <div className="site-nav-account-menu" role="menu">
           <NavLink
-            to="/pricing"
+            to={subscriptionPath}
             role="menuitem"
             className={({ isActive }) =>
               `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
@@ -222,7 +225,7 @@ export default function SiteNav() {
             <>
               <span className="site-nav-drawer-heading">My account</span>
               <NavLink
-                to="/pricing"
+                to={subscriptionPath}
                 className={({ isActive }) =>
                   `${navLinkClass({ isActive })} site-nav-drawer-sublink`
                 }
