@@ -4,5 +4,10 @@
       "maxDuration": 60
     }
   },
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/((?!api/|@|src/|node_modules/|.*\\.\\w+$).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
