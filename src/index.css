@@ -265,19 +265,19 @@ header .flow-back:hover {
    inside a crop-safe area instead of forcing the wide artwork into every shape. */
 .home-page .cinematic-backdrop {
   background-image: url("/images/hollywood-hills-hero-wide.png");
-  background-position: center center;
+  background-position: right center;
 }
 
 @media (max-aspect-ratio: 7 / 5) {
   .home-page .cinematic-backdrop {
-    background-image: url("/images/hollywood-hills-hero-tablet.png");
+    background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
     background-position: center top;
   }
 }
 
 @media (max-aspect-ratio: 4 / 5) {
   .home-page .cinematic-backdrop {
-    background-image: url("/images/hollywood-hills-hero-portrait.png");
+    background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
     background-position: center top;
   }
 }
@@ -1032,6 +1032,60 @@ header .flow-back:hover {
   }
   .demo-cta {
     justify-content: center;
+  }
+}
+
+/* Phones get an explicit art-directed safe zone: the sign stays in the upper
+   portion while the lower portion is reserved for the hero copy and actions. */
+@media (max-width: 720px) and (orientation: portrait) {
+  .home-page .cinematic-backdrop {
+    background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
+    background-position: center top;
+  }
+  .home-page::after {
+    background: linear-gradient(
+      0deg,
+      rgba(5, 12, 21, 0.98) 0%,
+      rgba(5, 12, 21, 0.9) 48%,
+      rgba(5, 12, 21, 0.22) 68%,
+      rgba(5, 12, 21, 0.06) 100%
+    );
+  }
+}
+
+@media (max-width: 720px) and (orientation: landscape) {
+  .home-page .cinematic-backdrop {
+    background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
+    background-position: center top;
+  }
+}
+
+/* Shallow desktop displays (Nest Hub, small laptops and short browser windows)
+   need the wide sign anchored above/right of the compacted hero copy. */
+@media (min-width: 980px) and (max-width: 1060px) and (min-height: 560px) and (max-height: 640px) and (orientation: landscape) {
+  .home-page .cinematic-backdrop {
+    background-image: url("/images/hollywood-hills-hero-wide.png");
+    background-position: left top;
+  }
+  .home-page::after {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(6, 14, 24, 0.97) 0%,
+        rgba(6, 14, 24, 0.86) 43%,
+        rgba(6, 14, 24, 0.16) 68%,
+        rgba(6, 14, 24, 0.03) 100%
+      ),
+      linear-gradient(0deg, rgba(5, 11, 19, 0.64), transparent 58%);
+  }
+  .home-page .hero-copy {
+    width: min(36rem, 48vw);
+  }
+  .home-page .hero-title {
+    font-size: clamp(2.65rem, 3.8vw, 4rem);
+  }
+  .home-page .hero-description {
+    width: min(31rem, 44vw);
   }
 }
 
