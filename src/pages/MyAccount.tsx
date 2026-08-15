@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
+import DocumentPreview from "../components/DocumentPreview";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
@@ -13,6 +14,8 @@ export default function MyAccount() {
   const [scripts, setScripts] = useState<SavedScript[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
+  const fetchedPreviewIds = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user) return;
@@ -32,6 +35,36 @@ export default function MyAccount() {
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    const pending = scripts.filter(
+      (script) => script.pdf_path && !fetchedPreviewIds.current.has(script.id)
+    );
+    if (pending.length === 0) return;
+    pending.forEach((script) => fetchedPreviewIds.current.add(script.id));
+
+    let active = true;
+    Promise.all(
+      pending.map(async (script) => {
+        const { data } = await supabase.storage
+          .from("scripts")
+          .createSignedUrl(script.pdf_path as string, 3600);
+        return [script.id, data?.signedUrl ?? null] as const;
+      })
+    ).then((entries) => {
+      if (!active) return;
+      setPreviewUrls((prev) => {
+        const next = { ...prev };
+        for (const [id, url] of entries) {
+          if (url) next[id] = url;
+        }
+        return next;
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [scripts]);
 
   const practice = (script: SavedScript) => {
     navigate("/practice", {
@@ -101,6 +134,13 @@ export default function MyAccount() {
                     })}
                   </span>
                 </div>
+                {script.pdf_path && (
+                  <div className="account-script-preview">
+                    {previewUrls[script.id] && (
+                      <DocumentPreview src={previewUrls[script.id]} fileName={script.title} />
+                    )}
+                  </div>
+                )}
                 <div className="account-script-actions">
                   {script.pdf_path && (
                     <button

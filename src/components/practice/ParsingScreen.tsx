@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Wordmark } from "../SiteNav";
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import DocumentPreview, { formatFileSize } from "../DocumentPreview";
 
 export default function ParsingScreen({
   file,
@@ -72,22 +68,9 @@ export default function ParsingScreen({
           </p>
         </div>
 
-        <figure className="document-panel" aria-label={`Document preview of ${file.name}`}>
-          <figcaption>
-            <span>Document preview</span>
-            <span>Page 1</span>
-          </figcaption>
-          <div className="document-frame">
-            {previewUrl && (
-              <embed
-                src={`${previewUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
-                type="application/pdf"
-                title={`Preview of ${file.name}`}
-              />
-            )}
-          </div>
-          <p><strong>{file.name}</strong><span>Read-only preview · {formatFileSize(file.size)}</span></p>
-        </figure>
+        {previewUrl && (
+          <DocumentPreview src={previewUrl} fileName={file.name} fileSize={file.size} />
+        )}
       </section>
     </main>
   );

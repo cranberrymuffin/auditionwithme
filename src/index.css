@@ -1317,9 +1317,9 @@ header .flow-back:hover {
 }
 .account-script-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
   padding: 20px 24px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 11px;
@@ -1344,9 +1344,13 @@ header .flow-back:hover {
 }
 .account-script-actions {
   display: flex;
-  flex-shrink: 0;
   align-items: center;
   gap: 10px;
+}
+.account-script-secondary,
+.account-script-practice {
+  flex: 1;
+  justify-content: center;
 }
 .account-script-secondary {
   padding: 10px 16px;
@@ -1374,21 +1378,6 @@ header .flow-back:hover {
 }
 .account-script-practice:hover {
   filter: brightness(1.05);
-}
-
-@media (max-width: 620px) {
-  .account-script-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .account-script-actions {
-    width: 100%;
-  }
-  .account-script-secondary,
-  .account-script-practice {
-    flex: 1;
-    justify-content: center;
-  }
 }
 
 .auth-layout {
