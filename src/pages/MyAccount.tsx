@@ -23,7 +23,7 @@ export default function MyAccount() {
     setLoading(true);
     supabase
       .from("scripts")
-      .select("id,title,language_code,language_name,characters,steps,pdf_path,created_at")
+      .select("id,title,language_code,language_name,characters,steps,pdf_path,character_voices,delivery_tags,created_at")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!active) return;
@@ -70,11 +70,14 @@ export default function MyAccount() {
     navigate("/practice", {
       state: {
         replayScript: {
+          id: script.id,
           title: script.title,
           steps: script.steps,
           characters: script.characters,
           languageCode: script.language_code,
           languageName: script.language_name,
+          characterVoices: script.character_voices,
+          deliveryTags: script.delivery_tags,
         },
       },
     });

@@ -85,7 +85,7 @@ export default function Home() {
       const { data: existing } = await supabase
         .from("scripts")
         .select(
-          "title,language_code,language_name,characters,steps,content_hash",
+          "id,title,language_code,language_name,characters,steps,content_hash,character_voices,delivery_tags",
         )
         .eq("user_id", user.id)
         .eq("content_hash", contentHash)
@@ -98,11 +98,14 @@ export default function Home() {
         navigate("/practice", {
           state: {
             replayScript: {
+              id: saved.id,
               title: saved.title,
               steps: saved.steps,
               characters: saved.characters,
               languageCode: saved.language_code,
               languageName: saved.language_name,
+              characterVoices: saved.character_voices,
+              deliveryTags: saved.delivery_tags,
             },
           },
         });
