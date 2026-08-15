@@ -49,22 +49,33 @@ export default function Practice() {
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
-  const replayScript: ReplayScript | null = location.state?.replayScript ?? null;
+  const replayScript: ReplayScript | null =
+    location.state?.replayScript ?? null;
 
   const [loading, setLoading] = useState(false);
-  const [processingPhase, setProcessingPhase] = useState<"extracting" | "analyzing">("extracting");
+  const [processingPhase, setProcessingPhase] = useState<
+    "extracting" | "analyzing"
+  >("extracting");
   const [error, setError] = useState("");
   const [steps, setSteps] = useState<Step[]>([]);
   const [characters, setCharacters] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [roleDraft, setRoleDraft] = useState<string | null>(null);
-  const [characterVoices, setCharacterVoices] = useState<Record<string, string>>({});
+  const [characterVoices, setCharacterVoices] = useState<
+    Record<string, string>
+  >({});
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
-  const [scriptLanguage, setScriptLanguage] = useState({ code: "en", name: "English" });
+  const [scriptLanguage, setScriptLanguage] = useState({
+    code: "en",
+    name: "English",
+  });
   const [parseAttempt, setParseAttempt] = useState(0);
   // Bilingual editions: holds the translated parse until the user picks a language.
   const [languageChoice, setLanguageChoice] = useState<ParseData | null>(null);
+  // Finished parse waiting on the user's "Continue" click — the parsing screen
+  // (with the PDF preview) stays up until they choose to proceed.
+  const [pendingParse, setPendingParse] = useState<ParseData | null>(null);
   const toast = useToast();
   const ranAttempt = useRef(-1);
 
@@ -73,7 +84,10 @@ export default function Practice() {
     const parsedCharacters: string[] = data.characters ?? [];
     setSteps(parsedSteps);
     setCharacters(parsedCharacters);
-    setScriptLanguage({ code: data.languageCode ?? "en", name: data.languageName ?? "English" });
+    setScriptLanguage({
+      code: data.languageCode ?? "en",
+      name: data.languageName ?? "English",
+    });
     if (parsedCharacters.length === 0) setSelectedRole("");
   };
 
@@ -109,7 +123,8 @@ export default function Practice() {
       language_name: data.languageName ?? "English",
       pdf_path: pdfPath,
     });
-    if (error) console.error("Failed to save script to account:", error.message);
+    if (error)
+      console.error("Failed to save script to account:", error.message);
   };
 
   const finalizeParse = (data: ParseData) => {
@@ -149,6 +164,7 @@ export default function Practice() {
     const run = async () => {
       setLoading(true);
       setError("");
+      setPendingParse(null);
       setProcessingPhase("extracting");
 
       try {
@@ -156,9 +172,17 @@ export default function Practice() {
         let extractedLines: LayoutLineTuple[] | null = null;
         try {
           const extracted = await extractPdfLayout(file, pdfDocument);
-          if (extracted.usable) extractedLines = extracted.lines;
+          // Sides with a raster markup overlay (X-boxes, START/END cues drawn
+          // as an image) can't be honored from the text layer — the vision
+          // path sees and applies the markup instead.
+          if (extracted.usable && !extracted.sides.visionRecommended) {
+            extractedLines = extracted.lines;
+          }
         } catch (extractionError) {
-          console.warn("PDF text extraction failed; using scanned-page parsing.", extractionError);
+          console.warn(
+            "PDF text extraction failed; using scanned-page parsing.",
+            extractionError,
+          );
         }
         setProcessingPhase("analyzing");
 
@@ -166,13 +190,21 @@ export default function Practice() {
         if (extractedLines !== null) {
           const res = await apiFetch("/api/parse-script", {
             method: "POST",
-            headers: { "Content-Type": "application/json", "x-rehearsal-grant": rehearsalGrant },
+            headers: {
+              "Content-Type": "application/json",
+              "x-rehearsal-grant": rehearsalGrant,
+            },
             body: JSON.stringify({ layout: { lines: extractedLines } }),
           });
 
           if (res.status === 401 || res.status === 403) {
-            const body = await res.json().catch(() => ({}) as { error?: string });
-            throw new ApiError(res.status, body.error ?? "Session or rehearsal grant is no longer valid");
+            const body = await res
+              .json()
+              .catch(() => ({}) as { error?: string });
+            throw new ApiError(
+              res.status,
+              body.error ?? "Session or rehearsal grant is no longer valid",
+            );
           }
 
           const responseText = await res.text();
@@ -182,25 +214,35 @@ export default function Practice() {
               payload = JSON.parse(responseText) as typeof payload;
             } catch {
               throw new Error(
-                res.ok ? "The script service returned an invalid response." : SERVICE_DOWN_MESSAGE
+                res.ok
+                  ? "The script service returned an invalid response."
+                  : SERVICE_DOWN_MESSAGE,
               );
             }
           }
           if (!res.ok) {
             throw new Error(payload.error || SERVICE_DOWN_MESSAGE);
           }
-          if (!responseText) throw new Error("The script service returned an empty response.");
+          if (!responseText)
+            throw new Error("The script service returned an empty response.");
           data = payload;
         } else {
           // Image-only PDF (scan) — render pages and parse chunks with vision.
-          data = await parseScannedPdf(file, rehearsalGrant, undefined, pdfDocument);
+          data = await parseScannedPdf(
+            file,
+            rehearsalGrant,
+            undefined,
+            pdfDocument,
+          );
         }
 
         if (data.unreadableOriginalLanguage && (data.steps?.length ?? 0) > 0) {
           // Bilingual edition — let the user pick a language before rehearsing.
           setLanguageChoice(data);
         } else {
-          finalizeParse(data);
+          // Hold on the parsing screen (PDF preview visible) until the user
+          // clicks Continue — never auto-advance into casting.
+          setPendingParse(data);
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
@@ -208,7 +250,9 @@ export default function Practice() {
           return;
         }
         if (err instanceof ApiError && err.status === 403) {
-          toast("Your rehearsal session expired — please re-upload your script.");
+          toast(
+            "Your rehearsal session expired — please re-upload your script.",
+          );
           navigate("/", { replace: true });
           return;
         }
@@ -243,21 +287,31 @@ export default function Practice() {
         const response = await apiFetch("/api/character-voices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ characters: characterList, languageCode: scriptLanguage.code }),
+          body: JSON.stringify({
+            characters: characterList,
+            languageCode: scriptLanguage.code,
+          }),
         });
-        const data = await response.json() as { voices?: Record<string, string>; error?: string };
-        if (!response.ok) throw new Error(data.error || "Voice matching failed");
+        const data = (await response.json()) as {
+          voices?: Record<string, string>;
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(data.error || "Voice matching failed");
         // Merge under any manual picks the user already made while this was in flight.
         if (!cancelled && data.voices) {
           setCharacterVoices((previous) => ({ ...data.voices, ...previous }));
         }
       } catch (err) {
         console.error("Character voice matching error:", err);
-        if (!cancelled) toast("Automatic voice casting didn't work — pick voices manually.");
+        if (!cancelled)
+          toast("Automatic voice casting didn't work — pick voices manually.");
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [steps, scriptLanguage.code, toast]);
 
   // Full voice catalog, so the user can override auto-assigned voices
@@ -266,15 +320,24 @@ export default function Practice() {
     void (async () => {
       try {
         const response = await apiFetch("/api/voices");
-        const data = await response.json() as { voices?: Voice[]; error?: string };
-        if (!response.ok) throw new Error(data.error || "Voice list fetch failed");
+        const data = (await response.json()) as {
+          voices?: Voice[];
+          error?: string;
+        };
+        if (!response.ok)
+          throw new Error(data.error || "Voice list fetch failed");
         if (!cancelled && Array.isArray(data.voices)) setVoices(data.voices);
       } catch (err) {
         console.error("Voice list fetch error:", err);
-        if (!cancelled) toast("The voice catalog couldn't be loaded. Voice options may be limited.");
+        if (!cancelled)
+          toast(
+            "The voice catalog couldn't be loaded. Voice options may be limited.",
+          );
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [toast]);
 
   const startReading = () => {
@@ -296,10 +359,18 @@ export default function Practice() {
     try {
       // Reuses the same grant as the initial parse — this is a re-parse of
       // the same upload, not a new billable session.
-      const result = await parseScannedPdf(file, rehearsalGrant, undefined, undefined, {
-        preferOriginalLanguage: true,
-      });
-      finalizeParse(result);
+      const result = await parseScannedPdf(
+        file,
+        rehearsalGrant,
+        undefined,
+        undefined,
+        {
+          preferOriginalLanguage: true,
+        },
+      );
+      // Same continue-gate as the initial parse — this path takes minutes, so
+      // the user may have stepped away; don't jump into casting unprompted.
+      setPendingParse(result);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         navigate("/login", { replace: true });
@@ -317,6 +388,18 @@ export default function Practice() {
   };
 
   if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
+  if (pendingParse) {
+    return (
+      <ParsingScreen
+        file={file!}
+        phase="done"
+        onContinue={() => {
+          finalizeParse(pendingParse);
+          setPendingParse(null);
+        }}
+      />
+    );
+  }
 
   if (error) {
     return (
@@ -351,11 +434,14 @@ export default function Practice() {
       <StageShell>
         <div className="flex h-full flex-col items-center justify-center text-center">
           <p className="eyebrow mb-4">Bilingual edition</p>
-          <h1 className="stage-error-title">Which version do you want to rehearse?</h1>
+          <h1 className="stage-error-title">
+            Which version do you want to rehearse?
+          </h1>
           <p className="stage-error-detail">
-            This script prints its dialogue in two languages, and only the translation is
-            readable as text. Rehearse the translation now, or have the original language
-            read from the printed pages — that takes a few minutes.
+            This script prints its dialogue in two languages, and only the
+            translation is readable as text. Rehearse the translation now, or
+            have the original language read from the printed pages — that takes
+            a few minutes.
           </p>
           <div className="stage-error-actions">
             <button
@@ -368,7 +454,11 @@ export default function Practice() {
             >
               Rehearse in {languageChoice.languageName ?? "the translation"}
             </button>
-            <button type="button" className="stage-error-secondary" onClick={rehearseOriginalLanguage}>
+            <button
+              type="button"
+              className="stage-error-secondary"
+              onClick={rehearseOriginalLanguage}
+            >
               Read the original language (takes a few minutes)
             </button>
           </div>
@@ -381,7 +471,9 @@ export default function Practice() {
     return (
       <StageShell>
         <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="text-ink-soft">No spoken lines detected in this script.</p>
+          <p className="text-ink-soft">
+            No spoken lines detected in this script.
+          </p>
         </div>
       </StageShell>
     );
@@ -403,7 +495,11 @@ export default function Practice() {
     );
   }
 
-  if (selectedRole !== null && !voicesConfirmed && voiceableSpeakers.length > 0) {
+  if (
+    selectedRole !== null &&
+    !voicesConfirmed &&
+    voiceableSpeakers.length > 0
+  ) {
     return (
       <VoiceCasting
         speakers={voiceableSpeakers}

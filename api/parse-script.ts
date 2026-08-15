@@ -1,7 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { buildSteps, collectSpeakerCandidates } from "./_screenplay.js";
-import { cleanLayoutLines, flattenLayout, parseScreenplayLayout, type LayoutLineTuple } from "./_layout.js";
+import {
+  cleanLayoutLines,
+  flattenLayout,
+  parseScreenplayLayout,
+  type LayoutLineTuple,
+} from "./_layout.js";
+import { applySidesMarkup } from "./_sides.js";
 import { detectLanguage } from "./_language.js";
 import { requireRehearsalGrant } from "./_entitlement.js";
 
@@ -98,7 +104,9 @@ async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
   const modelDurationMs = performance.now() - modelStartedAt;
 
   if (response.stop_reason === "max_tokens") {
-    console.warn("parse-script: classifier hit max_tokens; falling back to full parse");
+    console.warn(
+      "parse-script: classifier hit max_tokens; falling back to full parse",
+    );
     return null;
   }
 
@@ -110,14 +118,25 @@ async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
   try {
     result = JSON.parse(json) as ClassifierResult;
   } catch {
-    console.warn("parse-script: classifier returned malformed JSON; falling back");
+    console.warn(
+      "parse-script: classifier returned malformed JSON; falling back",
+    );
     return null;
   }
 
   const labels = new Map<string, string>();
   for (const character of result.characters ?? []) {
-    if (typeof character?.label === "string" && character.label && candidates.has(character.label)) {
-      labels.set(character.label, typeof character.name === "string" && character.name ? character.name : character.label);
+    if (
+      typeof character?.label === "string" &&
+      character.label &&
+      candidates.has(character.label)
+    ) {
+      labels.set(
+        character.label,
+        typeof character.name === "string" && character.name
+          ? character.name
+          : character.label,
+      );
     }
   }
   if (labels.size === 0) return null;
@@ -147,7 +166,9 @@ async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
     stageDirectionLines: asLineSet(result.stageDirections),
     junkLines: asLineSet(result.junk),
     start: Number.isInteger(result.dialogueStart) ? result.dialogueStart! : 0,
-    end: Number.isInteger(result.dialogueEnd) ? result.dialogueEnd! : lines.length - 1,
+    end: Number.isInteger(result.dialogueEnd)
+      ? result.dialogueEnd!
+      : lines.length - 1,
   });
 
   // Degenerate segmentation (weird format regex didn't really fit) → let the
@@ -156,8 +177,10 @@ async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
 
   return {
     characters,
-    languageCode: typeof result.languageCode === "string" ? result.languageCode : "en",
-    languageName: typeof result.languageName === "string" ? result.languageName : "English",
+    languageCode:
+      typeof result.languageCode === "string" ? result.languageCode : "en",
+    languageName:
+      typeof result.languageName === "string" ? result.languageName : "English",
     steps,
     processingMode: "text-fast",
     modelDurationMs: Math.round(modelDurationMs),
@@ -175,6 +198,13 @@ PART 1 — Produce a clean script internally.
 2. Extract all character names and their dialogue.
 3. Include relevant stage directions.
 4. Note any important annotations that affect how lines should be performed by folding them into the stage directions or dialogue context.
+
+AUDITION SIDES MARKUP — when the document is marked-up sides, apply the markup:
+- Content crossed out by strikethroughs, diagonal slashes, or X boxes, or hidden under white cover boxes, is CUT — exclude it.
+- START/END (or Start/Stop) margin cues bound the selection: exclude content before a START and after an END, until the next START.
+- Sections marked FYI or set off by a vertical margin line are context only — exclude them from the performed script.
+- Margin notes with acting instructions become stage directions on the adjacent line.
+- Page furniture ("ROLE: X", "PG 1 OF 7", "1/4", sides service watermarks) is not content.
 The clean script should be the definitive version of the script the actor should use for their audition, formatted as:
 
 CHARACTER NAME
@@ -249,38 +279,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     layout.lines.length > 0 &&
     layout.lines.length <= 30_000 &&
     layout.lines.every(
-      (l) => Array.isArray(l) && l.length === 3 && typeof l[0] === "number" && typeof l[1] === "number" && typeof l[2] === "string"
+      (l) =>
+        Array.isArray(l) &&
+        l.length === 3 &&
+        typeof l[0] === "number" &&
+        typeof l[1] === "number" &&
+        typeof l[2] === "string",
     )
       ? layout.lines
       : null;
   const cleaned = rawLayoutLines ? cleanLayoutLines(rawLayoutLines) : null;
-  const layoutLines = cleaned?.lines ?? null;
+  // Audition-sides cues (START/END markers, margin notes) arrive as sentinel
+  // or text lines; resolve them into the marked selection before any strategy.
+  const sided = cleaned ? applySidesMarkup(cleaned.lines) : null;
+  const layoutLines = sided?.lines ?? null;
   // A large share of unreadable original-language lines means this is a
   // bilingual edition where only the translation survives text extraction —
   // surfaced so the client can offer reading the original from page images.
   const unreadableOriginalLanguage =
     cleaned !== null &&
     cleaned.droppedMojibake >= 100 &&
-    cleaned.droppedMojibake / (cleaned.droppedMojibake + cleaned.lines.length) >= 0.08;
+    cleaned.droppedMojibake /
+      (cleaned.droppedMojibake + cleaned.lines.length) >=
+      0.08;
 
   // Strategy chain: screenplay-layout (deterministic) → labeled-text
   // (regex + small classifier) → full model parse.
-  const effectiveText = scriptText?.trim() || (layoutLines ? flattenLayout(layoutLines) : "");
+  const effectiveText =
+    scriptText?.trim() || (layoutLines ? flattenLayout(layoutLines) : "");
 
   if (!pdfData && !effectiveText) {
-    return res.status(400).json({ error: "No script text or PDF data provided" });
+    return res
+      .status(400)
+      .json({ error: "No script text or PDF data provided" });
   }
   if (effectiveText.length > 250_000) {
-    return res.status(413).json({ error: "Extracted script text is too large" });
+    return res
+      .status(413)
+      .json({ error: "Extracted script text is too large" });
   }
 
   try {
     // Strategy 1: deterministic indent-based screenplay parsing — no model
     // call at all, so it's instant and reproducible.
     if (layoutLines) {
-      const parsed = parseScreenplayLayout(layoutLines);
+      // A cue-trimmed sides selection can be one short scene — relax the
+      // statistical minimums the full-script heuristics assume.
+      const parsed = parseScreenplayLayout(layoutLines, {
+        relaxed: sided?.cuesApplied,
+      });
       if (parsed) {
-        const dialogue = parsed.steps.map((step) => step.verbalLine).filter(Boolean).join(" ");
+        const dialogue = parsed.steps
+          .map((step) => step.verbalLine)
+          .filter(Boolean)
+          .join(" ");
         const language = detectLanguage(dialogue);
         res.setHeader("Server-Timing", "model;dur=0");
         return res.status(200).json({
@@ -305,26 +357,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json({ ...fast, unreadableOriginalLanguage });
         }
       } catch (fastError) {
-        console.warn("parse-script: fast path failed; falling back to full parse", fastError);
+        console.warn(
+          "parse-script: fast path failed; falling back to full parse",
+          fastError,
+        );
       }
     }
 
-    const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] = effectiveText
-      ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${effectiveText}\n</SCRIPT>`
-      : [
-          {
-            type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: pdfData!,
+    const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] =
+      effectiveText
+        ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${effectiveText}\n</SCRIPT>`
+        : [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: pdfData!,
+              },
             },
-          },
-          {
-            type: "text",
-            text: "Process this script PDF as instructed and return the JSON result.",
-          },
-        ];
+            {
+              type: "text",
+              text: "Process this script PDF as instructed and return the JSON result.",
+            },
+          ];
     const modelStartedAt = performance.now();
     const stream = client.messages.stream({
       model: "claude-sonnet-5",
@@ -350,9 +406,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (response.stop_reason === "max_tokens") {
       console.error(
-        `parse-script: output truncated at max_tokens (input=${response.usage.input_tokens}, output=${response.usage.output_tokens})`
+        `parse-script: output truncated at max_tokens (input=${response.usage.input_tokens}, output=${response.usage.output_tokens})`,
       );
-      return res.status(500).json({ error: "This script is too long to process. Try uploading only the pages you need." });
+      return res
+        .status(500)
+        .json({
+          error:
+            "This script is too long to process. Try uploading only the pages you need.",
+        });
     }
 
     // A `thinking` block can precede the `text` block — don't assume content[0].
@@ -364,8 +425,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
-    type RawStep = { speaker: string; verbalLine: string; content: { kind: string; text: string }[] };
-    let parsed: { characters?: string[]; languageCode?: string; languageName?: string; steps?: RawStep[] };
+    type RawStep = {
+      speaker: string;
+      verbalLine: string;
+      content: { kind: string; text: string }[];
+    };
+    let parsed: {
+      characters?: string[];
+      languageCode?: string;
+      languageName?: string;
+      steps?: RawStep[];
+    };
     try {
       parsed = JSON.parse(json) as typeof parsed;
     } catch {
@@ -373,20 +443,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
-    const validSteps = Array.isArray(parsed.steps) && parsed.steps.every((step) =>
-      step &&
-      typeof step.speaker === "string" &&
-      typeof step.verbalLine === "string" &&
-      Array.isArray(step.content) &&
-      step.content.every((line) =>
-        line &&
-        (line.kind === "verbal" || line.kind === "nonverbal") &&
-        typeof line.text === "string"
-      )
-    );
-    const validCharacters = parsed.characters === undefined || (
-      Array.isArray(parsed.characters) && parsed.characters.every((character) => typeof character === "string")
-    );
+    const validSteps =
+      Array.isArray(parsed.steps) &&
+      parsed.steps.every(
+        (step) =>
+          step &&
+          typeof step.speaker === "string" &&
+          typeof step.verbalLine === "string" &&
+          Array.isArray(step.content) &&
+          step.content.every(
+            (line) =>
+              line &&
+              (line.kind === "verbal" || line.kind === "nonverbal") &&
+              typeof line.text === "string",
+          ),
+      );
+    const validCharacters =
+      parsed.characters === undefined ||
+      (Array.isArray(parsed.characters) &&
+        parsed.characters.every((character) => typeof character === "string"));
 
     if (!validSteps || !validCharacters) {
       return res.status(500).json({ error: "Script parsing failed" });
@@ -395,8 +470,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Server-Timing", `model;dur=${modelDurationMs.toFixed(1)}`);
     return res.status(200).json({
       characters: parsed.characters ?? [],
-      languageCode: typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
-      languageName: typeof parsed.languageName === "string" ? parsed.languageName : "English",
+      languageCode:
+        typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
+      languageName:
+        typeof parsed.languageName === "string"
+          ? parsed.languageName
+          : "English",
       steps: parsed.steps,
       processingMode: effectiveText ? "text-full" : "pdf-fallback",
       modelDurationMs: Math.round(modelDurationMs),
