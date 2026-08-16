@@ -5,6 +5,25 @@ import { apiFetch } from "../lib/api";
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
 
+// Bias Scribe toward this line's distinctive vocabulary (character names,
+// unusual script words) — the words most likely to be misheard by a generic
+// model. Common short words are skipped since biasing them wastes budget
+// (max 50 keyterms, 20 chars each) without helping.
+function extractKeyterms(line: string): string[] {
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  for (const raw of line.split(/\s+/)) {
+    const word = raw.replace(/[^A-Za-z'-]/g, "");
+    if (word.length < 4 || word.length > 20) continue;
+    const key = word.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push(word);
+    if (terms.length >= 50) break;
+  }
+  return terms;
+}
+
 function floatTo16BitPcmBase64(input: Float32Array): string {
   const buf = new ArrayBuffer(input.length * 2);
   const view = new DataView(buf);
@@ -58,7 +77,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       try {
         const [tokenRes, mic] = await Promise.all([
           apiFetch("/api/eleven-account", { method: "POST" }),
-          navigator.mediaDevices.getUserMedia({ audio: true }),
+          navigator.mediaDevices.getUserMedia({
+            audio: { autoGainControl: true, noiseSuppression: true, echoCancellation: true },
+          }),
         ]);
         stream = mic;
         const tokenData = await tokenRes.json();
@@ -71,7 +92,12 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           audio_format: `pcm_${SAMPLE_RATE}`,
           commit_strategy: "vad",
           language_code: languageCode,
+          // Strips filler words/disfluencies from the transcript so they
+          // can't occupy a match slot or otherwise muddy word-for-word
+          // comparison against the script line.
+          no_verbatim: "true",
         });
+        for (const term of extractKeyterms(line)) params.append("keyterms", term);
         ws = new WebSocket(`${SCRIBE_WS_BASE}?${params}`);
 
         ws.onmessage = (event) => {
@@ -94,6 +120,10 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           setListening(true);
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
           const source = audioContext.createMediaStreamSource(stream);
+          // Browser autoGainControl still leaves quiet mic input under Scribe's
+          // VAD threshold, so boost the signal ourselves before sending it.
+          const gain = audioContext.createGain();
+          gain.gain.value = 3;
           processor = audioContext.createScriptProcessor(4096, 1, 1);
           processor.onaudioprocess = (e) => {
             if (ws?.readyState !== WebSocket.OPEN) return;
@@ -105,7 +135,8 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
               })
             );
           };
-          source.connect(processor);
+          source.connect(gain);
+          gain.connect(processor);
           processor.connect(audioContext.destination);
         };
       } catch (err) {
