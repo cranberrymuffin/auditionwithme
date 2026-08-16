@@ -10,6 +10,7 @@ import {
 import { applySidesMarkup } from "./_sides.js";
 import { detectLanguage } from "./_language.js";
 import { requireRehearsalGrant } from "./_entitlement.js";
+import { extractJson, isValidCharacters } from "./_response.js";
 
 export const config = {
   api: {
@@ -69,13 +70,6 @@ type ParsePayload = {
   processingMode: string;
   modelDurationMs: number;
 };
-
-function extractJson(raw: string): string | null {
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start === -1 || end === -1) return null;
-  return raw.slice(start, end + 1);
-}
 
 async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
   const lines = scriptText.split("\n").map((line) => line.trim());
@@ -458,12 +452,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               typeof line.text === "string",
           ),
       );
-    const validCharacters =
-      parsed.characters === undefined ||
-      (Array.isArray(parsed.characters) &&
-        parsed.characters.every((character) => typeof character === "string"));
-
-    if (!validSteps || !validCharacters) {
+    if (!validSteps || !isValidCharacters(parsed.characters)) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 

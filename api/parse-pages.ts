@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireRehearsalGrant } from "./_entitlement.js";
 import { splitSpeech } from "./_screenplay.js";
+import { extractJson, isValidCharacters } from "./_response.js";
 
 // Parses a chunk of scanned script pages (rendered to JPEGs client-side) with
 // vision. Scanned PDFs have no text layer, so the fast text path in
@@ -136,9 +137,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const textBlock = response.content.find((b) => b.type === "text");
     const raw = textBlock?.type === "text" ? textBlock.text : "";
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start === -1 || end === -1) {
+    const json = extractJson(raw);
+    if (!json) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
@@ -152,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       steps?: RawStep[];
     };
     try {
-      parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
+      parsed = JSON.parse(json) as typeof parsed;
     } catch {
       console.error("parse-pages: malformed JSON from model");
       return res.status(500).json({ error: "Script parsing failed" });
@@ -167,12 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           (step.line === undefined || typeof step.line === "string") &&
           (step.direction === undefined || typeof step.direction === "string"),
       );
-    const validCharacters =
-      parsed.characters === undefined ||
-      (Array.isArray(parsed.characters) &&
-        parsed.characters.every((character) => typeof character === "string"));
-
-    if (!validSteps || !validCharacters) {
+    if (!validSteps || !isValidCharacters(parsed.characters)) {
       return res.status(500).json({ error: "Script parsing failed" });
     }
 
