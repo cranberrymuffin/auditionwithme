@@ -97,7 +97,7 @@ async function canonicalizeCharacters(
   try {
     // Auth-only (rate-limited), not grant-gated — this is bookkeeping for an
     // already-granted upload, not a new billable session (plan Decision 3).
-    const response = await apiFetch("/api/canonicalize-characters", {
+    const response = await apiFetch("/api/casting?action=canonicalize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ characters: result.characters }),

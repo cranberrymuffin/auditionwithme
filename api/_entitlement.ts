@@ -52,9 +52,8 @@ const DEFAULT_RATE_LIMIT = { maxPerWindow: 200, windowSeconds: 60 * 60 };
 
 /**
  * requireAuth, plus a generous shared per-user sliding-window rate limit
- * (default 200 calls/hour) across the five non-grant metered routes (tts,
- * character-voices, canonicalize-characters, scribe-token, voices). Sends
- * 401/429 and returns null on rejection.
+ * (default 200 calls/hour) across the non-grant metered routes (tts,
+ * casting, eleven-account). Sends 401/429 and returns null on rejection.
  */
 export async function requireAuthRateLimited(
   req: VercelRequest,

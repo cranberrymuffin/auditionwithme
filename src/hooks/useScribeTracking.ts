@@ -57,7 +57,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     const start = async () => {
       try {
         const [tokenRes, mic] = await Promise.all([
-          apiFetch("/api/scribe-token", { method: "POST" }),
+          apiFetch("/api/eleven-account", { method: "POST" }),
           navigator.mediaDevices.getUserMedia({ audio: true }),
         ]);
         stream = mic;

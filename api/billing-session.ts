@@ -25,14 +25,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
 
 // Starts a Stripe Checkout session for the single $7/month plan. Never writes
 // subscription_status — only the webhook does that (plan Principle 3).
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  const auth = await requireAuth(req, res);
-  if (!auth) return;
-
+async function startCheckout(
+  req: VercelRequest,
+  res: VercelResponse,
+  auth: { userId: string },
+) {
   const priceId = process.env.STRIPE_PRICE_ID;
   if (!priceId || !process.env.STRIPE_SECRET_KEY) {
     console.error("STRIPE_SECRET_KEY and STRIPE_PRICE_ID must be set");
@@ -108,4 +105,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .status(500)
       .json({ error: `Could not start checkout: ${message}` });
   }
+}
+
+// Opens Stripe's hosted Billing Portal so the user can update payment details
+// or cancel. Cancellation comes back to us as a webhook, never from the client.
+async function openPortal(
+  req: VercelRequest,
+  res: VercelResponse,
+  auth: { userId: string },
+) {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("STRIPE_SECRET_KEY must be set");
+    return res.status(500).json({ error: "Billing is not configured" });
+  }
+
+  const origin = process.env.SITE_URL ?? req.headers.origin;
+  if (!origin) {
+    return res.status(400).json({ error: "Missing origin" });
+  }
+
+  try {
+    const { data: row, error } = await serviceClient()
+      .from("entitlements")
+      .select("stripe_customer_id")
+      .eq("user_id", auth.userId)
+      .maybeSingle();
+    if (error) {
+      console.error("entitlements read failed:", error.message);
+      return res.status(500).json({ error: "Could not load billing account" });
+    }
+
+    const customerId: string | null = row?.stripe_customer_id ?? null;
+    if (!customerId) {
+      return res.status(400).json({ error: "No billing account found" });
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${origin}/pricing`,
+    });
+
+    return res.status(200).json({ url: session.url });
+  } catch (error) {
+    console.error("create-portal-session failed:", error);
+    return res.status(500).json({ error: "Could not open billing portal" });
+  }
+}
+
+// Combines the checkout and portal session endpoints under one route — Vercel's
+// Hobby plan caps deployments at 12 Serverless Functions, and this repo was at 13.
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+
+  const action = req.query.action;
+  if (action === "checkout") return startCheckout(req, res, auth);
+  if (action === "portal") return openPortal(req, res, auth);
+  return res.status(400).json({ error: "Invalid or missing action" });
 }

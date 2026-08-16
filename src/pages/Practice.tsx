@@ -74,7 +74,7 @@ export default function Practice() {
   // Saved scripts row backing this session, when the user is signed in —
   // casting and delivery tags are written back to it as they settle.
   const [scriptId, setScriptId] = useState<string | null>(null);
-  // Per-line delivery tags from the AI director (api/direct-lines), aligned
+  // Per-line delivery tags from the AI director (api/casting?action=direct-lines), aligned
   // by index with steps. null until the pass finishes (or fails silently).
   const [deliveryTags, setDeliveryTags] = useState<(string | null)[] | null>(
     null,
@@ -321,7 +321,7 @@ export default function Practice() {
 
     void (async () => {
       try {
-        const response = await apiFetch("/api/character-voices", {
+        const response = await apiFetch("/api/casting?action=voices", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -359,7 +359,7 @@ export default function Practice() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await apiFetch("/api/direct-lines", {
+        const response = await apiFetch("/api/casting?action=direct-lines", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -406,7 +406,7 @@ export default function Practice() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await apiFetch("/api/voices");
+        const response = await apiFetch("/api/eleven-account");
         const data = (await response.json()) as {
           voices?: Voice[];
           error?: string;

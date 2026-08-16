@@ -219,7 +219,7 @@ export default function Pricing() {
             <button
               onClick={() =>
                 redirectToStripe(
-                  "/api/create-portal-session",
+                  "/api/billing-session?action=portal",
                   "Could not open the billing portal. Please try again.",
                 )
               }
@@ -242,7 +242,7 @@ export default function Pricing() {
               <button
                 onClick={() =>
                   redirectToStripe(
-                    "/api/create-checkout-session",
+                    "/api/billing-session?action=checkout",
                     "Could not start checkout. Please try again.",
                   )
                 }
