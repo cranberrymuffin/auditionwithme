@@ -1012,7 +1012,7 @@ header .flow-back:hover {
   }
   .hero-title {
     max-width: 100%;
-    font-size: clamp(2.4rem, 10.5vw, 3.05rem);
+    font-size: clamp(2.1rem, 9vw, 2.7rem);
     line-height: 0.96;
   }
   .hero-title .hero-title-italic {
