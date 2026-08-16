@@ -250,33 +250,29 @@ header .flow-back:hover {
   bottom: auto;
 }
 
+/* Responsive art direction shared by every cinematic page: each composition
+   keeps the complete hillside sign inside a crop-safe area instead of forcing
+   the wide artwork into every shape. */
 .cinematic-backdrop {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background-image: url("/images/hollywood-hills-hero.png");
+  background-image: url("/images/hollywood-hills-hero-wide.png");
   background-size: cover;
-  background-position: center center;
+  background-position: right center;
   filter: saturate(0.84) contrast(1.04);
   transform: scale(1.002);
 }
 
-/* Responsive art direction: each composition keeps the complete hillside sign
-   inside a crop-safe area instead of forcing the wide artwork into every shape. */
-.home-page .cinematic-backdrop {
-  background-image: url("/images/hollywood-hills-hero-wide.png");
-  background-position: right center;
-}
-
 @media (max-aspect-ratio: 7 / 5) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
     background-position: center top;
   }
 }
 
 @media (max-aspect-ratio: 4 / 5) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
     background-position: center top;
   }
@@ -683,7 +679,6 @@ header .flow-back:hover {
     linear-gradient(0deg, rgba(5, 12, 21, 0.74), rgba(5, 12, 21, 0.2));
 }
 .about-page-clean .cinematic-backdrop {
-  background-position: 58% center;
   filter: saturate(0.55) contrast(0.88) brightness(0.62) blur(1px);
   transform: scale(1.02);
 }
@@ -976,9 +971,6 @@ header .flow-back:hover {
 
 @media (max-width: 720px) {
   .cinematic-backdrop {
-    background-position: 66% center;
-  }
-  .home-page .cinematic-backdrop {
     background-position: center top;
   }
   .cinematic-page::after {
@@ -1060,7 +1052,7 @@ header .flow-back:hover {
 /* Phones get an explicit art-directed safe zone: the sign stays in the upper
    portion while the lower portion is reserved for the hero copy and actions. */
 @media (max-width: 720px) and (orientation: portrait) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
     background-position: center top;
   }
@@ -1076,7 +1068,7 @@ header .flow-back:hover {
 }
 
 @media (max-width: 720px) and (orientation: landscape) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
     background-position: center top;
   }
