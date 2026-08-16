@@ -47,6 +47,12 @@ function formatMoney(amount: number, currency: string): string {
   }).format(amount / 100);
 }
 
+// The webhook, not the confirm() call, is what actually attaches the new
+// default payment method — so poll briefly after confirming before assuming
+// the update landed (same pattern as Pricing.tsx's subscription confirm).
+const CONFIRM_POLL_MS = 1500;
+const CONFIRM_TIMEOUT_MS = 10000;
+
 export default function Billing() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState<BillingSummary | null>(null);
@@ -58,20 +64,21 @@ export default function Billing() {
     null,
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<BillingSummary | null> => {
     setLoading(true);
     try {
       const response = await apiFetch("/api/billing");
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         setError(payload?.error ?? "Could not load your billing information.");
-        setLoading(false);
-        return;
+        return null;
       }
       setSummary(payload as BillingSummary);
       setError(null);
+      return payload as BillingSummary;
     } catch {
       setError("Could not load your billing information.");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -126,30 +133,27 @@ export default function Billing() {
     }
   }
 
-  async function confirmCardUpdate(paymentMethodId: string | null) {
+  // Confirming a setup-mode Checkout Session doesn't hand back a payment
+  // method id — the webhook (checkout.session.completed) attaches it as the
+  // default asynchronously, so poll briefly until the new card shows up.
+  async function confirmCardUpdate() {
     setUpdatingCard(false);
     setSetupClientSecret(null);
-    if (!paymentMethodId) {
-      await load();
-      return;
-    }
     setBusy(true);
-    try {
-      const response = await apiFetch("/api/billing?action=set-default-payment-method", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethodId }),
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok) {
-        setError(payload?.error ?? "Could not save your new card.");
-      }
-      await load();
-    } catch {
-      setError("Could not save your new card.");
-    } finally {
-      setBusy(false);
+    const previousCard = summary?.subscription?.card ?? null;
+    const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+    let latest = await load();
+    while (
+      Date.now() < deadline &&
+      (!latest?.subscription?.card ||
+        (previousCard &&
+          latest.subscription.card.brand === previousCard.brand &&
+          latest.subscription.card.last4 === previousCard.last4))
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_MS));
+      latest = await load();
     }
+    setBusy(false);
   }
 
   const subscription = summary?.subscription ?? null;
@@ -212,9 +216,7 @@ export default function Billing() {
               {updatingCard && setupClientSecret ? (
                 <StripeElementsForm
                   clientSecret={setupClientSecret}
-                  kind="setup"
                   submitLabel="Save card"
-                  returnPath="/billing"
                   onCancel={() => {
                     setUpdatingCard(false);
                     setSetupClientSecret(null);

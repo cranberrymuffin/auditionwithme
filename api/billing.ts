@@ -20,16 +20,8 @@ function serviceClient() {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2025-03-31.basil",
+  apiVersion: "2026-07-29.dahlia",
 });
-
-function clientSecretOf(subscription: Stripe.Subscription): string | null {
-  const invoice = subscription.latest_invoice;
-  if (!invoice || typeof invoice === "string") return null;
-  const paymentIntent = invoice.payment_intent;
-  if (!paymentIntent || typeof paymentIntent === "string") return null;
-  return paymentIntent.client_secret;
-}
 
 // Read-only view of the caller's Stripe billing state, fetched live so the
 // account/billing page can never drift from what Stripe actually has —
@@ -37,7 +29,7 @@ function clientSecretOf(subscription: Stripe.Subscription): string | null {
 async function getBillingSummary(
   req: VercelRequest,
   res: VercelResponse,
-  auth: { userId: string },
+  auth: { userId: string; email: string },
 ) {
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error("STRIPE_SECRET_KEY must be set");
@@ -73,22 +65,23 @@ async function getBillingSummary(
       }
     }
 
-    // The customer's default_payment_method is the field set-default-payment-
-    // method.ts can always update, so it's the freshest source once a user
-    // has ever changed their card. Subscriptions created via a Checkout
-    // Session with Managed Payments reject changes to their own
-    // default_payment_method entirely, so that field can go stale forever —
-    // fall back to it only when the customer has never set one (e.g. a
-    // day-one subscriber who hasn't used "update payment method" yet).
+    // The customer's default_payment_method is the field the setup-mode
+    // webhook handler (stripe-webhook.ts) always updates, so it's the
+    // freshest source once a user has ever changed their card. Subscriptions
+    // created via a Checkout Session with Managed Payments reject changes to
+    // their own default_payment_method entirely, so that field can go stale
+    // forever — fall back to it only when the customer has never set one
+    // (e.g. a day-one subscriber who hasn't used "update payment method" yet).
     const customer = await stripe.customers.retrieve(customerId, {
       expand: ["invoice_settings.default_payment_method"],
     });
     const customerDefault =
-      !("deleted" in customer && customer.deleted) &&
-      customer.invoice_settings.default_payment_method &&
-      typeof customer.invoice_settings.default_payment_method !== "string"
-        ? customer.invoice_settings.default_payment_method
-        : null;
+      "deleted" in customer
+        ? null
+        : customer.invoice_settings.default_payment_method &&
+            typeof customer.invoice_settings.default_payment_method !== "string"
+          ? customer.invoice_settings.default_payment_method
+          : null;
 
     const subscriptionDefault =
       subscription?.default_payment_method &&
@@ -134,14 +127,14 @@ async function getBillingSummary(
   }
 }
 
-// Starts (or resumes) a subscription for the single $7/month plan and returns
-// a PaymentIntent client secret for the embedded Payment Element to confirm.
+// Starts a subscription checkout for the single $7/month plan and returns a
+// Checkout Session client secret for the embedded Payment Element to confirm.
 // Never writes subscription_status — only the webhook does that (plan
 // Principle 3).
 async function createSubscription(
   req: VercelRequest,
   res: VercelResponse,
-  auth: { userId: string },
+  auth: { userId: string; email: string },
 ) {
   const priceId = process.env.STRIPE_PRICE_ID;
   if (!priceId || !process.env.STRIPE_SECRET_KEY) {
@@ -173,6 +166,7 @@ async function createSubscription(
     let customerId: string | null = row?.stripe_customer_id ?? null;
     if (!customerId) {
       const customer = await stripe.customers.create({
+        email: auth.email,
         metadata: { supabase_user_id: auth.userId },
       });
       customerId = customer.id;
@@ -196,42 +190,27 @@ async function createSubscription(
       );
     }
 
-    // Reuse an abandoned in-progress attempt instead of creating a duplicate
-    // subscription every time the user retries.
-    const existing = await stripe.subscriptions.list({
+    // A Checkout Session doesn't create a Subscription until it completes, so
+    // an abandoned attempt just expires on its own — no dedup/reuse needed.
+    const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      status: "incomplete",
-      expand: ["data.latest_invoice.payment_intent"],
-      limit: 1,
-    });
-    const reusable = existing.data[0];
-    const reusableSecret = reusable ? clientSecretOf(reusable) : null;
-    if (reusable && reusableSecret) {
-      return res.status(200).json({ clientSecret: reusableSecret });
-    }
-
-    const subscription = await stripe.subscriptions.create({
-      customer: customerId,
-      items: [{ price: priceId }],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        payment_method_types: ["card"],
-        save_default_payment_method: "on_subscription",
-      },
-      expand: ["latest_invoice.payment_intent"],
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: "subscription",
+      ui_mode: "elements",
+      // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
+      // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
+      payment_method_types: ["card"],
+      return_url: `${req.headers.origin}/pricing`,
     });
 
-    const clientSecret = clientSecretOf(subscription);
-    if (!clientSecret) {
-      console.error(
-        `subscription ${subscription.id} created with no payment_intent client_secret`,
-      );
+    if (!session.client_secret) {
+      console.error(`checkout session ${session.id} created with no client_secret`);
       return res
         .status(500)
         .json({ error: "Could not start subscription payment" });
     }
 
-    return res.status(200).json({ clientSecret });
+    return res.status(200).json({ clientSecret: session.client_secret });
   } catch (error) {
     console.error("create-subscription failed:", error);
     const message = error instanceof Error ? error.message : String(error);
@@ -242,12 +221,13 @@ async function createSubscription(
 }
 
 // Starts an in-app "update payment method" flow: the client mounts the
-// Payment Element against this SetupIntent's client secret, confirms it, then
-// calls this endpoint again with action=set-default-payment-method.
+// Payment Element against this Checkout Session's client secret and confirms
+// it. The webhook (checkout.session.completed, mode "setup") is what actually
+// attaches the resulting payment method as the default — see stripe-webhook.ts.
 async function createSetupIntent(
   req: VercelRequest,
   res: VercelResponse,
-  auth: { userId: string },
+  auth: { userId: string; email: string },
 ) {
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error("STRIPE_SECRET_KEY must be set");
@@ -270,90 +250,34 @@ async function createSetupIntent(
       return res.status(400).json({ error: "No billing account found" });
     }
 
-    const setupIntent = await stripe.setupIntents.create({
+    // Managed Payments (enabled by default on this account) only supports
+    // mode: "subscription" and mode: "payment" — opt out for this session so
+    // mode: "setup" is accepted.
+    const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      usage: "off_session",
+      mode: "setup",
+      ui_mode: "elements",
+      currency: "usd",
+      // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
+      // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
       payment_method_types: ["card"],
+      managed_payments: { enabled: false },
+      return_url: `${req.headers.origin}/billing`,
     });
 
-    return res.status(200).json({ clientSecret: setupIntent.client_secret });
+    if (!session.client_secret) {
+      console.error(`checkout session ${session.id} created with no client_secret`);
+      return res
+        .status(500)
+        .json({ error: "Could not start payment method update" });
+    }
+
+    return res.status(200).json({ clientSecret: session.client_secret });
   } catch (error) {
     console.error("create-setup-intent failed:", error);
     return res
       .status(500)
       .json({ error: "Could not start payment method update" });
-  }
-}
-
-// Called after the client confirms a SetupIntent (action=create-setup-intent)
-// client-side. Attaches the resulting payment method as the default for both
-// the customer's invoices and their active subscription.
-async function setDefaultPaymentMethod(
-  req: VercelRequest,
-  res: VercelResponse,
-  auth: { userId: string },
-) {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.error("STRIPE_SECRET_KEY must be set");
-    return res.status(500).json({ error: "Billing is not configured" });
-  }
-
-  const paymentMethodId = req.body?.paymentMethodId;
-  if (typeof paymentMethodId !== "string" || !paymentMethodId) {
-    return res.status(400).json({ error: "Missing paymentMethodId" });
-  }
-
-  try {
-    const { data: row, error } = await serviceClient()
-      .from("entitlements")
-      .select("stripe_customer_id, stripe_subscription_id")
-      .eq("user_id", auth.userId)
-      .maybeSingle();
-    if (error) {
-      console.error("entitlements read failed:", error.message);
-      return res.status(500).json({ error: "Could not load billing account" });
-    }
-
-    const customerId = row?.stripe_customer_id ?? null;
-    if (!customerId) {
-      return res.status(400).json({ error: "No billing account found" });
-    }
-
-    // Confirm the payment method actually belongs to this customer before
-    // trusting a client-supplied id.
-    const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
-    if (paymentMethod.customer !== customerId) {
-      return res.status(403).json({ error: "Payment method does not belong to this account" });
-    }
-
-    await stripe.customers.update(customerId, {
-      invoice_settings: { default_payment_method: paymentMethodId },
-    });
-
-    const subscriptionId = row?.stripe_subscription_id ?? null;
-    if (subscriptionId) {
-      try {
-        await stripe.subscriptions.update(subscriptionId, {
-          default_payment_method: paymentMethodId,
-        });
-      } catch (err) {
-        // Subscriptions created via a Checkout Session with Managed Payments
-        // reject this field outright — Stripe bills the customer's default
-        // for those instead, and that update above already succeeded, so
-        // this isn't fatal.
-        console.error(
-          `subscription ${subscriptionId} default_payment_method update failed, relying on customer-level default:`,
-          err,
-        );
-      }
-    }
-
-    return res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error("set-default-payment-method failed:", error);
-    return res
-      .status(500)
-      .json({ error: "Could not update payment method" });
   }
 }
 
@@ -364,7 +288,7 @@ async function setDefaultPaymentMethod(
 async function cancelSubscription(
   req: VercelRequest,
   res: VercelResponse,
-  auth: { userId: string },
+  auth: { userId: string; email: string },
 ) {
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error("STRIPE_SECRET_KEY must be set");
@@ -404,9 +328,9 @@ async function cancelSubscription(
   }
 }
 
-// Combines billing-summary, create-subscription, create-setup-intent,
-// set-default-payment-method, and cancel-subscription under one route —
-// Vercel's Hobby plan caps deployments at 12 Serverless Functions.
+// Combines billing-summary, create-subscription, create-setup-intent, and
+// cancel-subscription under one route — Vercel's Hobby plan caps deployments
+// at 12 Serverless Functions.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -420,8 +344,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action = req.query.action;
   if (action === "create-subscription") return createSubscription(req, res, auth);
   if (action === "create-setup-intent") return createSetupIntent(req, res, auth);
-  if (action === "set-default-payment-method")
-    return setDefaultPaymentMethod(req, res, auth);
   if (action === "cancel-subscription") return cancelSubscription(req, res, auth);
   return res.status(400).json({ error: "Invalid or missing action" });
 }

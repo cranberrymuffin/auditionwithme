@@ -212,10 +212,12 @@ export default function Pricing() {
             Everything you need to rehearse complete scenes with a responsive
             scene partner.
           </p>
-          <p className="plan-price" aria-label="Seven dollars per month">
-            <strong>$7</strong>
-            <span>/month</span>
-          </p>
+          {!clientSecret && (
+            <p className="plan-price" aria-label="Seven dollars per month">
+              <strong>$7</strong>
+              <span>/month</span>
+            </p>
+          )}
 
           <ul>
             {features.map((feature) => (
@@ -236,9 +238,8 @@ export default function Pricing() {
           ) : clientSecret ? (
             <StripeElementsForm
               clientSecret={clientSecret}
-              kind="payment"
-              submitLabel="Subscribe — $7/month"
-              returnPath="/pricing"
+              submitLabel="Subscribe"
+              showTotal
               onCancel={() => setClientSecret(null)}
               onConfirmed={() => {
                 setClientSecret(null);

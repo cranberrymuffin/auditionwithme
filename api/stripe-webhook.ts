@@ -28,7 +28,7 @@ function serviceClient() {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2025-03-31.basil",
+  apiVersion: "2026-07-29.dahlia",
 });
 
 async function readRawBody(
@@ -127,12 +127,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     switch (event.type) {
-      // A subscription created via api/create-subscription.ts (payment_behavior:
-      // "default_incomplete") fires "created" immediately in status
-      // "incomplete", then "updated" again once the embedded Payment Element
-      // confirms the PaymentIntent and status flips to "active". Both are
-      // handled identically — state is always derived fresh from the
-      // subscription object, so it doesn't matter which event lands last.
+      // A subscription created via a Checkout Session (api/billing.ts
+      // createSubscription) only exists once the session is confirmed, but
+      // still fires "created" and "updated" in close succession as the
+      // subscription's PaymentIntent settles. Both are handled identically —
+      // state is always derived fresh from the subscription object, so it
+      // doesn't matter which event lands last.
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object;
@@ -185,6 +185,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
         console.log(
           `webhook ${event.type} ${event.id}: customer ${customerId} -> ${status}, period_end ${periodEnd(subscription)}`,
+        );
+        break;
+      }
+
+      case "checkout.session.completed": {
+        const session = event.data.object;
+        if (session.mode !== "setup") {
+          // Subscription-mode completion is already fully covered by the
+          // customer.subscription.created/updated and invoice.payment_succeeded
+          // handlers above, since createSubscription always passes our own
+          // pre-created customer into the session.
+          console.log(
+            `webhook ${event.type} ${event.id}: mode ${session.mode}, no setup handling needed`,
+          );
+          break;
+        }
+
+        const customerId = idOf(session.customer);
+        if (!customerId) break;
+
+        // The session payload doesn't expand setup_intent by default —
+        // retrieve it to get the confirmed payment method.
+        const retrieved = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ["setup_intent"],
+        });
+        const setupIntent = retrieved.setup_intent;
+        const paymentMethodId =
+          setupIntent && typeof setupIntent !== "string"
+            ? idOf(setupIntent.payment_method)
+            : null;
+        if (!paymentMethodId) {
+          console.error(
+            `webhook ${event.type} ${event.id}: no payment_method on setup_intent`,
+          );
+          break;
+        }
+
+        await stripe.customers.update(customerId, {
+          invoice_settings: { default_payment_method: paymentMethodId },
+        });
+
+        const { data: row, error } = await serviceClient()
+          .from("entitlements")
+          .select("stripe_subscription_id")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+        if (error) throw new Error(`entitlements read failed: ${error.message}`);
+
+        const subscriptionId = row?.stripe_subscription_id ?? null;
+        if (subscriptionId) {
+          try {
+            await stripe.subscriptions.update(subscriptionId, {
+              default_payment_method: paymentMethodId,
+            });
+          } catch (err) {
+            // Subscriptions created via a Checkout Session with Managed
+            // Payments reject this field outright — Stripe bills the
+            // customer's default for those instead, and the customer-level
+            // update above already succeeded, so this isn't fatal.
+            console.error(
+              `subscription ${subscriptionId} default_payment_method update failed, relying on customer-level default:`,
+              err,
+            );
+          }
+        }
+
+        console.log(
+          `webhook ${event.type} ${event.id}: customer ${customerId} default payment method -> ${paymentMethodId}`,
         );
         break;
       }

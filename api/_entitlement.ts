@@ -26,7 +26,7 @@ function serviceClient() {
 export async function requireAuth(
   req: VercelRequest,
   res: VercelResponse
-): Promise<{ userId: string } | null> {
+): Promise<{ userId: string; email: string } | null> {
   const header = req.headers.authorization;
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) {
@@ -34,7 +34,7 @@ export async function requireAuth(
     return null;
   }
   const { data, error } = await serviceClient().auth.getUser(token);
-  if (error || !data.user) {
+  if (error || !data.user || !data.user.email) {
     res.status(401).json({ error: "Invalid or expired session" });
     return null;
   }
@@ -45,7 +45,7 @@ export async function requireAuth(
     { user_id: data.user.id },
     { onConflict: "user_id", ignoreDuplicates: true }
   );
-  return { userId: data.user.id };
+  return { userId: data.user.id, email: data.user.email };
 }
 
 const DEFAULT_RATE_LIMIT = { maxPerWindow: 200, windowSeconds: 60 * 60 };
