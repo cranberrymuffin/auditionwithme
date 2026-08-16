@@ -1,10 +1,31 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sanitizePerformance } from "./_direction.js";
 import { fetchVoices } from "./_elevenlabs.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 
 const client = new Anthropic();
+
+const VOICE_CAST_SCHEMA = {
+  type: "object",
+  properties: {
+    assignments: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          character: { type: "string" },
+          voiceId: { type: "string" },
+        },
+        required: ["character", "voiceId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["assignments"],
+  additionalProperties: false,
+} as const;
 
 // Chunked scanned-page parsing (parse-pages.ts) transcribes speaker names as
 // printed, so the same character surfaces under several spellings across
@@ -129,32 +150,31 @@ Rules:
 - Assign a different voice to each character where possible
 - Prioritise gender match, then age, then personality fit
 - These voices act out scenes opposite a human, so prefer voices whose tone/description suggests expressive, emotionally versatile delivery (conversational, characterful) over flat narration or meditation voices
-- Return only a JSON object mapping character names to voice IDs
+- Return one assignment for every character, using character names and voice IDs exactly as supplied
 
-Example output: {"HAMLET": "pNInz6obpgDQGcFmaJgB", "OPHELIA": "pFZP5JQG7iQjIQuC4Bku"}`;
+Example output: {"assignments":[{"character":"HAMLET","voiceId":"pNInz6obpgDQGcFmaJgB"},{"character":"OPHELIA","voiceId":"pFZP5JQG7iQjIQuC4Bku"}]}`;
 
   try {
-    const response = await client.messages.create({
+    const response = await client.messages.parse({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
+      // Each assignment repeats a character name and voice ID. Scale the
+      // allowance so a large cast cannot leave the JSON response unfinished.
+      max_tokens: Math.min(8192, Math.max(1024, characters.length * 64)),
       messages: [{ role: "user", content: prompt }],
+      output_config: {
+        format: jsonSchemaOutputFormat(VOICE_CAST_SCHEMA),
+      },
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "{}";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-
-    const rawVoices: unknown = JSON.parse(jsonMatch[0]);
-    if (!rawVoices || typeof rawVoices !== "object" || Array.isArray(rawVoices)) {
-      throw new Error("Invalid voice mapping");
-    }
+    const assignments = response.parsed_output?.assignments;
+    if (!assignments) throw new Error("No structured voice assignments in response");
 
     const characterNames = new Set(characters.map((character) => character.name));
     const voiceIds = new Set(VOICES.map((voice) => voice.id));
     const voices = Object.fromEntries(
-      Object.entries(rawVoices).filter(
-        ([character, voiceId]) => characterNames.has(character) && typeof voiceId === "string" && voiceIds.has(voiceId)
-      )
+      assignments
+        .filter(({ character, voiceId }) => characterNames.has(character) && voiceIds.has(voiceId))
+        .map(({ character, voiceId }) => [character, voiceId]),
     );
     return res.status(200).json({ voices });
   } catch (err) {
