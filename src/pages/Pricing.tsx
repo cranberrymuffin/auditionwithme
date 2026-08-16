@@ -264,8 +264,7 @@ export default function Pricing() {
                   disabled={busy}
                 >
                   You still have {freeSessionsRemaining} free session
-                  {freeSessionsRemaining === 1 ? "" : "s"} — rehearse free{" "}
-                  <span>→</span>
+                  {freeSessionsRemaining === 1 ? "" : "s"}
                 </button>
               )}
             </>
