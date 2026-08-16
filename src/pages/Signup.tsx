@@ -47,14 +47,9 @@ export default function Signup() {
 
       <section className="auth-layout">
         <form className="auth-card" onSubmit={handleSubmit}>
-          <header>
-            <p>Three free sessions</p>
-            <h1>Create your account</h1>
-          </header>
-
           {accountCreated ? (
             <div className="auth-success" role="status">
-              <p>Your account has been created.</p>
+              <h1>Your account has been created.</h1>
               <p>
                 <Link to="/login" state={location.state}>
                   Log in
@@ -64,6 +59,10 @@ export default function Signup() {
             </div>
           ) : (
             <>
+              <header>
+                <p>Three free sessions</p>
+                <h1>Create your account</h1>
+              </header>
               <label htmlFor="signup-email">Email</label>
               <input
                 id="signup-email"
@@ -104,18 +103,20 @@ export default function Signup() {
           )}
 
           {!accountCreated && (
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Creating account…" : "Sign up"}{" "}
-              <span aria-hidden="true">→</span>
-            </button>
-          )}
+            <>
+              <button type="submit" disabled={submitting}>
+                {submitting ? "Creating account…" : "Sign up"}{" "}
+                <span aria-hidden="true">→</span>
+              </button>
 
-          <footer>
-            Already have an account?{" "}
-            <Link to="/login" state={location.state}>
-              Log in
-            </Link>
-          </footer>
+              <footer>
+                Already have an account?{" "}
+                <Link to="/login" state={location.state}>
+                  Log in
+                </Link>
+              </footer>
+            </>
+          )}
         </form>
       </section>
     </main>

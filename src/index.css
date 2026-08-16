@@ -1846,7 +1846,8 @@ header .flow-back:hover {
   font-size: 0.9375rem;
   font-weight: 600;
 }
-.auth-card > header h1 {
+.auth-card > header h1,
+.auth-success h1 {
   margin: 0 0 26px;
   font-family: var(--font-display);
   font-size: clamp(2.25rem, 3.4vw, 2.75rem);
@@ -1915,11 +1916,13 @@ header .flow-back:hover {
   font-size: 0.875rem;
   text-align: center;
 }
-.auth-card > footer a {
+.auth-card > footer a,
+.auth-success a {
   color: #f3a17e;
   font-weight: 600;
 }
-.auth-card > footer a:hover {
+.auth-card > footer a:hover,
+.auth-success a:hover {
   color: #f8f1e6;
 }
 

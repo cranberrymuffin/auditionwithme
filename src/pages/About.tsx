@@ -53,7 +53,6 @@ export default function About() {
           aria-labelledby="how-it-works-title"
         >
           <header>
-            <p>Product workflow</p>
             <h2 id="how-it-works-title">How it works</h2>
           </header>
           <ol>
