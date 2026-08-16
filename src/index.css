@@ -865,7 +865,18 @@ header .flow-back:hover {
 }
 
 @media (max-width: 620px) {
+  /* Phones get a scrolling page instead of squeezing the hero and the
+     process card into one locked viewport (matches the home-page pattern:
+     the backdrop and scrim stay pinned to the first screenful). */
+  .about-page-clean {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    background: rgb(5, 12, 21);
+  }
   .about-page-clean::after {
+    bottom: auto;
+    height: 100dvh;
     background: linear-gradient(
       0deg,
       rgba(5, 12, 21, 0.98),
@@ -874,14 +885,17 @@ header .flow-back:hover {
   }
   .about-page-clean .cinematic-backdrop {
     opacity: 0.42;
+    bottom: auto;
+    height: 100dvh;
   }
   .about-product-layout {
-    height: calc(100% - 66px);
+    height: auto;
+    min-height: calc(100dvh - 66px);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 22px;
-    padding: 18px 20px max(18px, env(safe-area-inset-bottom));
+    gap: 26px;
+    padding: 24px 20px max(28px, env(safe-area-inset-bottom));
   }
   .about-product-intro {
     width: 100%;
@@ -908,7 +922,7 @@ header .flow-back:hover {
     font-size: 0.75rem;
   }
   .about-process-panel {
-    padding: 20px;
+    padding: 24px 20px 26px;
   }
   .about-process-panel > header p {
     display: none;
@@ -920,18 +934,18 @@ header .flow-back:hover {
   }
   .about-process-panel ol {
     display: flex;
-    gap: 13px;
-    margin-top: 16px;
+    gap: 19px;
+    margin-top: 18px;
   }
   .about-process-panel li {
     grid-template-columns: 24px 1fr;
   }
   .about-process-panel li p {
-    margin-top: 2px;
-    font-size: 0.8125rem;
+    margin-top: 3px;
+    font-size: 0.875rem;
   }
   .about-process-panel li strong {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
 }
 
