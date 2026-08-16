@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
-import TrackedWords from "../TrackedWords";
-import ScriptRail from "./ScriptRail";
+import RehearsalLineList from "./RehearsalLineList";
 
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "first" | "hidden";
@@ -25,7 +24,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
   const [lineMode, setLineMode] = useState<LineMode>("full");
-  const [railOpen, setRailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const intensity: TtsIntensity = "dramatic";
   const [voiceSpeed, setVoiceSpeed] = useState(1);
@@ -67,7 +65,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     };
   }, [steps, characterVoices]);
 
-  const speakers = useMemo(() => [...new Set(steps.map((step) => normalizeSpeaker(step.speaker)).filter(Boolean))], [steps]);
   const currentStep = steps[currentStepIndex];
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
   const isMyLine = Boolean(selectedRole) && currentSpeaker === selectedRole;
@@ -133,12 +130,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     ? [...steps.slice(0, currentStepIndex).keys()].reverse().find((index) => steps[index].verbalLine.trim())
     : currentStepIndex;
   const cueStep = cueIndex === undefined ? null : steps[cueIndex];
-  const cueSpeaker = normalizeSpeaker(cueStep?.speaker ?? "");
-  const userStep = isMyLine
-    ? currentStep
-    : selectedRole
-      ? steps.slice(currentStepIndex + 1).find((step) => normalizeSpeaker(step.speaker) === selectedRole)
-      : null;
 
   // fresh=true busts the audio cache — "give me a different take" on the cue.
   const replayCue = useCallback((fresh = false) => {
@@ -166,7 +157,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setRailOpen(false);
         setSettingsOpen(false);
         return;
       }
@@ -197,10 +187,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
               ? { title: `${currentSpeaker || "Scene partner"} is speaking…`, detail: "Listen for your cue.", kind: "playing" }
               : { title: "Cue complete", detail: autoAdvance ? "Moving to the next line." : "Continue when you’re ready.", kind: "ready" };
 
-  const visibleUserLine = userStep?.verbalLine ?? "";
-  const firstWords = visibleUserLine.split(/\s+/).slice(0, 3).join(" ");
-  const stageDirections = currentStep.content.filter((line) => line.kind === "nonverbal");
-
   return (
     <main className="rehearsal-page">
       <header className="rehearsal-header">
@@ -209,56 +195,38 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
           <span title={fileName}>{fileName}</span>
         </div>
         <p><strong>Rehearsal</strong><span>Line {currentStepIndex + 1} of {steps.length}</span></p>
-        <div><button className="mobile-script-toggle" onClick={() => setRailOpen(true)}>Transcript</button><button className="controls-toggle" onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen}>Controls</button><Link to="/">Exit</Link></div>
+        <div><button className="controls-toggle" onClick={() => setSettingsOpen((open) => !open)} aria-expanded={settingsOpen}>Controls</button><Link to="/">Exit</Link></div>
       </header>
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
-        {(railOpen || settingsOpen) && (
+        {settingsOpen && (
           <button
             type="button"
             className="drawer-scrim"
             aria-label="Close panel"
-            onClick={() => {
-              setRailOpen(false);
-              setSettingsOpen(false);
-            }}
+            onClick={() => setSettingsOpen(false)}
           />
         )}
-        <aside className={`rehearsal-transcript ${railOpen ? "is-open" : ""}`}>
-          <button className="drawer-close" onClick={() => setRailOpen(false)}>Close</button>
-          <ScriptRail steps={steps} speakers={speakers} currentIndex={currentStepIndex} selectedRole={selectedRole} onJump={(index) => { setRailOpen(false); goTo(index); }} />
-        </aside>
-
         <section className="rehearsal-center" aria-live="polite">
-          <article className="rehearsal-card">
-            {cueStep && (
-              <section className="cue-block">
-                <span>Cue · {cueSpeaker || "Scene direction"}</span>
-                <p>{cueStep.verbalLine}</p>
-              </section>
-            )}
-            {stageDirections.map((direction, index) => <p className="rehearsal-direction" key={index}>{direction.text}</p>)}
-            {selectedRole && userStep && (
-              <section className="actor-line">
-                <span>Your line · {displayCharacter(selectedRole)}</span>
-                <p className={lineMode === "hidden" ? "is-hidden" : ""}>
-                  {lineMode === "hidden" ? "Line hidden" : lineMode === "first" ? `${firstWords}…` : isMyLine ? <TrackedWords text={visibleUserLine} matchedCount={matchedWordCount} /> : visibleUserLine}
-                </p>
-              </section>
-            )}
-            <div className={`rehearsal-status is-${status.kind}`}>
-              {status.kind === "listening" && <span className="mic-meter" aria-label="Microphone active"><i /><i /><i /><i /></span>}
-              <div><strong>{status.title}</strong><span>{status.detail}</span></div>
-            </div>
-            <div className="rehearsal-controls">
-              <button onClick={() => replayCue()} disabled={!cueStep}>↻ Replay cue</button>
-              <button onClick={() => replayCue(true)} disabled={!cueStep} title="Regenerate the cue for a different read">✦ New take</button>
-              <button onClick={() => setLineMode((mode) => mode === "full" ? "hidden" : "full")}>{lineMode === "hidden" ? "Show line" : "Hide line"}</button>
-              <button onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
-            </div>
-            <footer><button onClick={goPrev} disabled={currentStepIndex === 0}>← Previous</button><span>Line {currentStepIndex + 1} of {steps.length}</span><button className="next-line" onClick={goNext} disabled={currentStepIndex >= steps.length - 1}>Next →</button></footer>
-          </article>
+          <RehearsalLineList
+            steps={steps}
+            currentIndex={currentStepIndex}
+            selectedRole={selectedRole}
+            lineMode={lineMode}
+            isMyLine={isMyLine}
+            matchedWordCount={matchedWordCount}
+            status={status}
+            paused={paused}
+            canReplay={Boolean(cueStep)}
+            onJump={goTo}
+            onPrev={goPrev}
+            onNext={goNext}
+            onReplay={() => replayCue()}
+            onNewTake={() => replayCue(true)}
+            onToggleHide={() => setLineMode((mode) => mode === "full" ? "hidden" : "full")}
+            onTogglePause={togglePause}
+          />
         </section>
 
         <aside className={`rehearsal-settings ${settingsOpen ? "is-open" : ""}`}>
@@ -278,8 +246,4 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       </div>
     </main>
   );
-}
-
-function displayCharacter(name: string) {
-  return name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 }

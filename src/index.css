@@ -3389,105 +3389,14 @@ header .flow-back:hover {
   position: relative;
   display: grid;
   height: calc(100% - 71px);
-  grid-template-columns: 300px minmax(0, 1fr) 260px;
-}
-.rehearsal-transcript {
-  min-width: 0;
-  overflow: hidden;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
-  background: #101d2c;
-}
-.scene-rail {
-  display: flex;
-  height: 100%;
-  flex-direction: column;
-}
-.scene-rail > header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-.scene-rail > header strong {
-  font-size: 0.9375rem;
-}
-.scene-rail > header span {
-  color: rgba(248, 241, 230, 0.55);
-  font-size: 0.75rem;
-}
-.scene-rail > div {
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(239, 154, 120, 0.5) transparent;
-}
-.scene-rail button {
-  position: relative;
-  display: grid;
-  width: 100%;
-  grid-template-columns: 30px 1fr;
-  gap: 8px;
-  padding: 12px 10px;
-  border-radius: 7px;
-  color: rgba(248, 241, 230, 0.72);
-  text-align: left;
-}
-.scene-rail button::before {
-  content: "";
-  position: absolute;
-  inset: 8px auto 8px 0;
-  width: 3px;
-  border-radius: 2px;
-  background: transparent;
-}
-.scene-rail button:hover {
-  background: rgba(255, 255, 255, 0.045);
-}
-.scene-rail button.is-active {
-  background: rgba(239, 154, 120, 0.11);
-  color: #f8f1e6;
-}
-.scene-rail button.is-active::before {
-  background: #ef9a78;
-}
-.scene-rail button.is-past {
-  opacity: 0.58;
-}
-.scene-rail button.is-user:not(.is-active)::before {
-  background: rgba(239, 154, 120, 0.38);
-}
-.scene-line-number {
-  padding-top: 2px;
-  color: rgba(248, 241, 230, 0.42);
-  font-size: 0.7rem;
-  font-variant-numeric: tabular-nums;
-}
-.scene-line-copy {
-  min-width: 0;
-}
-.scene-line-copy strong {
-  display: block;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.scene-line-copy > span {
-  display: block;
-  overflow: hidden;
-  margin-top: 4px;
-  color: rgba(248, 241, 230, 0.65);
-  font-size: 0.875rem;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 .rehearsal-center {
   min-width: 0;
   overflow-y: auto;
   padding: clamp(26px, 5vh, 60px) clamp(24px, 5vw, 72px);
 }
-.rehearsal-card {
+.rehearsal-lines {
   width: min(780px, 100%);
   margin: auto;
   overflow: hidden;
@@ -3498,56 +3407,104 @@ header .flow-back:hover {
     0 22px 55px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-.cue-block {
-  padding: clamp(24px, 3vw, 38px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+.rehearsal-line {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
-.cue-block > span,
-.actor-line > span {
+.rehearsal-line:last-child {
+  border-bottom: 0;
+}
+.rehearsal-line-row {
+  position: relative;
+  display: grid;
+  width: 100%;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  padding: 16px clamp(18px, 3vw, 32px);
+  text-align: left;
+  cursor: pointer;
+}
+.rehearsal-line-row::before {
+  content: "";
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 2px;
+  background: transparent;
+}
+.rehearsal-line:hover .rehearsal-line-row {
+  background: rgba(255, 255, 255, 0.035);
+}
+.rehearsal-line.is-past .rehearsal-line-row {
+  opacity: 0.5;
+}
+.rehearsal-line.is-user:not(.is-active) .rehearsal-line-row::before {
+  background: rgba(239, 154, 120, 0.38);
+}
+.rehearsal-line.is-active .rehearsal-line-row {
+  cursor: default;
+  background: rgba(239, 154, 120, 0.08);
+}
+.rehearsal-line.is-active .rehearsal-line-row::before {
+  background: #ef9a78;
+}
+.rehearsal-line-number {
+  padding-top: 3px;
+  color: rgba(248, 241, 230, 0.42);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.rehearsal-line-copy {
+  min-width: 0;
+}
+.rehearsal-line-copy strong {
+  display: block;
   color: #f1a081;
   font-size: 0.8125rem;
   font-weight: 600;
 }
-.cue-block p {
-  margin: 12px 0 0;
-  color: rgba(248, 241, 230, 0.9);
-  font-size: clamp(1.45rem, 2.3vw, 2rem);
-  font-weight: 500;
-  line-height: 1.35;
-}
-.rehearsal-direction {
-  margin: 0;
-  padding: 14px clamp(24px, 3vw, 38px) 0;
-  color: rgba(248, 241, 230, 0.58);
+.rehearsal-line-copy em {
+  display: block;
+  margin-top: 4px;
+  color: rgba(248, 241, 230, 0.55);
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-style: italic;
 }
-.actor-line {
-  padding: clamp(26px, 3.5vw, 44px) clamp(24px, 3vw, 38px);
+.rehearsal-line-copy > span {
+  display: block;
+  margin-top: 6px;
+  color: rgba(248, 241, 230, 0.82);
+  font-size: 0.9375rem;
+  line-height: 1.45;
 }
-.actor-line p {
-  min-height: 1.2em;
-  margin: 13px 0 0;
+.rehearsal-line-copy > span.is-masked {
+  color: rgba(248, 241, 230, 0.35);
+  font-style: italic;
+}
+.rehearsal-line.is-active .rehearsal-line-copy > span {
+  color: #f8f1e6;
   font-family: var(--font-display);
-  font-size: clamp(2.35rem, 4.4vw, 3.5rem);
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
   font-weight: 500;
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
-.actor-line p.is-hidden {
+.rehearsal-line.is-active .rehearsal-line-copy > span.is-masked {
   color: rgba(248, 241, 230, 0.4);
   font-family: var(--font-sans);
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   letter-spacing: 0;
+}
+.rehearsal-line-active-panel {
+  padding: 0 clamp(18px, 3vw, 32px) 20px;
 }
 .rehearsal-status {
   display: flex;
   min-height: 70px;
   align-items: center;
   gap: 13px;
-  margin: 0 clamp(24px, 3vw, 38px);
+  margin-top: 16px;
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -3608,7 +3565,7 @@ header .flow-back:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 18px clamp(24px, 3vw, 38px);
+  margin-top: 14px;
 }
 .rehearsal-controls button {
   min-height: 44px;
@@ -3625,16 +3582,16 @@ header .flow-back:hover {
 .rehearsal-controls button:disabled {
   opacity: 0.35;
 }
-.rehearsal-card > footer {
+.rehearsal-line-active-panel > footer {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 15px;
-  padding: 16px clamp(24px, 3vw, 38px);
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(7, 15, 26, 0.22);
 }
-.rehearsal-card > footer button {
+.rehearsal-line-active-panel > footer button {
   min-height: 46px;
   justify-self: start;
   padding: 0 16px;
@@ -3643,7 +3600,7 @@ header .flow-back:hover {
   font-size: 0.875rem;
   font-weight: 600;
 }
-.rehearsal-card > footer button.next-line {
+.rehearsal-line-active-panel > footer button.next-line {
   justify-self: end;
   border-color: rgba(255, 205, 183, 0.58);
   background: linear-gradient(135deg, #f4a583, #e98464);
@@ -3655,15 +3612,15 @@ header .flow-back:hover {
     filter 0.2s ease,
     transform 0.2s ease;
 }
-.rehearsal-card > footer button.next-line:hover:not(:disabled) {
+.rehearsal-line-active-panel > footer button.next-line:hover:not(:disabled) {
   filter: brightness(1.04);
   transform: translateY(-1px);
 }
-.rehearsal-card > footer button:disabled {
+.rehearsal-line-active-panel > footer button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
 }
-.rehearsal-card > footer > span {
+.rehearsal-line-active-panel > footer > span {
   color: rgba(248, 241, 230, 0.6);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
@@ -3774,16 +3731,14 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.58);
   font-size: 0.75rem;
 }
-.drawer-close,
-.mobile-script-toggle {
+.drawer-close {
   display: none !important;
 }
 .controls-toggle {
   display: none !important;
 }
-/* Click-outside dismissal for the transcript/controls drawers. Rendered only
-   while a drawer is open; sits under the drawers (transcript z 50, controls
-   z 40) but over everything else. */
+/* Click-outside dismissal for the controls drawer. Rendered only while the
+   drawer is open; sits under it (z 40) but over everything else. */
 .drawer-scrim {
   display: none;
 }
@@ -3800,7 +3755,7 @@ header .flow-back:hover {
 
 @media (max-width: 1100px) {
   .rehearsal-workspace {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .rehearsal-settings {
     position: absolute;
@@ -3846,76 +3801,38 @@ header .flow-back:hover {
   .rehearsal-header > div:last-child a {
     display: none;
   }
-  .mobile-script-toggle {
-    display: inline-flex !important;
-  }
   .rehearsal-workspace {
     height: auto;
     min-height: calc(100dvh - 65px);
     display: block;
   }
-  .rehearsal-transcript {
-    position: fixed;
-    z-index: 50;
-    inset: 0 auto 0 0;
-    display: flex;
-    flex-direction: column;
-    width: min(88vw, 340px);
-    box-shadow: 18px 0 45px rgba(0, 0, 0, 0.35);
-    transform: translateX(-100%);
-    transition: transform 0.25s ease;
-  }
-  .rehearsal-transcript.is-open {
-    transform: translateX(0);
-  }
-  .rehearsal-transcript .drawer-close {
-    display: block !important;
-    flex-shrink: 0;
-    min-height: 44px;
-    margin: 8px 12px 0 auto;
-    color: #f3a17e;
-    font-size: 0.8125rem;
-  }
-  /* The close button sits above the rail, so the rail can't keep claiming the
-     drawer's full height or its bottom gets clipped by overflow: hidden. */
-  .rehearsal-transcript .scene-rail {
-    height: auto;
-    flex: 1;
-    min-height: 0;
-  }
   .rehearsal-center {
     overflow: visible;
-    padding: 24px 20px 34px;
+    padding: 20px 16px 30px;
   }
-  .rehearsal-card {
+  .rehearsal-lines {
     border-radius: 10px;
   }
-  .cue-block {
-    padding: 22px 20px;
+  .rehearsal-line-row {
+    grid-template-columns: 26px 1fr;
+    padding: 14px 16px;
   }
-  .actor-line {
-    padding: 25px 20px;
+  .rehearsal-line-active-panel {
+    padding: 0 16px 16px;
   }
-  .actor-line p {
-    font-size: clamp(2rem, 9.5vw, 2.75rem);
+  .rehearsal-line.is-active .rehearsal-line-copy > span {
+    font-size: clamp(1.35rem, 6.5vw, 1.75rem);
   }
-  .rehearsal-status {
-    margin-inline: 20px;
-  }
-  .rehearsal-controls {
-    padding-inline: 20px;
-  }
-  .rehearsal-card > footer {
+  .rehearsal-line-active-panel > footer {
     grid-template-columns: 1fr 1fr;
-    padding-inline: 20px;
   }
-  .rehearsal-card > footer > span {
+  .rehearsal-line-active-panel > footer > span {
     display: none;
   }
-  .rehearsal-card > footer button.next-line {
+  .rehearsal-line-active-panel > footer button.next-line {
     justify-self: stretch;
   }
-  .rehearsal-card > footer button {
+  .rehearsal-line-active-panel > footer button {
     justify-self: stretch;
   }
 }
@@ -3926,8 +3843,7 @@ header .flow-back:hover {
     height: 13px;
   }
   .rehearsal-progress i,
-  .rehearsal-settings,
-  .rehearsal-transcript {
+  .rehearsal-settings {
     transition: none;
   }
 }
