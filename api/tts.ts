@@ -5,9 +5,10 @@ import { sanitizePerformance } from "./_direction.js";
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no character voice assigned
 
 // Eleven v3 is the expressive acting model: it takes inline audio tags like
-// "[angry]" and uses previous/next-line context for prosody. Multilingual v2
-// is the fallback when the account or voice can't serve v3 — v2 would read
-// audio tags out loud, so markup only ever goes on the v3 request.
+// "[angry]". Multilingual v2 is the fallback when the account or voice can't
+// serve v3 — v2 would read audio tags out loud, so markup only ever goes on
+// the v3 request. Eleven v3 does not accept previous_text or next_text; the AI
+// director already uses scene context to produce the inline performance.
 const EXPRESSIVE_MODEL = "eleven_v3";
 const FALLBACK_MODEL = "eleven_multilingual_v2";
 
@@ -98,7 +99,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 text: expressiveText,
                 model_id: modelId,
                 voice_settings: { stability: v3Stability(level, directed) },
-                ...context,
               }
             : {
                 text,
