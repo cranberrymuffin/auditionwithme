@@ -54,16 +54,35 @@ export default function RehearsalLineList({
         const isOwnLine = Boolean(selectedRole) && speaker === selectedRole;
         const active = index === currentIndex;
         const masked = isOwnLine && lineMode !== "full";
-        const stageDirections = step.content.filter((line) => line.kind === "nonverbal");
+        const showTracking = !masked && active && isMyLine;
 
-        let lineContent;
-        if (masked) {
-          lineContent = lineMode === "hidden" ? "Line hidden" : `${step.verbalLine.split(/\s+/).slice(0, 3).join(" ")}…`;
-        } else if (active && isMyLine) {
-          lineContent = <TrackedWords text={step.verbalLine} matchedCount={matchedWordCount} />;
-        } else {
-          lineContent = step.verbalLine;
-        }
+        // Render content in its real order so a stage direction that falls
+        // mid-speech lands between the spoken segments it actually splits,
+        // instead of every direction bunching ahead of the whole line.
+        let wordOffset = 0;
+        const bodyNodes = masked
+          ? step.verbalLine.trim() && (
+              <span className={lineMode === "hidden" ? "is-masked" : undefined}>
+                {lineMode === "hidden" ? "Line hidden" : `${step.verbalLine.split(/\s+/).slice(0, 3).join(" ")}…`}
+              </span>
+            )
+          : step.content.map((item, i) => {
+              if (item.kind === "nonverbal") return <em key={i}>{item.text}</em>;
+              const wordCount = item.text.split(/\s+/).filter(Boolean).length;
+              // Wrapped in a real <span> (not left as TrackedWords' bare word
+              // fragments) so `.rehearsal-line-copy > span` — which every
+              // spoken segment relies on for its block layout — still matches
+              // one element per segment instead of one per word.
+              const node = (
+                <span key={i}>
+                  {showTracking
+                    ? <TrackedWords text={item.text} matchedCount={Math.max(0, matchedWordCount - wordOffset)} />
+                    : item.text}
+                </span>
+              );
+              wordOffset += wordCount;
+              return node;
+            });
 
         return (
           <div
@@ -81,8 +100,7 @@ export default function RehearsalLineList({
               <span className="rehearsal-line-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="rehearsal-line-copy">
                 <strong>{speaker || "Stage direction"}</strong>
-                {stageDirections.map((direction, dIndex) => <em key={dIndex}>{direction.text}</em>)}
-                {step.verbalLine.trim() && <span className={masked && lineMode === "hidden" ? "is-masked" : ""}>{lineContent}</span>}
+                {bodyNodes}
               </span>
             </button>
             {active && (

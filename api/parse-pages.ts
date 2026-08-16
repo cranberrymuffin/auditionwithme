@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireRehearsalGrant } from "./_entitlement.js";
+import { splitSpeech } from "./_screenplay.js";
 
 // Parses a chunk of scanned script pages (rendered to JPEGs client-side) with
 // vision. Scanned PDFs have no text layer, so the fast text path in
@@ -28,9 +29,9 @@ Rules:
 1. Walk the pages top to bottom, in order. Each speech (a speaker label plus everything that character says until the next speaker label) becomes exactly one step.
 2. "speaker" is the canonical character name — strip continuity suffixes such as (CONT'D), (V.O.), (O.S.).
 3. If the first spoken text on the first page continues a speech begun on an earlier page (no speaker label above it), output it as the first step with "speaker": "".
-4. "line" is what the character speaks in that step, joined into one string. Rejoin words hyphenated across line breaks. Do not include parentheticals or stage directions in "line".
+4. "line" is what the character speaks in that step, joined into one string. Rejoin words hyphenated across line breaks. A parenthetical or brief stage direction that falls IN THE MIDDLE of the speech (e.g. an actor's aside like "(turning drunk sad on a dime)") stays embedded in "line", wrapped in parentheses, exactly where it occurs — do not pull it out or move it.
 4b. MUSICAL NUMBERS: do NOT transcribe song lyrics — not even one line. This includes sections marked "MUSIC #", and any sung verse formatted like dialogue (stacked short rhyming lines under speaker labels, often a parody of a well-known song), including songs continuing from a previous page. Replace each song with ONE step: "speaker": "", empty "line", and a "direction" summarizing it, e.g. "MUSIC #4 — In The Navy parody, sung by EVERYBODY". Resume normal steps at the first spoken (non-sung) dialogue after the song.
-5. "direction" (optional) holds the non-spoken text attached to this step: stage directions or scene descriptions immediately before the speech, plus any parentheticals inside it. Omit the field when there is none.
+5. "direction" (optional) holds ONLY a stage direction or scene description that appears BEFORE the speaker begins talking — never text that falls inside the speech itself (that stays in "line" per rule 4). Omit the field when there is none.
 6. Transcribe what is printed — do not invent, rewrite, summarize, or translate. Ignore handwritten annotations, crossed-out lines, page headers, footers, and page numbers.
 6b. AUDITION SIDES MARKUP — these pages may be audition sides with production markup. Apply it:
    - Content crossed out by strikethrough lines, diagonal slashes, or X boxes is CUT — exclude it from steps entirely.
@@ -177,8 +178,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const steps = (parsed.steps ?? [])
       .map((step) => {
-        const verbalLine = step.line?.trim() ?? "";
         const direction = step.direction?.trim() ?? "";
+        // Parentheticals embedded mid-speech (e.g. "(turning drunk sad on a
+        // dime)") stay inline in step.line per the prompt — split them out
+        // in their original position rather than always leading the step.
+        const { content: spokenContent, verbalLine } = splitSpeech(
+          step.line?.trim() ?? "",
+        );
         return {
           speaker: step.speaker?.trim() ?? "",
           verbalLine,
@@ -186,9 +192,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ...(direction
               ? [{ kind: "nonverbal" as const, text: direction }]
               : []),
-            ...(verbalLine
-              ? [{ kind: "verbal" as const, text: verbalLine }]
-              : []),
+            ...spokenContent,
           ],
         };
       })
