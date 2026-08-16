@@ -3781,6 +3781,22 @@ header .flow-back:hover {
 .controls-toggle {
   display: none !important;
 }
+/* Click-outside dismissal for the transcript/controls drawers. Rendered only
+   while a drawer is open; sits under the drawers (transcript z 50, controls
+   z 40) but over everything else. */
+.drawer-scrim {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    border: 0;
+    background: rgba(4, 10, 18, 0.45);
+  }
+}
 
 @media (max-width: 1100px) {
   .rehearsal-workspace {
@@ -3842,6 +3858,8 @@ header .flow-back:hover {
     position: fixed;
     z-index: 50;
     inset: 0 auto 0 0;
+    display: flex;
+    flex-direction: column;
     width: min(88vw, 340px);
     box-shadow: 18px 0 45px rgba(0, 0, 0, 0.35);
     transform: translateX(-100%);
@@ -3852,10 +3870,18 @@ header .flow-back:hover {
   }
   .rehearsal-transcript .drawer-close {
     display: block !important;
+    flex-shrink: 0;
     min-height: 44px;
     margin: 8px 12px 0 auto;
     color: #f3a17e;
     font-size: 0.8125rem;
+  }
+  /* The close button sits above the rail, so the rail can't keep claiming the
+     drawer's full height or its bottom gets clipped by overflow: hidden. */
+  .rehearsal-transcript .scene-rail {
+    height: auto;
+    flex: 1;
+    min-height: 0;
   }
   .rehearsal-center {
     overflow: visible;

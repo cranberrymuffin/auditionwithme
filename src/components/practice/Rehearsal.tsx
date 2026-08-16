@@ -158,6 +158,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setRailOpen(false);
+        setSettingsOpen(false);
+        return;
+      }
       if ((event.target as HTMLElement)?.matches("input, select, textarea, button")) return;
       if (event.key === "ArrowRight") goNext();
       if (event.key === "ArrowLeft") goPrev();
@@ -202,6 +207,17 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
+        {(railOpen || settingsOpen) && (
+          <button
+            type="button"
+            className="drawer-scrim"
+            aria-label="Close panel"
+            onClick={() => {
+              setRailOpen(false);
+              setSettingsOpen(false);
+            }}
+          />
+        )}
         <aside className={`rehearsal-transcript ${railOpen ? "is-open" : ""}`}>
           <button className="drawer-close" onClick={() => setRailOpen(false)}>Close</button>
           <ScriptRail steps={steps} speakers={speakers} currentIndex={currentStepIndex} selectedRole={selectedRole} onJump={(index) => { setRailOpen(false); goTo(index); }} />
