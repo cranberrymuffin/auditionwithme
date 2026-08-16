@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fetchVoices } from "./_elevenlabs.js";
-import { requireAuthRateLimited } from "./_entitlement.js";
+import { fetchElevenLabs, fetchVoices } from "./_elevenlabs.js";
+import { requireAuth, requireAuthRateLimited } from "./_entitlement.js";
 
 async function listVoices(res: VercelResponse, apiKey: string) {
   try {
@@ -17,7 +17,7 @@ async function listVoices(res: VercelResponse, apiKey: string) {
 // Scribe v2 Realtime WebSocket without ever seeing the API key.
 async function mintScribeToken(res: VercelResponse, apiKey: string) {
   try {
-    const upstream = await fetch(
+    const upstream = await fetchElevenLabs(
       "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
       {
         method: "POST",
@@ -55,7 +55,18 @@ async function mintScribeToken(res: VercelResponse, apiKey: string) {
 // split by HTTP method, so no action param is needed. Keeps the function
 // count under Vercel Hobby's 12-per-deployment cap.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const auth = await requireAuthRateLimited(req, res);
+  if (req.method !== "GET" && req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // The catalog is read-only and cached server-side; require a valid user but
+  // do not let ordinary voice-picker loads consume a metered feature bucket.
+  const auth = req.method === "GET"
+    ? await requireAuth(req, res)
+    : await requireAuthRateLimited(req, res, {
+        bucket: "scribe",
+        maxPerWindow: 120,
+      });
   if (!auth) return;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -64,6 +75,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === "GET") return listVoices(res, apiKey);
-  if (req.method === "POST") return mintScribeToken(res, apiKey);
-  return res.status(405).json({ error: "Method not allowed" });
+  return mintScribeToken(res, apiKey);
 }
