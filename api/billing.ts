@@ -192,6 +192,12 @@ async function createSubscription(
 
     // A Checkout Session doesn't create a Subscription until it completes, so
     // an abandoned attempt just expires on its own — no dedup/reuse needed.
+    //
+    // Managed Payments (enabled by default on this account) only supports
+    // mode: "subscription" and mode: "payment" but takes over payment_method_types
+    // itself — opt out so the explicit card-only list below is honored and
+    // checkout stays embedded in-app (ui_mode: "elements") rather than
+    // redirecting to Stripe-hosted Checkout.
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
@@ -200,6 +206,7 @@ async function createSubscription(
       // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
       // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
       payment_method_types: ["card"],
+      managed_payments: { enabled: false },
       return_url: `${req.headers.origin}/pricing`,
     });
 

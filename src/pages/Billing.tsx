@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Modal from "../components/Modal";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
@@ -213,7 +214,51 @@ export default function Billing() {
                 </div>
               </div>
 
-              {updatingCard && setupClientSecret ? (
+              <div className="billing-card-actions">
+                <button
+                  type="button"
+                  onClick={startCardUpdate}
+                  disabled={busy}
+                >
+                  Update payment method
+                </button>
+                {subscription.cancelAtPeriodEnd ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleCancel(true)}
+                    disabled={busy}
+                  >
+                    Resume plan
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleCancel(false)}
+                    disabled={busy}
+                  >
+                    Cancel plan
+                  </button>
+                )}
+              </div>
+
+              {error && (
+                <p className="plan-error" role="alert">
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {updatingCard && setupClientSecret && (
+              <Modal
+                onClose={() => {
+                  setUpdatingCard(false);
+                  setSetupClientSecret(null);
+                }}
+                labelledBy="update-card-modal-title"
+              >
+                <h2 id="update-card-modal-title" className="modal-title">
+                  Update payment method
+                </h2>
                 <StripeElementsForm
                   clientSecret={setupClientSecret}
                   submitLabel="Save card"
@@ -223,41 +268,8 @@ export default function Billing() {
                   }}
                   onConfirmed={confirmCardUpdate}
                 />
-              ) : (
-                <div className="billing-card-actions">
-                  <button
-                    type="button"
-                    onClick={startCardUpdate}
-                    disabled={busy}
-                  >
-                    Update payment method
-                  </button>
-                  {subscription.cancelAtPeriodEnd ? (
-                    <button
-                      type="button"
-                      onClick={() => toggleCancel(true)}
-                      disabled={busy}
-                    >
-                      Resume plan
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => toggleCancel(false)}
-                      disabled={busy}
-                    >
-                      Cancel plan
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {error && (
-                <p className="plan-error" role="alert">
-                  {error}
-                </p>
-              )}
-            </div>
+              </Modal>
+            )}
 
             {summary && summary.invoices.length > 0 && (
               <div className="billing-history">

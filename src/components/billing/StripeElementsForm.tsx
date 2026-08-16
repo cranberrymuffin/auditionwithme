@@ -54,27 +54,35 @@ function InnerForm({ submitLabel, onConfirmed, onCancel, showTotal }: Omit<Props
 
   return (
     <form className="stripe-elements-form" onSubmit={handleSubmit}>
-      {showTotal && (
-        // Sourced from the live session (not hardcoded) so this stays correct
-        // under Adaptive Pricing currency conversion and future price changes.
-        <p
-          className="plan-price"
-          aria-label={`${checkout.total.total.amount}${
-            checkout.recurring ? ` per ${checkout.recurring.interval}` : ""
-          }`}
-        >
-          <strong>{checkout.total.total.amount}</strong>
-          {checkout.recurring && <span>/{checkout.recurring.interval}</span>}
-        </p>
-      )}
-      <PaymentElement
-        options={{ wallets: { applePay: "auto", googlePay: "auto", link: "never" } }}
-      />
-      {error && (
-        <p className="plan-error" role="alert">
-          {error}
-        </p>
-      )}
+      <div className="stripe-elements-form-fields">
+        {showTotal && (
+          // Sourced from the live session (not hardcoded) so this stays correct
+          // under Adaptive Pricing currency conversion and future price changes.
+          <p
+            className="plan-price"
+            aria-label={`${checkout.total.total.amount}${
+              checkout.recurring ? ` per ${checkout.recurring.interval}` : ""
+            }`}
+          >
+            <strong>{checkout.total.total.amount}</strong>
+            {checkout.recurring && <span>/{checkout.recurring.interval}</span>}
+          </p>
+        )}
+        <PaymentElement
+          options={{
+            wallets: { applePay: "auto", googlePay: "auto", link: "never" },
+            // Card is the only payment_method_type this Checkout Session
+            // accepts, so there's nothing to choose between — expand its
+            // fields immediately instead of collapsing them behind a click.
+            layout: { type: "accordion", defaultCollapsed: false },
+          }}
+        />
+        {error && (
+          <p className="plan-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
       <div className="stripe-elements-form-actions">
         {onCancel && (
           <button type="button" onClick={onCancel} disabled={submitting}>

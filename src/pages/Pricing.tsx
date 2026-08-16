@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import Modal from "../components/Modal";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
@@ -212,12 +213,10 @@ export default function Pricing() {
             Everything you need to rehearse complete scenes with a responsive
             scene partner.
           </p>
-          {!clientSecret && (
-            <p className="plan-price" aria-label="Seven dollars per month">
-              <strong>$7</strong>
-              <span>/month</span>
-            </p>
-          )}
+          <p className="plan-price" aria-label="Seven dollars per month">
+            <strong>$7</strong>
+            <span>/month</span>
+          </p>
 
           <ul>
             {features.map((feature) => (
@@ -235,17 +234,6 @@ export default function Pricing() {
             <button type="button" onClick={() => navigate("/signup")}>
               Try 3 rehearsals for Free <span>→</span>
             </button>
-          ) : clientSecret ? (
-            <StripeElementsForm
-              clientSecret={clientSecret}
-              submitLabel="Subscribe"
-              showTotal
-              onCancel={() => setClientSecret(null)}
-              onConfirmed={() => {
-                setClientSecret(null);
-                setConfirming(true);
-              }}
-            />
           ) : (
             <>
               <button onClick={startSubscription} disabled={busy || confirming}>
@@ -284,6 +272,27 @@ export default function Pricing() {
           )}
         </article>
       </section>
+
+      {clientSecret && (
+        <Modal
+          onClose={() => setClientSecret(null)}
+          labelledBy="checkout-modal-title"
+        >
+          <h2 id="checkout-modal-title" className="modal-title">
+            Subscribe to Audition Plus
+          </h2>
+          <StripeElementsForm
+            clientSecret={clientSecret}
+            submitLabel="Subscribe"
+            showTotal
+            onCancel={() => setClientSecret(null)}
+            onConfirmed={() => {
+              setClientSecret(null);
+              setConfirming(true);
+            }}
+          />
+        </Modal>
+      )}
 
       <section className="pricing-details" aria-labelledby="pricing-questions">
         <header>
