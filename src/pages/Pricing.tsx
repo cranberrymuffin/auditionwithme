@@ -109,7 +109,7 @@ export default function Pricing() {
         ? {
             eyebrow: "One simple plan",
             title: `You have ${freeSessionsRemaining} of ${entitlement.free_sessions_limit} free sessions left`,
-            sub: "Keep rehearsing free, or subscribe now — new rehearsals become unlimited the moment you do.",
+            sub: "Rehearsals become unlimited the moment you subscribe.",
             reassurance: [
               "Cancel anytime",
               "Unused free sessions stay yours",
@@ -166,12 +166,17 @@ export default function Pricing() {
     setBusy(true);
     setError(null);
     try {
-      const response = await apiFetch("/api/billing?action=create-subscription", {
-        method: "POST",
-      });
+      const response = await apiFetch(
+        "/api/billing?action=create-subscription",
+        {
+          method: "POST",
+        },
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.clientSecret) {
-        setError(payload?.error ?? "Could not start checkout. Please try again.");
+        setError(
+          payload?.error ?? "Could not start checkout. Please try again.",
+        );
         setBusy(false);
         return;
       }

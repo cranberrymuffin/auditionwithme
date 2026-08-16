@@ -27,7 +27,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const [lineMode, setLineMode] = useState<LineMode>("full");
   const [railOpen, setRailOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [intensity, setIntensity] = useState<TtsIntensity>("natural");
+  const intensity: TtsIntensity = "dramatic";
   const [voiceSpeed, setVoiceSpeed] = useState(1);
   const autoAdvanceRef = useRef(autoAdvance);
   autoAdvanceRef.current = autoAdvance;
@@ -243,7 +243,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
           <h2>Rehearsal controls</h2>
           <div className="autoflow-setting"><div><strong>Auto-flow: {autoAdvance ? "On" : "Off"}</strong><span>{autoAdvance ? "Advances after your line is detected." : "Use Next to advance each line."}</span></div><button role="switch" aria-checked={autoAdvance} onClick={() => setAutoAdvance((value) => !value)}><i /></button></div>
           <fieldset><legend>Line help</legend>{(["full", "first", "hidden"] as LineMode[]).map((mode) => <label key={mode}><input type="radio" name="line-mode" checked={lineMode === mode} onChange={() => setLineMode(mode)} />{mode === "full" ? "Show full line" : mode === "first" ? "Show first words" : "Hide line"}</label>)}</fieldset>
-          <fieldset><legend>Delivery style</legend>{(["subtle", "natural", "dramatic"] as TtsIntensity[]).map((level) => <label key={level}><input type="radio" name="delivery-intensity" checked={intensity === level} onChange={() => setIntensity(level)} />{level === "subtle" ? "Subtle — steady, restrained reads" : level === "natural" ? "Natural — balanced expression" : "Dramatic — big, emotional reads"}</label>)}</fieldset>
           <div className="voice-speed-setting">
             <label htmlFor="voice-speed"><strong>Voice speed: {voiceSpeed.toFixed(2)}×</strong></label>
             <input id="voice-speed" type="range" min={0.85} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />

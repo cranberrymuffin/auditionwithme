@@ -35,7 +35,7 @@ export default function Home() {
     !!entitlement && !isSubscribed && freeSessionsRemaining === 0;
 
   const sessionsStatus = entitlement
-    ? `${entitlement.free_sessions_limit} free session${entitlement.free_sessions_limit === 1 ? "" : "s"} (${freeSessionsRemaining} left)`
+    ? `${freeSessionsRemaining} free sessions left`
     : null;
   // The hero trust line right below the CTA carries the session count, so
   // the button hint stays minimal to avoid saying it twice.
@@ -247,8 +247,8 @@ export default function Home() {
           {!isSubscribed && (
             <p className="hero-trust">
               {sessionsStatus
-                ? `PDF scripts — typed or scanned · ${sessionsStatus}`
-                : "PDF scripts — typed or scanned · 3 free sessions · No credit card required"}
+                ? `${sessionsStatus}`
+                : "3 free sessions · No credit card required"}
             </p>
           )}
 
