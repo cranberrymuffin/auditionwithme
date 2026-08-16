@@ -87,14 +87,17 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     const step = steps[currentStepIndex];
     if (!step) return;
     const speaker = normalizeSpeaker(step.speaker);
-    if (selectedRole && speaker === selectedRole) {
-      setPlaybackState("ready");
-      return;
-    }
+    // Prefetch the next opposing-character line regardless of whose turn this
+    // step is, so audio is already warm by the time the user finishes their
+    // own line and playback advances to it.
     const nextIndex = steps.findIndex((item, index) => index > currentStepIndex && item.verbalLine.trim() && (!selectedRole || normalizeSpeaker(item.speaker) !== selectedRole));
     if (nextIndex !== -1) {
       const nextLine = ttsLine(nextIndex);
       if (nextLine) prefetch(nextLine, intensity);
+    }
+    if (selectedRole && speaker === selectedRole) {
+      setPlaybackState("ready");
+      return;
     }
     if (!step.verbalLine.trim()) {
       setPlaybackState("ready");
