@@ -994,17 +994,25 @@ header .flow-back:hover {
     font-size: 1rem;
     letter-spacing: 0;
   }
+  /* Size the hero against the large viewport (browser bars collapsed) so
+     Safari lays it out exactly like the installed app: full image up top,
+     copy in the lower half. The bars just overlap the bottom until scroll. */
   .hero-editorial {
     min-height: calc(100dvh - 66px);
+    min-height: calc(100lvh - 66px);
     justify-content: flex-end;
     padding: 0 22px max(24px, env(safe-area-inset-bottom));
+  }
+  .home-page .cinematic-backdrop,
+  .home-page::after {
+    height: 100lvh;
   }
   .hero-copy {
     width: 100%;
   }
   .hero-title {
     max-width: 100%;
-    font-size: clamp(2.4rem, 10.5vw, 3.05rem);
+    font-size: clamp(2.1rem, 9vw, 2.7rem);
     line-height: 0.96;
   }
   .hero-title .hero-title-italic {
@@ -1065,7 +1073,7 @@ header .flow-back:hover {
 @media (min-width: 980px) and (max-width: 1060px) and (min-height: 560px) and (max-height: 640px) and (orientation: landscape) {
   .home-page .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-wide.png");
-    background-position: left top;
+    background-position: right top;
   }
   .home-page::after {
     background:
@@ -1110,26 +1118,6 @@ header .flow-back:hover {
   }
   .hero-title {
     font-size: clamp(3.5rem, 7vw, 4.75rem);
-  }
-}
-
-@media (max-height: 650px) {
-  .hero-kicker {
-    margin-bottom: 12px;
-  }
-  .hero-title {
-    font-size: clamp(2.4rem, 8.8vh, 4.4rem);
-  }
-  .hero-description {
-    margin-top: 14px;
-    line-height: 1.4;
-  }
-  .hero-actions {
-    margin-top: 15px;
-  }
-  .upload-cta {
-    padding-top: 9px;
-    padding-bottom: 9px;
   }
 }
 
@@ -1924,6 +1912,46 @@ header .flow-back:hover {
   }
   .hero-title {
     font-size: clamp(3.95rem, 7vw, 4.85rem);
+  }
+}
+
+/* ── Late overrides: these must beat every width-band rule above ── */
+
+/* Short desktop windows (including phones rotated landscape): compact type so
+   the hero fits. Phones in portrait (≤720px wide) keep the mobile scale. */
+@media (max-height: 650px) and (min-width: 721px) {
+  .hero-kicker {
+    margin-bottom: 12px;
+  }
+  .hero-title {
+    font-size: clamp(2.4rem, 8.8vh, 4.4rem);
+  }
+  .hero-description {
+    margin-top: 14px;
+    line-height: 1.4;
+  }
+  .hero-actions {
+    margin-top: 15px;
+  }
+  .upload-cta {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+}
+
+/* Squarer desktop windows slide the hillside sign into the headline band, so
+   the scrim must reach the full width to keep the copy readable over it. */
+@media (min-width: 721px) and (min-aspect-ratio: 4 / 5) and (max-aspect-ratio: 14 / 9) {
+  .cinematic-page::after {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(6, 14, 24, 0.97) 0%,
+        rgba(6, 14, 24, 0.92) 45%,
+        rgba(6, 14, 24, 0.72) 75%,
+        rgba(6, 14, 24, 0.4) 100%
+      ),
+      linear-gradient(0deg, rgba(5, 11, 19, 0.6), transparent 48%);
   }
 }
 
