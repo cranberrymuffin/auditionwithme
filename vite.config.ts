@@ -108,6 +108,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       VitePWA({
         registerType: "autoUpdate",
+        injectRegister: false,
         includeAssets: [
           "icons/favicon-16x16.png",
           "icons/favicon-32x32.png",
@@ -145,6 +146,8 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          skipWaiting: true,
+          clientsClaim: true,
           globPatterns: ["**/*.{js,css,html,woff,woff2,svg,ico}"],
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
