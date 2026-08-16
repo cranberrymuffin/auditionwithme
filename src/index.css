@@ -994,10 +994,18 @@ header .flow-back:hover {
     font-size: 1rem;
     letter-spacing: 0;
   }
+  /* Size the hero against the large viewport (browser bars collapsed) so
+     Safari lays it out exactly like the installed app: full image up top,
+     copy in the lower half. The bars just overlap the bottom until scroll. */
   .hero-editorial {
     min-height: calc(100dvh - 66px);
+    min-height: calc(100lvh - 66px);
     justify-content: flex-end;
     padding: 0 22px max(24px, env(safe-area-inset-bottom));
+  }
+  .home-page .cinematic-backdrop,
+  .home-page::after {
+    height: 100lvh;
   }
   .hero-copy {
     width: 100%;
@@ -1113,7 +1121,9 @@ header .flow-back:hover {
   }
 }
 
-@media (max-height: 650px) {
+/* Short desktop windows only: phones in-browser (Safari chrome shrinks the
+   visible height below 650px) must keep the mobile hero type scale. */
+@media (max-height: 650px) and (min-width: 721px) {
   .hero-kicker {
     margin-bottom: 12px;
   }
