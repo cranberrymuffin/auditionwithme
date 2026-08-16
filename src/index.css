@@ -1121,28 +1121,6 @@ header .flow-back:hover {
   }
 }
 
-/* Short desktop windows only: phones in-browser (Safari chrome shrinks the
-   visible height below 650px) must keep the mobile hero type scale. */
-@media (max-height: 650px) and (min-width: 721px) {
-  .hero-kicker {
-    margin-bottom: 12px;
-  }
-  .hero-title {
-    font-size: clamp(2.4rem, 8.8vh, 4.4rem);
-  }
-  .hero-description {
-    margin-top: 14px;
-    line-height: 1.4;
-  }
-  .hero-actions {
-    margin-top: 15px;
-  }
-  .upload-cta {
-    padding-top: 9px;
-    padding-bottom: 9px;
-  }
-}
-
 /* Credible single-plan pricing */
 .pricing-page {
   min-height: 100vh;
@@ -1934,6 +1912,46 @@ header .flow-back:hover {
   }
   .hero-title {
     font-size: clamp(3.95rem, 7vw, 4.85rem);
+  }
+}
+
+/* ── Late overrides: these must beat every width-band rule above ── */
+
+/* Short desktop windows (including phones rotated landscape): compact type so
+   the hero fits. Phones in portrait (≤720px wide) keep the mobile scale. */
+@media (max-height: 650px) and (min-width: 721px) {
+  .hero-kicker {
+    margin-bottom: 12px;
+  }
+  .hero-title {
+    font-size: clamp(2.4rem, 8.8vh, 4.4rem);
+  }
+  .hero-description {
+    margin-top: 14px;
+    line-height: 1.4;
+  }
+  .hero-actions {
+    margin-top: 15px;
+  }
+  .upload-cta {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+}
+
+/* Squarer desktop windows slide the hillside sign into the headline band, so
+   the scrim must reach the full width to keep the copy readable over it. */
+@media (min-width: 721px) and (min-aspect-ratio: 4 / 5) and (max-aspect-ratio: 14 / 9) {
+  .cinematic-page::after {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(6, 14, 24, 0.97) 0%,
+        rgba(6, 14, 24, 0.92) 45%,
+        rgba(6, 14, 24, 0.72) 75%,
+        rgba(6, 14, 24, 0.4) 100%
+      ),
+      linear-gradient(0deg, rgba(5, 11, 19, 0.6), transparent 48%);
   }
 }
 
