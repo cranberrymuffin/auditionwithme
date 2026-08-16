@@ -246,14 +246,8 @@ export default function Pricing() {
                   "Confirming your subscription…"
                 ) : busy ? (
                   "Starting…"
-                ) : sessionsExhausted ? (
-                  <>
-                    Subscribe to keep rehearsing <span>→</span>
-                  </>
                 ) : (
-                  <>
-                    Subscribe — $7/month <span>→</span>
-                  </>
+                  <>Subscribe</>
                 )}
               </button>
               {freeSessionsRemaining > 0 && (
