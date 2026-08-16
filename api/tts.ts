@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAuthRateLimited } from "./_entitlement.js";
 import { sanitizePerformance } from "./_direction.js";
+import { fetchElevenLabs } from "./_elevenlabs.js";
 
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no character voice assigned
 
@@ -39,7 +40,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const auth = await requireAuthRateLimited(req, res);
+  const auth = await requireAuthRateLimited(req, res, {
+    bucket: "tts",
+    maxPerWindow: 600,
+  });
   if (!auth) return;
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
@@ -85,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
 
   const synthesize = (modelId: string) =>
-    fetch(
+    fetchElevenLabs(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId || DEFAULT_VOICE_ID)}`,
       {
         method: "POST",

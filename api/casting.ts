@@ -306,7 +306,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const auth = await requireAuthRateLimited(req, res);
+  const auth = await requireAuthRateLimited(req, res, {
+    bucket: "casting",
+    maxPerWindow: 30,
+  });
   if (!auth) return;
 
   const action = req.query.action;

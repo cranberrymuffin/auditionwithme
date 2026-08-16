@@ -48,26 +48,32 @@ export async function requireAuth(
   return { userId: data.user.id, email: data.user.email };
 }
 
-const DEFAULT_RATE_LIMIT = { maxPerWindow: 200, windowSeconds: 60 * 60 };
+const DEFAULT_RATE_LIMIT = {
+  bucket: "default",
+  maxPerWindow: 200,
+  windowSeconds: 60 * 60,
+};
 
 /**
- * requireAuth, plus a generous shared per-user sliding-window rate limit
- * (default 200 calls/hour) across the non-grant metered routes (tts,
- * casting, eleven-account). Sends 401/429 and returns null on rejection.
+ * requireAuth, plus a per-user, per-feature sliding-window rate limit. Keeping
+ * buckets separate prevents normal TTS playback from blocking casting or
+ * Scribe token creation. Sends 401/429 and returns null on rejection.
  */
 export async function requireAuthRateLimited(
   req: VercelRequest,
   res: VercelResponse,
-  options: { maxPerWindow?: number; windowSeconds?: number } = {}
+  options: { bucket?: string; maxPerWindow?: number; windowSeconds?: number } = {}
 ): Promise<{ userId: string } | null> {
   const auth = await requireAuth(req, res);
   if (!auth) return null;
 
+  const bucket = options.bucket ?? DEFAULT_RATE_LIMIT.bucket;
   const maxPerWindow = options.maxPerWindow ?? DEFAULT_RATE_LIMIT.maxPerWindow;
   const windowSeconds = options.windowSeconds ?? DEFAULT_RATE_LIMIT.windowSeconds;
 
   const { data: allowed, error } = await serviceClient().rpc("check_rate_limit", {
     p_user_id: auth.userId,
+    p_bucket: bucket,
     p_window_seconds: windowSeconds,
     p_max_calls: maxPerWindow,
   });
