@@ -168,7 +168,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case "invoice.payment_succeeded": {
         const invoice = event.data.object;
         const customerId = idOf(invoice.customer);
-        const subscriptionId = idOf(invoice.subscription);
+        const subscriptionId = idOf(
+          invoice.parent?.subscription_details?.subscription,
+        );
         if (!customerId || !subscriptionId) {
           console.log(
             `webhook ${event.type} ${event.id}: not a subscription invoice, ignored`,
