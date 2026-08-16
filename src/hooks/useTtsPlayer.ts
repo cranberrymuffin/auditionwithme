@@ -11,6 +11,8 @@ export type TtsLine = {
   nextText?: string;
   /** Eleven v3 audio tag, e.g. "angry" or "whispers". */
   deliveryTag?: string;
+  /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
+  performance?: string;
 };
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
@@ -37,6 +39,7 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     line.voiceId ?? "",
     line.text,
     line.deliveryTag ?? "",
+    line.performance ?? "",
     line.previousText ?? "",
     line.nextText ?? "",
     intensity,
@@ -52,6 +55,7 @@ async function fetchTtsBlob(line: TtsLine, intensity: TtsIntensity): Promise<Blo
       previousText: line.previousText,
       nextText: line.nextText,
       deliveryTag: line.deliveryTag,
+      performance: line.performance,
       intensity,
     }),
   });

@@ -74,8 +74,9 @@ export default function Practice() {
   // Saved scripts row backing this session, when the user is signed in —
   // casting and delivery tags are written back to it as they settle.
   const [scriptId, setScriptId] = useState<string | null>(null);
-  // Per-line delivery tags from the AI director (api/casting?action=direct-lines), aligned
-  // by index with steps. null until the pass finishes (or fails silently).
+  // Per-line direction from the AI director (api/casting?action=direct-lines), aligned
+  // by index with steps: performance markup on new parses, single-word tags on
+  // rows saved before the markup upgrade. null until the pass finishes (or fails silently).
   const [deliveryTags, setDeliveryTags] = useState<(string | null)[] | null>(
     null,
   );
@@ -351,9 +352,10 @@ export default function Practice() {
     };
   }, [steps, scriptLanguage.code, replayScript, toast]);
 
-  // AI director pass: annotate each line with a delivery tag (how the scene
-  // partner should read it) once steps load. Purely an enhancement — failures
-  // are silent and the rehearsal reads lines untagged.
+  // AI director pass: annotate each line with performance markup (inline v3
+  // audio tags + pacing punctuation — how the scene partner should read it)
+  // once steps load. Purely an enhancement — failures are silent and the
+  // rehearsal reads lines unadorned.
   useEffect(() => {
     if (!steps.length || deliveryTags) return;
     let cancelled = false;

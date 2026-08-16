@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { sanitizePerformance } from "./_direction.js";
 import { fetchVoices } from "./_elevenlabs.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 
@@ -103,8 +104,12 @@ async function characterVoices(req: VercelRequest, res: VercelResponse) {
   }
   const languageVoices = allVoices.filter((voice) => voice.language === languageCode);
   const VOICES = languageVoices.length ? languageVoices : allVoices;
+  // Description included so the "prefer expressive voices" rule below has
+  // real signal — tone labels alone rarely distinguish a characterful acting
+  // voice from a flat narration one.
   const voiceList = VOICES.map(
-    (v) => `- ${v.name} (${v.gender}, ${v.age}, ${v.accent}, ${v.tone}) [id: ${v.id}]`
+    (v) =>
+      `- ${v.name} (${[v.gender, v.age, v.accent, v.tone, v.description].filter(Boolean).join(", ")}) [id: ${v.id}]`
   ).join("\n");
 
   const characterList = characters
@@ -159,12 +164,13 @@ Example output: {"HAMLET": "pNInz6obpgDQGcFmaJgB", "OPHELIA": "pFZP5JQG7iQjIQuC4
   }
 }
 
-// Lines beyond this cap simply get no tag — the client aligns tags by index,
-// so truncation degrades gracefully on very long scripts.
+// Lines beyond this cap simply get no direction — the client aligns entries
+// by index, so truncation degrades gracefully on very long scripts.
 const MAX_LINES = 400;
 
-// Delivery tags Eleven v3 handles well as inline audio tags. The model must
-// pick from this list (or null) so the TTS layer never sees free-form text.
+// Emotional tags Eleven v3 handles well, offered to the director as the core
+// palette (validation no longer requires them — sanitizePerformance keeps any
+// simple bracketed tag and guarantees the spoken words are unchanged).
 const TAG_VOCABULARY = [
   "angry", "annoyed", "cold", "sad", "somber", "crying", "cheerful", "warm",
   "excited", "playful", "teasing", "flirtatious", "nervous", "hesitant",
@@ -173,17 +179,21 @@ const TAG_VOCABULARY = [
   "tired", "resigned", "whispers", "shouts", "laughs", "sighs",
 ];
 
-const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner to read lines opposite a human actor. For each numbered dialogue line, decide how a skilled actor would deliver it given the surrounding scene, and assign at most one delivery tag.
+const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v3) to read lines opposite a human actor. For each numbered dialogue line, decide how a skilled actor would deliver it given the surrounding scene, and return a performance markup of that exact line.
 
-Allowed tags (use these exactly, nothing else):
-${TAG_VOCABULARY.join(", ")}
+Your markup toolkit (Eleven v3):
+- Audio tags in square brackets, placed at the start of the line or between sentences — emotional tags (${TAG_VOCABULARY.join(", ")}) and non-verbal sounds ([laughs], [chuckles], [sighs], [gasps], [pause], [clears throat]).
+- Pacing punctuation: ellipses (…) for weighted pauses and trailing thoughts, em-dashes for interruptions and pivots.
+- Emphasis: CAPITALIZE a single stressed word where a real actor would punch it.
 
 Rules:
-- Most lines are conversationally neutral: use null unless the scene context clearly calls for a specific emotion or vocal delivery. Tag at most about a third of the lines.
+- NEVER add, remove, reorder, or respell words. Only bracketed tags, punctuation, and letter casing may differ from the input line. Entries that change the words are discarded.
+- At most 2 audio tags per line. Don't front-load every line with an emotion tag — most conversational lines need only pacing punctuation, or nothing. Save emotional tags for lines where the scene clearly calls for them, and vary them; a scene where every line is tagged reads as melodrama.
 - Judge from context, not just the line itself — a line's delivery depends on what was said before and where the scene is going.
-- Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a tag string or null) per input line, in input order.
+- Return null for lines that are fine exactly as written.
+- Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
 
-Example output: [null, "nervous", null, null, "angry", null]`;
+Example output: [null, "[nervous] You're supposed to say what you're… thankful for.", null, "I KNOW what I said — [sighs] just forget it."]`;
 
 function extractJsonArray(raw: string): string | null {
   const start = raw.indexOf("[");
@@ -219,7 +229,9 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
   try {
     const stream = client.messages.stream({
       model: "claude-opus-5",
-      max_tokens: 16000,
+      // The model echoes each directed line back with markup, so the output
+      // budget scales with script length rather than tag count.
+      max_tokens: 32000,
       // A well-specified per-line classification — low effort keeps latency
       // and cost down while adaptive thinking stays available for hard scenes.
       output_config: { effort: "low" },
@@ -251,15 +263,13 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: "Line direction failed" });
     }
 
-    const allowed = new Set(TAG_VOCABULARY);
-    // One entry per submitted line: unknown tags and any overflow past the
-    // model's output (or MAX_LINES) collapse to null.
-    const tags: (string | null)[] = lines.map((_, index) => {
-      const value = parsed[index];
-      if (typeof value !== "string") return null;
-      const tag = value.trim().toLowerCase().replace(/^\[|\]$/g, "");
-      return allowed.has(tag) ? tag : null;
-    });
+    // One entry per submitted line: markup that alters the spoken words, and
+    // any overflow past the model's output (or MAX_LINES), collapses to null.
+    // Kept under the `tags` key — it's the same wire/storage slot the old
+    // single-word tags used, so saved scripts with either format keep working.
+    const tags: (string | null)[] = lines.map((line, index) =>
+      sanitizePerformance(parsed[index], typeof line.text === "string" ? line.text : ""),
+    );
 
     return res.status(200).json({ tags });
   } catch (err) {
