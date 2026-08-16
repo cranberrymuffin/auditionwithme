@@ -198,9 +198,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .filter((step) => step.content.length > 0);
 
+    // Derive characters from who actually speaks in the built steps, rather
+    // than trusting the model's self-reported "characters" list — it can
+    // include mentioned-but-silent characters, or ones whose only lines fell
+    // outside the sides selection or got cut as song lyrics (rule 4b).
+    const characters: string[] = [];
+    for (const step of steps) {
+      if (step.speaker && step.verbalLine.trim() && !characters.includes(step.speaker)) {
+        characters.push(step.speaker);
+      }
+    }
+    console.log(
+      `[parse-pages] chunk: matched — ${steps.length} steps, ${characters.length} speaking characters (${characters.join(", ")})`,
+    );
+
     res.setHeader("Server-Timing", `model;dur=${modelDurationMs.toFixed(1)}`);
     return res.status(200).json({
-      characters: parsed.characters ?? [],
+      characters,
       languageCode:
         typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
       languageName:
