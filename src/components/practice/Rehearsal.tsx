@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
-import { deliveryTagFromContent } from "../../lib/delivery";
+import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import TrackedWords from "../TrackedWords";
@@ -51,12 +51,19 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     if (!step?.verbalLine.trim()) return null;
     const before = [...steps.slice(0, index)].reverse().find((item) => item.verbalLine.trim());
     const after = steps.slice(index + 1).find((item) => item.verbalLine.trim());
+    // Explicit script parenthetical outranks the AI director. Director entries
+    // are performance markup of the whole line on newly directed scripts, or a
+    // legacy single-word tag on scripts saved before the markup upgrade.
+    const parenthetical = deliveryTagFromContent(step.content);
+    const directed = parenthetical ? null : deliveryTagsRef.current[index];
+    const performance = directed && isPerformanceMarkup(directed, step.verbalLine) ? directed : undefined;
     return {
       text: step.verbalLine,
       voiceId: characterVoices[normalizeSpeaker(step.speaker)],
       previousText: before?.verbalLine,
       nextText: after?.verbalLine,
-      deliveryTag: deliveryTagFromContent(step.content) ?? deliveryTagsRef.current[index] ?? undefined,
+      deliveryTag: parenthetical ?? (performance ? undefined : directed ?? undefined),
+      performance,
     };
   }, [steps, characterVoices]);
 
@@ -158,6 +165,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setRailOpen(false);
+        setSettingsOpen(false);
+        return;
+      }
       if ((event.target as HTMLElement)?.matches("input, select, textarea, button")) return;
       if (event.key === "ArrowRight") goNext();
       if (event.key === "ArrowLeft") goPrev();
@@ -202,6 +214,17 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
+        {(railOpen || settingsOpen) && (
+          <button
+            type="button"
+            className="drawer-scrim"
+            aria-label="Close panel"
+            onClick={() => {
+              setRailOpen(false);
+              setSettingsOpen(false);
+            }}
+          />
+        )}
         <aside className={`rehearsal-transcript ${railOpen ? "is-open" : ""}`}>
           <button className="drawer-close" onClick={() => setRailOpen(false)}>Close</button>
           <ScriptRail steps={steps} speakers={speakers} currentIndex={currentStepIndex} selectedRole={selectedRole} onJump={(index) => { setRailOpen(false); goTo(index); }} />
@@ -245,7 +268,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
           <fieldset><legend>Line help</legend>{(["full", "first", "hidden"] as LineMode[]).map((mode) => <label key={mode}><input type="radio" name="line-mode" checked={lineMode === mode} onChange={() => setLineMode(mode)} />{mode === "full" ? "Show full line" : mode === "first" ? "Show first words" : "Hide line"}</label>)}</fieldset>
           <div className="voice-speed-setting">
             <label htmlFor="voice-speed"><strong>Voice speed: {voiceSpeed.toFixed(2)}×</strong></label>
-            <input id="voice-speed" type="range" min={0.85} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />
+            {/* Implemented as client-side time-stretch (Eleven v3 has no API
+                speed setting), which audibly degrades below ~0.9× — pacing
+                should come from the director's markup, not this slider. */}
+            <input id="voice-speed" type="range" min={0.9} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />
           </div>
           <div className="shortcut-help"><strong>Keyboard shortcuts</strong><span>Space Pause / resume</span><span>R Replay cue</span><span>← → Previous / next</span><span>H Hide / reveal line</span></div>
         </aside>

@@ -250,33 +250,29 @@ header .flow-back:hover {
   bottom: auto;
 }
 
+/* Responsive art direction shared by every cinematic page: each composition
+   keeps the complete hillside sign inside a crop-safe area instead of forcing
+   the wide artwork into every shape. */
 .cinematic-backdrop {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background-image: url("/images/hollywood-hills-hero.png");
+  background-image: url("/images/hollywood-hills-hero-wide.png");
   background-size: cover;
-  background-position: center center;
+  background-position: right center;
   filter: saturate(0.84) contrast(1.04);
   transform: scale(1.002);
 }
 
-/* Responsive art direction: each composition keeps the complete hillside sign
-   inside a crop-safe area instead of forcing the wide artwork into every shape. */
-.home-page .cinematic-backdrop {
-  background-image: url("/images/hollywood-hills-hero-wide.png");
-  background-position: right center;
-}
-
 @media (max-aspect-ratio: 7 / 5) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
     background-position: center top;
   }
 }
 
 @media (max-aspect-ratio: 4 / 5) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
     background-position: center top;
   }
@@ -683,7 +679,6 @@ header .flow-back:hover {
     linear-gradient(0deg, rgba(5, 12, 21, 0.74), rgba(5, 12, 21, 0.2));
 }
 .about-page-clean .cinematic-backdrop {
-  background-position: 58% center;
   filter: saturate(0.55) contrast(0.88) brightness(0.62) blur(1px);
   transform: scale(1.02);
 }
@@ -865,7 +860,18 @@ header .flow-back:hover {
 }
 
 @media (max-width: 620px) {
+  /* Phones get a scrolling page instead of squeezing the hero and the
+     process card into one locked viewport (matches the home-page pattern:
+     the backdrop and scrim stay pinned to the first screenful). */
+  .about-page-clean {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+    background: rgb(5, 12, 21);
+  }
   .about-page-clean::after {
+    bottom: auto;
+    height: 100dvh;
     background: linear-gradient(
       0deg,
       rgba(5, 12, 21, 0.98),
@@ -874,14 +880,17 @@ header .flow-back:hover {
   }
   .about-page-clean .cinematic-backdrop {
     opacity: 0.42;
+    bottom: auto;
+    height: 100dvh;
   }
   .about-product-layout {
-    height: calc(100% - 66px);
+    height: auto;
+    min-height: calc(100dvh - 66px);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 22px;
-    padding: 18px 20px max(18px, env(safe-area-inset-bottom));
+    gap: 26px;
+    padding: 24px 20px max(28px, env(safe-area-inset-bottom));
   }
   .about-product-intro {
     width: 100%;
@@ -908,7 +917,7 @@ header .flow-back:hover {
     font-size: 0.75rem;
   }
   .about-process-panel {
-    padding: 20px;
+    padding: 24px 20px 26px;
   }
   .about-process-panel > header p {
     display: none;
@@ -920,18 +929,18 @@ header .flow-back:hover {
   }
   .about-process-panel ol {
     display: flex;
-    gap: 13px;
-    margin-top: 16px;
+    gap: 19px;
+    margin-top: 18px;
   }
   .about-process-panel li {
     grid-template-columns: 24px 1fr;
   }
   .about-process-panel li p {
-    margin-top: 2px;
-    font-size: 0.8125rem;
+    margin-top: 3px;
+    font-size: 0.875rem;
   }
   .about-process-panel li strong {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
   }
 }
 
@@ -962,9 +971,6 @@ header .flow-back:hover {
 
 @media (max-width: 720px) {
   .cinematic-backdrop {
-    background-position: 66% center;
-  }
-  .home-page .cinematic-backdrop {
     background-position: center top;
   }
   .cinematic-page::after {
@@ -1046,7 +1052,7 @@ header .flow-back:hover {
 /* Phones get an explicit art-directed safe zone: the sign stays in the upper
    portion while the lower portion is reserved for the hero copy and actions. */
 @media (max-width: 720px) and (orientation: portrait) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-portrait-v2.png");
     background-position: center top;
   }
@@ -1062,7 +1068,7 @@ header .flow-back:hover {
 }
 
 @media (max-width: 720px) and (orientation: landscape) {
-  .home-page .cinematic-backdrop {
+  .cinematic-backdrop {
     background-image: url("/images/hollywood-hills-hero-tablet-v2.png");
     background-position: center top;
   }
@@ -3775,6 +3781,22 @@ header .flow-back:hover {
 .controls-toggle {
   display: none !important;
 }
+/* Click-outside dismissal for the transcript/controls drawers. Rendered only
+   while a drawer is open; sits under the drawers (transcript z 50, controls
+   z 40) but over everything else. */
+.drawer-scrim {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: block;
+    border: 0;
+    background: rgba(4, 10, 18, 0.45);
+  }
+}
 
 @media (max-width: 1100px) {
   .rehearsal-workspace {
@@ -3836,6 +3858,8 @@ header .flow-back:hover {
     position: fixed;
     z-index: 50;
     inset: 0 auto 0 0;
+    display: flex;
+    flex-direction: column;
     width: min(88vw, 340px);
     box-shadow: 18px 0 45px rgba(0, 0, 0, 0.35);
     transform: translateX(-100%);
@@ -3846,10 +3870,18 @@ header .flow-back:hover {
   }
   .rehearsal-transcript .drawer-close {
     display: block !important;
+    flex-shrink: 0;
     min-height: 44px;
     margin: 8px 12px 0 auto;
     color: #f3a17e;
     font-size: 0.8125rem;
+  }
+  /* The close button sits above the rail, so the rail can't keep claiming the
+     drawer's full height or its bottom gets clipped by overflow: hidden. */
+  .rehearsal-transcript .scene-rail {
+    height: auto;
+    flex: 1;
+    min-height: 0;
   }
   .rehearsal-center {
     overflow: visible;

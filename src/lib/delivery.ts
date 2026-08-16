@@ -104,6 +104,26 @@ function tagFromDirection(direction: string): string | undefined {
   return undefined;
 }
 
+// Mirrors api/_direction.ts — the words actually spoken once bracket tags and
+// punctuation are stripped.
+function spokenWords(value: string): string {
+  return value
+    .replace(/\[[^\]]*\]/g, " ")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/**
+ * Whether a stored AI-director entry is full performance markup of the line
+ * (inline tags + pacing punctuation) rather than a legacy single-word tag.
+ * Scripts directed before the markup upgrade saved bare tags like "angry";
+ * those never speak the line's words, so this cleanly splits the formats.
+ */
+export function isPerformanceMarkup(direction: string, lineText: string): boolean {
+  return direction.includes("[") || spokenWords(direction) === spokenWords(lineText);
+}
+
 /** First delivery-style parenthetical in a step's content, as a v3 audio tag. */
 export function deliveryTagFromContent(content: ContentLine[]): string | undefined {
   for (const line of content) {
