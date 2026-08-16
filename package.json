@@ -6,6 +6,7 @@
   "scripts": {
     "bench:sides": "tsx benchmarks/sides-parse.ts",
     "benchmark:pdf": "node benchmarks/pdf-latency.mjs",
+    "delete-user": "node scripts/delete-user.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
