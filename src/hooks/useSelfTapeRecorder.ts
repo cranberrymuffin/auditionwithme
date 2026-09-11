@@ -17,10 +17,14 @@ function pickMimeType(): string | undefined {
 /**
  * Camera + mic capture for rehearsal self-tapes.
  *
- * `start()` opens the camera and begins recording; the live `stream` is
- * exposed so the caller can bind it to a preview <video>'s srcObject.
- * `stop()` resolves with the finished recording as a Blob and releases the
- * camera. Permission failures land in `error` rather than throwing.
+ * `start(ttsStream)` opens the camera and begins recording; the live camera
+ * `stream` is exposed so the caller can bind it to a preview <video>'s
+ * srcObject. If `ttsStream` is given (the scene partner's TTS audio, tapped
+ * directly rather than picked up acoustically off the mic — see
+ * useTtsPlayer's getTapStream), it's mixed with the mic track into the
+ * recording's single audio track; the preview stream is untouched. `stop()`
+ * resolves with the finished recording as a Blob and releases the camera.
+ * Permission failures land in `error` rather than throwing.
  */
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -28,6 +32,8 @@ export function useSelfTapeRecorder() {
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mixContextRef = useRef<AudioContext | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
@@ -36,11 +42,13 @@ export function useSelfTapeRecorder() {
         recorderRef.current.stop();
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      void mixContextRef.current?.close();
     };
     return cleanup;
   }, []);
 
-  const start = async () => {
+  const start = async (ttsStream?: MediaStream | null) => {
     setError(null);
     setStatus("requesting");
     let media: MediaStream;
@@ -60,9 +68,28 @@ export function useSelfTapeRecorder() {
 
     streamRef.current = media;
     setStream(media);
+
+    // Mix the mic with the TTS tap so the recording gets the scene partner's
+    // lines directly, not whatever the mic happens to pick up off the
+    // speakers. Falls back to mic-only if no tap stream was available.
+    let recordingStream = media;
+    const micTrack = media.getAudioTracks()[0];
+    if (ttsStream?.getAudioTracks().length && micTrack) {
+      const mixContext = new AudioContext();
+      mixContextRef.current = mixContext;
+      const destination = mixContext.createMediaStreamDestination();
+      mixContext.createMediaStreamSource(media).connect(destination);
+      mixContext.createMediaStreamSource(ttsStream).connect(destination);
+      recordingStream = new MediaStream([
+        media.getVideoTracks()[0],
+        destination.stream.getAudioTracks()[0],
+      ]);
+    }
+    recordingStreamRef.current = recordingStream;
+
     chunksRef.current = [];
     const mimeType = pickMimeType();
-    const recorder = new MediaRecorder(media, mimeType ? { mimeType } : undefined);
+    const recorder = new MediaRecorder(recordingStream, mimeType ? { mimeType } : undefined);
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
@@ -83,6 +110,10 @@ export function useSelfTapeRecorder() {
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+    await mixContextRef.current?.close();
+    mixContextRef.current = null;
     recorderRef.current = null;
     chunksRef.current = [];
     setStream(null);

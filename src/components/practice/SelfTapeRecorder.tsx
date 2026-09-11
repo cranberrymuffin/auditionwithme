@@ -4,7 +4,14 @@ import { useSelfTapeRecorder } from "../../hooks/useSelfTapeRecorder";
 import { supabase } from "../../lib/supabase";
 import { useToast } from "../../lib/toast";
 
-export default function SelfTapeRecorder({ scriptId }: { scriptId: string }) {
+export default function SelfTapeRecorder({
+  scriptId,
+  getTtsStream,
+}: {
+  scriptId: string;
+  /** The scene partner's TTS audio, tapped directly for the recording. */
+  getTtsStream: () => MediaStream | null;
+}) {
   const { user } = useAuth();
   const { status, stream, start, stop, error } = useSelfTapeRecorder();
   const toast = useToast();
@@ -93,7 +100,7 @@ export default function SelfTapeRecorder({ scriptId }: { scriptId: string }) {
         ) : (
           <button
             type="button"
-            onClick={() => void start()}
+            onClick={() => void start(getTtsStream())}
             disabled={status === "requesting"}
           >
             Start

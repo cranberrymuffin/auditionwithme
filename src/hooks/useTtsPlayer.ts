@@ -99,6 +99,24 @@ function getBlob(line: TtsLine, intensity: TtsIntensity, fresh = false): Promise
 export function useTtsPlayer() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
+  // Lazily created so most sessions (no self-tape recording) never pay for
+  // an AudioContext. Once up, every played line is routed through it so a
+  // self-tape recording can tap the line's audio directly instead of
+  // picking it up acoustically off the mic.
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const tapDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+  const ensureTap = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioContext();
+      tapDestinationRef.current = audioContextRef.current.createMediaStreamDestination();
+    }
+    return { context: audioContextRef.current, destination: tapDestinationRef.current! };
+  }, []);
+
+  /** MediaStream carrying every line's audio, silent when nothing is playing. */
+  const getTapStream = useCallback(() => ensureTap().destination.stream, [ensureTap]);
 
   const stop = useCallback(() => {
     if (audioRef.current) {
@@ -106,6 +124,8 @@ export function useTtsPlayer() {
       audioRef.current.onended = null;
       audioRef.current = null;
     }
+    sourceNodeRef.current?.disconnect();
+    sourceNodeRef.current = null;
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
@@ -129,9 +149,20 @@ export function useTtsPlayer() {
       audio.playbackRate = opts?.speed ?? 1;
       audioRef.current = audio;
       if (opts?.onEnded) audio.onended = opts.onEnded;
+
+      // Route through the shared tap so a self-tape recording (if any) picks
+      // this line up directly, not acoustically off the mic. Still connected
+      // to the context's own destination so normal speaker playback is unchanged.
+      const { context, destination } = ensureTap();
+      if (context.state === "suspended") await context.resume();
+      const source = context.createMediaElementSource(audio);
+      source.connect(context.destination);
+      source.connect(destination);
+      sourceNodeRef.current = source;
+
       await audio.play();
     },
-    [stop]
+    [stop, ensureTap]
   );
 
   /** Adjusts the rate of whatever is currently playing (and nothing else). */
@@ -141,5 +172,5 @@ export function useTtsPlayer() {
 
   useEffect(() => stop, [stop]);
 
-  return { play, prefetch, stop, setPlaybackRate };
+  return { play, prefetch, stop, setPlaybackRate, getTapStream };
 }

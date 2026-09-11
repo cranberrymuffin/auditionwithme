@@ -36,7 +36,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const deliveryTagsRef = useRef(deliveryTags);
   deliveryTagsRef.current = deliveryTags;
   const voiceSpeedRef = useRef(voiceSpeed);
-  const { play, prefetch, stop, setPlaybackRate } = useTtsPlayer();
+  const { play, prefetch, stop, setPlaybackRate, getTapStream } = useTtsPlayer();
 
   useEffect(() => {
     voiceSpeedRef.current = voiceSpeed;
@@ -246,7 +246,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
                 should come from the director's markup, not this slider. */}
             <input id="voice-speed" type="range" min={0.9} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />
           </div>
-          {scriptId && <SelfTapeRecorder scriptId={scriptId} />}
+          {scriptId && <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} />}
           <div className="shortcut-help"><strong>Keyboard shortcuts</strong><span>Space Pause / resume</span><span>R Replay cue</span><span>← → Previous / next</span><span>H Hide / reveal line</span></div>
         </aside>
       </div>
