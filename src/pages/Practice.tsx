@@ -113,21 +113,7 @@ export default function Practice() {
   const persistScript = async (data: ParseData) => {
     if (!user) return;
     const title = (file?.name ?? "Untitled script").replace(/\.pdf$/i, "");
-    // Generated client-side so the PDF upload path and the row insert can
-    // share the same id without a round trip in between.
     const id = crypto.randomUUID();
-
-    let pdfPath: string | null = null;
-    if (file) {
-      pdfPath = `${user.id}/${id}.pdf`;
-      const { error: uploadError } = await supabase.storage
-        .from("scripts")
-        .upload(pdfPath, file, { contentType: "application/pdf" });
-      if (uploadError) {
-        console.error("Failed to upload script PDF:", uploadError.message);
-        pdfPath = null;
-      }
-    }
 
     // Fingerprints this upload so re-uploading the same PDF later (Home.tsx's
     // handleFile) can be recognized and served from this saved row instead
@@ -142,7 +128,6 @@ export default function Practice() {
       characters: data.characters ?? [],
       language_code: data.languageCode ?? "en",
       language_name: data.languageName ?? "English",
-      pdf_path: pdfPath,
       content_hash: contentHash,
     });
     if (error) {
@@ -634,6 +619,7 @@ export default function Practice() {
       }}
       languageCode={scriptLanguage.code}
       fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
+      scriptId={scriptId}
     />
   );
 }

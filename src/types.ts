@@ -15,12 +15,18 @@ export type SavedScript = {
   language_name: string;
   characters: string[];
   steps: Step[];
-  pdf_path: string | null;
   content_hash: string | null;
   /** Confirmed casting from a past rehearsal, speaker → ElevenLabs voice id */
   character_voices: Record<string, string> | null;
   /** AI-director delivery tags, aligned by index with steps */
   delivery_tags: (string | null)[] | null;
+  created_at: string;
+};
+
+export type SelfTape = {
+  id: string;
+  script_id: string;
+  storage_path: string;
   created_at: string;
 };
 

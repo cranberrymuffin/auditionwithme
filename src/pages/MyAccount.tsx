@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
-import DocumentPreview from "../components/DocumentPreview";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
-import type { SavedScript } from "../types";
+import type { SavedScript, SelfTape } from "../types";
 
 export default function MyAccount() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
   const [scripts, setScripts] = useState<SavedScript[]>([]);
+  const [selfTapes, setSelfTapes] = useState<SelfTape[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openingId, setOpeningId] = useState<string | null>(null);
-  const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const fetchedPreviewIds = useRef(new Set<string>());
+  const [tapeUrls, setTapeUrls] = useState<Record<string, string>>({});
+  const fetchedTapeIds = useRef(new Set<string>());
 
   useEffect(() => {
     if (!user) return;
@@ -23,7 +22,7 @@ export default function MyAccount() {
     setLoading(true);
     supabase
       .from("scripts")
-      .select("id,title,language_code,language_name,characters,steps,pdf_path,character_voices,delivery_tags,created_at")
+      .select("id,title,language_code,language_name,characters,steps,character_voices,delivery_tags,created_at")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!active) return;
@@ -37,23 +36,38 @@ export default function MyAccount() {
   }, [user]);
 
   useEffect(() => {
-    const pending = scripts.filter(
-      (script) => script.pdf_path && !fetchedPreviewIds.current.has(script.id)
-    );
+    if (!user) return;
+    let active = true;
+    supabase
+      .from("self_tapes")
+      .select("id,script_id,storage_path,created_at")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.error("Failed to load self-tapes:", error.message);
+        setSelfTapes(error ? [] : (data as SelfTape[]));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const pending = selfTapes.filter((tape) => !fetchedTapeIds.current.has(tape.id));
     if (pending.length === 0) return;
-    pending.forEach((script) => fetchedPreviewIds.current.add(script.id));
+    pending.forEach((tape) => fetchedTapeIds.current.add(tape.id));
 
     let active = true;
     Promise.all(
-      pending.map(async (script) => {
+      pending.map(async (tape) => {
         const { data } = await supabase.storage
-          .from("scripts")
-          .createSignedUrl(script.pdf_path as string, 3600);
-        return [script.id, data?.signedUrl ?? null] as const;
+          .from("self-tapes")
+          .createSignedUrl(tape.storage_path, 3600);
+        return [tape.id, data?.signedUrl ?? null] as const;
       })
     ).then((entries) => {
       if (!active) return;
-      setPreviewUrls((prev) => {
+      setTapeUrls((prev) => {
         const next = { ...prev };
         for (const [id, url] of entries) {
           if (url) next[id] = url;
@@ -64,7 +78,7 @@ export default function MyAccount() {
     return () => {
       active = false;
     };
-  }, [scripts]);
+  }, [selfTapes]);
 
   const practice = (script: SavedScript) => {
     navigate("/practice", {
@@ -83,18 +97,22 @@ export default function MyAccount() {
     });
   };
 
-  const viewPdf = async (script: SavedScript) => {
-    if (!script.pdf_path) return;
-    setOpeningId(script.id);
-    const { data, error } = await supabase.storage
-      .from("scripts")
-      .createSignedUrl(script.pdf_path, 60);
-    setOpeningId(null);
-    if (error || !data?.signedUrl) {
-      toast("Couldn't open that PDF. Please try again.");
+  const deleteTape = async (tape: SelfTape) => {
+    const { error: storageError } = await supabase.storage
+      .from("self-tapes")
+      .remove([tape.storage_path]);
+    if (storageError) {
+      console.error("Failed to delete self-tape file:", storageError.message);
+      toast("Couldn't delete that self-tape. Please try again.");
       return;
     }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    const { error } = await supabase.from("self_tapes").delete().eq("id", tape.id);
+    if (error) {
+      console.error("Failed to delete self-tape:", error.message);
+      toast("Couldn't delete that self-tape. Please try again.");
+      return;
+    }
+    setSelfTapes((prev) => prev.filter((item) => item.id !== tape.id));
   };
 
   return (
@@ -123,48 +141,62 @@ export default function MyAccount() {
           </div>
         ) : (
           <ul className="account-scripts">
-            {scripts.map((script) => (
-              <li key={script.id} className="account-script-row">
-                <div className="account-script-info">
-                  <strong>{script.title}</strong>
-                  <span>
-                    {script.characters.length} {script.characters.length === 1 ? "character" : "characters"}
-                    {" · "}
-                    {new Date(script.created_at).toLocaleDateString(undefined, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </span>
-                </div>
-                {script.pdf_path && (
-                  <div className="account-script-preview">
-                    {previewUrls[script.id] && (
-                      <DocumentPreview src={previewUrls[script.id]} fileName={script.title} />
-                    )}
+            {scripts.map((script) => {
+              const tapes = selfTapes.filter((tape) => tape.script_id === script.id);
+              return (
+                <li key={script.id} className="account-script-row">
+                  <div className="account-script-info">
+                    <strong>{script.title}</strong>
+                    <span>
+                      {script.characters.length} {script.characters.length === 1 ? "character" : "characters"}
+                      {" · "}
+                      {new Date(script.created_at).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
                   </div>
-                )}
-                <div className="account-script-actions">
-                  {script.pdf_path && (
+                  {tapes.length > 0 && (
+                    <ul className="account-self-tapes">
+                      {tapes.map((tape) => (
+                        <li key={tape.id}>
+                          {tapeUrls[tape.id] && (
+                            <video controls src={tapeUrls[tape.id]} />
+                          )}
+                          <div>
+                            <span>
+                              {new Date(tape.created_at).toLocaleString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                            <button
+                              type="button"
+                              className="account-script-secondary"
+                              onClick={() => deleteTape(tape)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="account-script-actions">
                     <button
                       type="button"
-                      className="account-script-secondary"
-                      onClick={() => viewPdf(script)}
-                      disabled={openingId === script.id}
+                      className="account-script-practice"
+                      onClick={() => practice(script)}
                     >
-                      {openingId === script.id ? "Opening…" : "View PDF"}
+                      Practice <span>→</span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="account-script-practice"
-                    onClick={() => practice(script)}
-                  >
-                    Practice <span>→</span>
-                  </button>
-                </div>
-              </li>
-            ))}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

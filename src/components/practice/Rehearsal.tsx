@@ -6,11 +6,12 @@ import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery"
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import RehearsalLineList from "./RehearsalLineList";
+import SelfTapeRecorder from "./SelfTapeRecorder";
 
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "first" | "hidden";
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -18,6 +19,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   onBack: () => void;
   languageCode: string;
   fileName: string;
+  scriptId: string | null;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -244,6 +246,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
                 should come from the director's markup, not this slider. */}
             <input id="voice-speed" type="range" min={0.9} max={1.1} step={0.05} value={voiceSpeed} onChange={(event) => setVoiceSpeed(Number(event.target.value))} />
           </div>
+          {scriptId && <SelfTapeRecorder scriptId={scriptId} />}
           <div className="shortcut-help"><strong>Keyboard shortcuts</strong><span>Space Pause / resume</span><span>R Replay cue</span><span>← → Previous / next</span><span>H Hide / reveal line</span></div>
         </aside>
       </div>
