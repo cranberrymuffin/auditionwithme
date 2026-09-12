@@ -96,6 +96,17 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     return () => clearTimeout(timer);
   }, [startPhase, countdown]);
 
+  // Keep the script from scrolling behind the start overlay (mobile lets the
+  // page itself scroll, so the lock has to live on the body, not a container).
+  useEffect(() => {
+    if (startPhase === "active") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [startPhase]);
+
   const goTo = useCallback((index: number) => {
     stop();
     setPaused(false);

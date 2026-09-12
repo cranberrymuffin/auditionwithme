@@ -3626,7 +3626,7 @@ header .flow-back:hover {
   font-variant-numeric: tabular-nums;
 }
 .rehearsal-start-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
