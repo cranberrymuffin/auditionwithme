@@ -234,6 +234,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
+        {selfTapeMode && startPhase !== "choose" && scriptId && (
+          <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} autoStart onReady={handleCameraReady} />
+        )}
+
         <section className="rehearsal-center" aria-live="polite">
           <RehearsalLineList
             steps={steps}
@@ -254,10 +258,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
             onTogglePause={togglePause}
           />
         </section>
-
-        {selfTapeMode && startPhase !== "choose" && scriptId && (
-          <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} autoStart onReady={handleCameraReady} />
-        )}
 
         {startPhase !== "active" && (
           <div className="rehearsal-start-overlay">

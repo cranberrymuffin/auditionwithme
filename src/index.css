@@ -3390,8 +3390,10 @@ header .flow-back:hover {
   display: grid;
   height: calc(100% - 71px);
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 .rehearsal-center {
+  grid-row: 2;
   min-width: 0;
   overflow-y: auto;
   padding: clamp(26px, 5vh, 60px) clamp(24px, 5vw, 72px);
@@ -3703,14 +3705,15 @@ header .flow-back:hover {
   }
 }
 .self-tape-setting {
-  position: fixed;
-  top: 88px;
-  right: 24px;
-  z-index: 20;
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(300px, calc(100vw - 32px));
+  width: min(clamp(300px, 32vw, 480px), calc(100% - 32px));
+  margin: 16px auto 16px;
   padding: 14px 16px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 10px;
@@ -3785,12 +3788,19 @@ header .flow-back:hover {
   .rehearsal-page {
     height: auto;
     min-height: 100dvh;
-    overflow: auto;
+    overflow: visible;
   }
   .rehearsal-header {
     height: 62px;
     grid-template-columns: 1fr auto;
     padding: 0 16px;
+  }
+  .self-tape-setting {
+    width: 100%;
+    margin: 0;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
   }
   .rehearsal-header > div:first-child > span,
   .rehearsal-header > p {
