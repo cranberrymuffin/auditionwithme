@@ -394,6 +394,10 @@ export default function Practice() {
     void (async () => {
       try {
         const response = await apiFetch("/api/eleven-account");
+        if (response.status === 401) {
+          if (!cancelled) navigate("/login", { replace: true });
+          return;
+        }
         const data = (await response.json()) as {
           voices?: Voice[];
           error?: string;
@@ -412,7 +416,7 @@ export default function Practice() {
     return () => {
       cancelled = true;
     };
-  }, [toast]);
+  }, [toast, navigate]);
 
   const startReading = () => {
     const next = { ...characterVoices };
