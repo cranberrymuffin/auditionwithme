@@ -3790,6 +3790,24 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.8125rem;
 }
+@media (min-width: 1100px) {
+  .rehearsal-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 26vw);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: 24px;
+  }
+  .rehearsal-center {
+    grid-row: auto;
+    grid-column: 1;
+  }
+  .self-tape-setting {
+    grid-row: auto;
+    grid-column: 2;
+    align-self: start;
+    width: auto;
+    margin: 16px 24px 0 0;
+  }
+}
 @media (max-width: 760px) {
   .rehearsal-page {
     height: auto;
