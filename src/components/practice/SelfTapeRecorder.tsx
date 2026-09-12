@@ -7,21 +7,34 @@ import { useToast } from "../../lib/toast";
 export default function SelfTapeRecorder({
   scriptId,
   getTtsStream,
+  autoStart = false,
+  onReady,
 }: {
   scriptId: string;
   /** The scene partner's TTS audio, tapped directly for the recording. */
   getTtsStream: () => MediaStream | null;
+  /** Skip the "Record self-tape" prompt and start recording as soon as this mounts. */
+  autoStart?: boolean;
+  /** Fires once the camera/mic request has settled (granted or denied) after autoStart. */
+  onReady?: () => void;
 }) {
   const { user } = useAuth();
   const { status, stream, start, stop, error } = useSelfTapeRecorder();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoStart);
   const [saving, setSaving] = useState(false);
   const previewRef = useRef<HTMLVideoElement | null>(null);
+  const autoStartedRef = useRef(false);
 
   useEffect(() => {
     if (previewRef.current) previewRef.current.srcObject = stream;
   }, [stream]);
+
+  useEffect(() => {
+    if (!autoStart || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void start(getTtsStream()).then(() => onReady?.());
+  }, [autoStart, start, getTtsStream, onReady]);
 
   if (!user) return null;
 

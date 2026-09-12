@@ -3625,10 +3625,87 @@ header .flow-back:hover {
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
+.rehearsal-start-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 14, 22, 0.72);
+  backdrop-filter: blur(3px);
+}
+.rehearsal-start-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 340px;
+  padding: 32px 28px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: #101d2c;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.4);
+}
+.rehearsal-start-choice h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.rehearsal-start-choice > p {
+  margin: 0 0 14px;
+  color: rgba(248, 241, 230, 0.65);
+  font-size: 0.875rem;
+}
+.rehearsal-start-choice > div {
+  display: flex;
+  gap: 12px;
+}
+.rehearsal-start-choice button {
+  padding: 11px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  color: rgba(248, 241, 230, 0.9);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.rehearsal-start-choice button:first-child {
+  border-color: rgba(255, 205, 183, 0.58);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+}
+.rehearsal-start-choice button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.rehearsal-start-choice button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.rehearsal-start-choice > span {
+  margin-top: 12px;
+  color: rgba(248, 241, 230, 0.5);
+  font-size: 0.75rem;
+}
+.rehearsal-countdown {
+  font-size: clamp(4rem, 14vw, 7rem);
+  font-weight: 700;
+  color: #f8f1e6;
+  animation: countdown-tick 1s ease-out;
+}
+@keyframes countdown-tick {
+  from {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
 .self-tape-setting {
   position: fixed;
+  top: 88px;
   right: 24px;
-  bottom: 24px;
   z-index: 20;
   display: flex;
   flex-direction: column;

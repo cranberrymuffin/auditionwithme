@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery";
+import { useAuth } from "../../contexts/AuthContext";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import RehearsalLineList from "./RehearsalLineList";
@@ -10,6 +11,8 @@ import SelfTapeRecorder from "./SelfTapeRecorder";
 
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "hidden";
+type StartPhase = "choose" | "preparing" | "countdown" | "active";
+const COUNTDOWN_START = 3;
 
 export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId }: {
   steps: Step[];
@@ -21,10 +24,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   fileName: string;
   scriptId: string | null;
 }) {
+  const { user } = useAuth();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
   const [lineMode, setLineMode] = useState<LineMode>("full");
+  const [startPhase, setStartPhase] = useState<StartPhase>("choose");
+  const [selfTapeMode, setSelfTapeMode] = useState(false);
+  const [countdown, setCountdown] = useState(COUNTDOWN_START);
   const intensity: TtsIntensity = "dramatic";
   // Refs so mid-line updates (AI delivery tags arriving) don't restart the
   // audio effect below.
@@ -60,7 +67,34 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
   const isMyLine = Boolean(selectedRole) && currentSpeaker === selectedRole;
   const lineWordCount = (currentStep?.verbalLine ?? "").split(/\s+/).filter(Boolean).length;
-  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused, currentStep?.verbalLine ?? "", languageCode);
+  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode);
+
+  const beginRehearsal = useCallback((selfTape: boolean) => {
+    setSelfTapeMode(selfTape);
+    if (selfTape) {
+      setStartPhase("preparing");
+    } else {
+      setCountdown(COUNTDOWN_START);
+      setStartPhase("countdown");
+    }
+  }, []);
+
+  // The camera must be live before the countdown overlay drops, so self-tape
+  // mode waits here for the recorder to report readiness before counting down.
+  const handleCameraReady = useCallback(() => {
+    setCountdown(COUNTDOWN_START);
+    setStartPhase("countdown");
+  }, []);
+
+  useEffect(() => {
+    if (startPhase !== "countdown") return;
+    if (countdown <= 0) {
+      setStartPhase("active");
+      return;
+    }
+    const timer = setTimeout(() => setCountdown((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [startPhase, countdown]);
 
   const goTo = useCallback((index: number) => {
     stop();
@@ -74,7 +108,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   goNextRef.current = goNext;
 
   useEffect(() => {
-    if (paused) return;
+    if (paused || startPhase !== "active") return;
     const step = steps[currentStepIndex];
     if (!step) return;
     const speaker = normalizeSpeaker(step.speaker);
@@ -110,7 +144,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       if (error?.name !== "AbortError") setPlaybackState("error");
     });
     return () => { controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, intensity, ttsLine, play, prefetch, stop]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -148,6 +182,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (startPhase !== "active") return;
       if ((event.target as HTMLElement)?.matches("input, select, textarea, button")) return;
       if (event.key === "ArrowRight") goNext();
       if (event.key === "ArrowLeft") goPrev();
@@ -157,7 +192,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [goNext, goPrev, replayCue, togglePause]);
+  }, [startPhase, goNext, goPrev, replayCue, togglePause]);
 
   if (!currentStep) return null;
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
@@ -209,7 +244,34 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
           />
         </section>
 
-        {scriptId && <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} />}
+        {selfTapeMode && startPhase !== "choose" && scriptId && (
+          <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} autoStart onReady={handleCameraReady} />
+        )}
+
+        {startPhase !== "active" && (
+          <div className="rehearsal-start-overlay">
+            {startPhase === "choose" && (
+              <div className="rehearsal-start-choice">
+                <h2>Ready to rehearse?</h2>
+                <p>Choose how you want to run this scene.</p>
+                <div>
+                  <button type="button" onClick={() => beginRehearsal(false)}>Practice</button>
+                  <button type="button" onClick={() => beginRehearsal(true)} disabled={!scriptId || !user}>Self-tape</button>
+                </div>
+                {!user && <span>Sign in to record a self-tape.</span>}
+              </div>
+            )}
+            {startPhase === "preparing" && (
+              <div className="rehearsal-start-choice">
+                <h2>Setting up your camera…</h2>
+                <p>Allow camera and microphone access to continue.</p>
+              </div>
+            )}
+            {startPhase === "countdown" && (
+              <div className="rehearsal-countdown" key={countdown}>{countdown}</div>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );
