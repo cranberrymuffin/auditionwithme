@@ -3389,7 +3389,7 @@ header .flow-back:hover {
   position: relative;
   display: grid;
   height: calc(100% - 71px);
-  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-columns: minmax(0, 1fr);
 }
 .rehearsal-center {
   min-width: 0;
@@ -3625,105 +3625,20 @@ header .flow-back:hover {
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
-.rehearsal-settings {
-  padding: 20px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  background: #101d2c;
-}
-.rehearsal-settings h2 {
-  margin: 0 0 22px;
-  font-size: 1rem;
-}
-.autoflow-setting {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
-}
-.autoflow-setting > div {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.autoflow-setting strong {
-  font-size: 0.875rem;
-}
-.autoflow-setting span {
-  color: rgba(248, 241, 230, 0.6);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-.autoflow-setting > button {
-  position: relative;
-  width: 42px;
-  height: 24px;
-  flex: 0 0 auto;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.15);
-}
-.autoflow-setting > button i {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #fff;
-  transition: left 0.2s ease;
-}
-.autoflow-setting > button[aria-checked="true"] {
-  background: #ef9a78;
-}
-.autoflow-setting > button[aria-checked="true"] i {
-  left: 21px;
-}
-.rehearsal-settings fieldset {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  margin: 20px 0 0;
-  padding: 0 0 20px;
-  border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
-}
-.rehearsal-settings legend {
-  margin-bottom: 12px;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.rehearsal-settings label {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  gap: 9px;
-  color: rgba(248, 241, 230, 0.75);
-  font-size: 0.8125rem;
-}
-.rehearsal-settings input {
-  accent-color: #ef9a78;
-}
-.voice-speed-setting {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
-}
-.voice-speed-setting label {
-  font-size: 0.875rem;
-}
-.voice-speed-setting input[type="range"] {
-  width: 100%;
-}
 .self-tape-setting {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 20px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.11);
+  width: min(300px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: #101d2c;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
 }
 .self-tape-setting > div {
   display: flex;
@@ -3789,72 +3704,6 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.8125rem;
 }
-.shortcut-help {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 20px;
-}
-.shortcut-help strong {
-  margin-bottom: 3px;
-  font-size: 0.875rem;
-}
-.shortcut-help span {
-  color: rgba(248, 241, 230, 0.58);
-  font-size: 0.75rem;
-}
-.drawer-close {
-  display: none !important;
-}
-.controls-toggle {
-  display: none !important;
-}
-/* Click-outside dismissal for the controls drawer. Rendered only while the
-   drawer is open; sits under it (z 40) but over everything else. */
-.drawer-scrim {
-  display: none;
-}
-@media (max-width: 1100px) {
-  .drawer-scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 30;
-    display: block;
-    border: 0;
-    background: rgba(4, 10, 18, 0.45);
-  }
-}
-
-@media (max-width: 1100px) {
-  .rehearsal-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .rehearsal-settings {
-    position: absolute;
-    z-index: 40;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 290px;
-    box-shadow: -18px 0 45px rgba(0, 0, 0, 0.3);
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
-  }
-  .rehearsal-settings.is-open {
-    transform: translateX(0);
-  }
-  .controls-toggle {
-    display: inline-flex !important;
-  }
-  .rehearsal-settings .drawer-close {
-    display: block !important;
-    min-height: 44px;
-    margin: -10px 0 8px auto;
-    color: #f3a17e;
-    font-size: 0.8125rem;
-  }
-}
-
 @media (max-width: 760px) {
   .rehearsal-page {
     height: auto;
@@ -3914,8 +3763,7 @@ header .flow-back:hover {
     animation: none;
     height: 13px;
   }
-  .rehearsal-progress i,
-  .rehearsal-settings {
+  .rehearsal-progress i {
     transition: none;
   }
 }

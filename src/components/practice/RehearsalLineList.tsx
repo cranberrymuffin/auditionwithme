@@ -3,7 +3,7 @@ import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import TrackedWords from "../TrackedWords";
 
-type LineMode = "full" | "first" | "hidden";
+type LineMode = "full" | "hidden";
 type Status = { title: string; detail: string; kind: string };
 
 export default function RehearsalLineList({
