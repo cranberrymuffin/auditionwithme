@@ -8,7 +8,6 @@ export default function Signup() {
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [secret, setSecret] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
@@ -22,7 +21,7 @@ export default function Signup() {
     const response = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, secret }),
+      body: JSON.stringify({ email, password }),
     });
 
     const payload = await response.json().catch(() => null);
@@ -82,16 +81,6 @@ export default function Signup() {
                 minLength={6}
                 required
                 onChange={(event) => setPassword(event.target.value)}
-              />
-
-              <label htmlFor="signup-secret">Signup secret</label>
-              <input
-                id="signup-secret"
-                type="password"
-                value={secret}
-                autoComplete="one-time-code"
-                required
-                onChange={(event) => setSecret(event.target.value)}
               />
             </>
           )}
