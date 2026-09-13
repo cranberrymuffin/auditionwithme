@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -9,12 +9,16 @@ import type { SavedScript, SelfTape } from "../types";
 export default function MyAccount() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const [scripts, setScripts] = useState<SavedScript[]>([]);
   const [selfTapes, setSelfTapes] = useState<SelfTape[]>([]);
   const [loading, setLoading] = useState(true);
   const [tapeUrls, setTapeUrls] = useState<Record<string, string>>({});
+  const [expandedTapeId, setExpandedTapeId] = useState<string | null>(null);
   const fetchedTapeIds = useRef(new Set<string>());
+  const scriptRowRefs = useRef(new Map<string, HTMLLIElement>());
+  const consumedOpenRequestRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -80,6 +84,16 @@ export default function MyAccount() {
     };
   }, [selfTapes]);
 
+  // Arriving straight from a just-finished audition (Rehearsal navigates
+  // here with the new tape's id) opens that tape's review view immediately.
+  useEffect(() => {
+    const openTapeId = (location.state as { openTapeId?: string } | null)?.openTapeId;
+    if (!openTapeId || consumedOpenRequestRef.current) return;
+    if (!selfTapes.some((tape) => tape.id === openTapeId)) return;
+    consumedOpenRequestRef.current = true;
+    setExpandedTapeId(openTapeId);
+  }, [location.state, selfTapes]);
+
   const practice = (script: SavedScript) => {
     navigate("/practice", {
       state: {
@@ -95,6 +109,16 @@ export default function MyAccount() {
         },
       },
     });
+  };
+
+  const scrollToScript = (scriptId: string) => {
+    scriptRowRefs.current.get(scriptId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const closeExpanded = () => {
+    const tape = selfTapes.find((item) => item.id === expandedTapeId);
+    setExpandedTapeId(null);
+    if (tape) scrollToScript(tape.script_id);
   };
 
   const deleteTape = async (tape: SelfTape) => {
@@ -113,7 +137,33 @@ export default function MyAccount() {
       return;
     }
     setSelfTapes((prev) => prev.filter((item) => item.id !== tape.id));
+    if (expandedTapeId === tape.id) {
+      setExpandedTapeId(null);
+      scrollToScript(tape.script_id);
+    }
   };
+
+  const downloadTape = async (tape: SelfTape) => {
+    const url = tapeUrls[tape.id];
+    if (!url) return;
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `self-tape-${tape.created_at.slice(0, 10)}.webm`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error("Failed to download self-tape:", err);
+      toast("Couldn't download that self-tape. Please try again.");
+    }
+  };
+
+  const expandedTape = selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
 
   return (
     <main className="account-page">
@@ -144,7 +194,14 @@ export default function MyAccount() {
             {scripts.map((script) => {
               const tapes = selfTapes.filter((tape) => tape.script_id === script.id);
               return (
-                <li key={script.id} className="account-script-row">
+                <li
+                  key={script.id}
+                  className="account-script-row"
+                  ref={(el) => {
+                    if (el) scriptRowRefs.current.set(script.id, el);
+                    else scriptRowRefs.current.delete(script.id);
+                  }}
+                >
                   <div className="account-script-info">
                     <strong>{script.title}</strong>
                     <span>
@@ -161,11 +218,33 @@ export default function MyAccount() {
                     <ul className="account-self-tapes">
                       {tapes.map((tape) => (
                         <li key={tape.id}>
-                          {tapeUrls[tape.id] && (
-                            <video controls src={tapeUrls[tape.id]} />
-                          )}
-                          <div>
-                            <span>
+                          <button
+                            type="button"
+                            className="account-tape-tile"
+                            onClick={() => setExpandedTapeId(tape.id)}
+                            aria-label="Open self-tape"
+                          >
+                            <span className="account-tape-tile-frame">
+                              {tapeUrls[tape.id] ? (
+                                <video
+                                  src={tapeUrls[tape.id]}
+                                  preload="metadata"
+                                  muted
+                                  playsInline
+                                  onLoadedMetadata={(event) => {
+                                    // preload="metadata" alone leaves the canvas
+                                    // blank in some browsers; seeking forces a
+                                    // frame to actually decode and paint.
+                                    const video = event.currentTarget;
+                                    video.currentTime = Math.min(0.5, video.duration || 0.5);
+                                  }}
+                                />
+                              ) : (
+                                <span className="account-tape-tile-loading" />
+                              )}
+                              <span className="account-tape-tile-play" aria-hidden="true">▶</span>
+                            </span>
+                            <span className="account-tape-tile-date">
                               {new Date(tape.created_at).toLocaleString(undefined, {
                                 month: "short",
                                 day: "numeric",
@@ -173,14 +252,7 @@ export default function MyAccount() {
                                 minute: "2-digit",
                               })}
                             </span>
-                            <button
-                              type="button"
-                              className="account-script-secondary"
-                              onClick={() => deleteTape(tape)}
-                            >
-                              Delete
-                            </button>
-                          </div>
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -200,6 +272,29 @@ export default function MyAccount() {
           </ul>
         )}
       </section>
+
+      {expandedTape && (
+        <div className="tape-modal-overlay" onClick={closeExpanded}>
+          <div className="tape-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="tape-modal-close" onClick={closeExpanded} aria-label="Close">
+              ✕
+            </button>
+            {tapeUrls[expandedTape.id] ? (
+              <video src={tapeUrls[expandedTape.id]} controls autoPlay />
+            ) : (
+              <div className="tape-modal-loading">Loading video…</div>
+            )}
+            <div className="tape-modal-actions">
+              <button type="button" onClick={() => void downloadTape(expandedTape)}>
+                Download
+              </button>
+              <button type="button" className="tape-modal-delete" onClick={() => void deleteTape(expandedTape)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

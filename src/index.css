@@ -3817,27 +3817,146 @@ header .flow-back:hover {
 }
 .account-self-tapes {
   display: flex;
-  flex-direction: column;
+  overflow-x: auto;
   gap: 12px;
   margin: 0;
-  padding: 0;
+  padding: 2px 2px 6px;
   list-style: none;
 }
-.account-self-tapes video {
+.account-self-tapes > li {
+  flex: 0 0 auto;
+}
+.account-tape-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 140px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  background: transparent;
+  overflow: hidden;
+  text-align: left;
+}
+.account-tape-tile:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.account-tape-tile-frame {
+  position: relative;
+  display: block;
+}
+.account-tape-tile video {
+  display: block;
   width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #000;
+  pointer-events: none;
+}
+.account-tape-tile-loading {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+}
+.account-tape-tile-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 2px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.75rem;
+  transform: translate(-50%, -50%);
+}
+.account-tape-tile-date {
+  padding: 0 8px 8px;
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.75rem;
+}
+.tape-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 14, 22, 0.78);
+  backdrop-filter: blur(3px);
+}
+.tape-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(720px, 100%);
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: #101d2c;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.4);
+}
+.tape-modal video {
+  width: 100%;
+  max-height: 70vh;
   border-radius: 8px;
   background: #000;
 }
-.account-self-tapes > li > div {
+.tape-modal-loading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 8px;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  color: rgba(248, 241, 230, 0.6);
+  font-size: 0.875rem;
 }
-.account-self-tapes > li > div > span {
-  color: rgba(248, 241, 230, 0.62);
+.tape-modal-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: #182739;
+  color: #f8f1e6;
   font-size: 0.8125rem;
+}
+.tape-modal-close:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.tape-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+.tape-modal-actions button {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: rgba(248, 241, 230, 0.85);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.tape-modal-actions button:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.tape-modal-actions button.tape-modal-delete {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f3a17e;
+}
+.tape-modal-actions button.tape-modal-delete:hover {
+  border-color: rgba(239, 68, 68, 0.7);
 }
 @media (min-width: 1100px) {
   .rehearsal-workspace {
