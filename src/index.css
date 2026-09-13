@@ -3726,45 +3726,94 @@ header .flow-back:hover {
   background: #101d2c;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
 }
-.self-tape-setting > div {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.self-tape-setting strong {
-  font-size: 0.875rem;
-}
-.self-tape-setting span {
-  color: rgba(248, 241, 230, 0.6);
-  font-size: 0.75rem;
-  line-height: 1.4;
-}
-.self-tape-setting button {
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 8px;
-  color: rgba(248, 241, 230, 0.85);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.self-tape-setting button:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-}
-.self-tape-setting button:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-.self-tape-preview {
-  width: 100%;
+.self-tape-video {
+  position: relative;
+  overflow: hidden;
   border-radius: 8px;
   background: #000;
 }
-.self-tape-actions {
-  display: flex;
-  gap: 10px;
+.self-tape-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #000;
 }
-.self-tape-actions button {
-  flex: 1;
+.self-tape-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  padding: 16px;
+  text-align: center;
+  color: rgba(248, 241, 230, 0.6);
+  font-size: 0.8125rem;
+}
+.self-tape-rec {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.self-tape-rec i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: self-tape-rec-pulse 1.4s ease-in-out infinite;
+}
+.self-tape-rec.is-paused i {
+  animation: none;
+  opacity: 0.6;
+}
+@keyframes self-tape-rec-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.self-tape-video-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), transparent);
+}
+.self-tape-video-controls button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.self-tape-video-controls button:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+.self-tape-video-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 .account-self-tapes {
   display: flex;

@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery";
-import { useAuth } from "../../contexts/AuthContext";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
+import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "hidden";
-type StartPhase = "choose" | "preparing" | "countdown" | "active";
+type StartPhase = "idle" | "preparing" | "countdown" | "active";
 const COUNTDOWN_START = 3;
 
 export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId }: {
@@ -24,13 +24,24 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   fileName: string;
   scriptId: string | null;
 }) {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const {
+    user,
+    status: recorderStatus,
+    stream: cameraStream,
+    error: recorderError,
+    saving: recorderSaving,
+    requestCamera,
+    startRecording,
+    pause: pauseRecording,
+    resume: resumeRecording,
+    finish: finishRecording,
+  } = useSelfTapeSession(scriptId);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
   const [lineMode, setLineMode] = useState<LineMode>("full");
-  const [startPhase, setStartPhase] = useState<StartPhase>("choose");
-  const [selfTapeMode, setSelfTapeMode] = useState(false);
+  const [startPhase, setStartPhase] = useState<StartPhase>("idle");
   const [countdown, setCountdown] = useState(COUNTDOWN_START);
   const intensity: TtsIntensity = "dramatic";
   // Refs so mid-line updates (AI delivery tags arriving) don't restart the
@@ -69,22 +80,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const lineWordCount = (currentStep?.verbalLine ?? "").split(/\s+/).filter(Boolean).length;
   const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode);
 
-  const beginRehearsal = useCallback((selfTape: boolean) => {
-    setSelfTapeMode(selfTape);
-    if (selfTape) {
-      setStartPhase("preparing");
-    } else {
+  const beginRehearsal = useCallback(() => {
+    setStartPhase("preparing");
+    void requestCamera().then(() => {
       setCountdown(COUNTDOWN_START);
       setStartPhase("countdown");
-    }
-  }, []);
-
-  // The camera must be live before the countdown overlay drops, so self-tape
-  // mode waits here for the recorder to report readiness before counting down.
-  const handleCameraReady = useCallback(() => {
-    setCountdown(COUNTDOWN_START);
-    setStartPhase("countdown");
-  }, []);
+    });
+  }, [requestCamera]);
 
   useEffect(() => {
     if (startPhase !== "countdown") return;
@@ -95,6 +97,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     const timer = setTimeout(() => setCountdown((value) => value - 1), 1000);
     return () => clearTimeout(timer);
   }, [startPhase, countdown]);
+
+  // Recording begins the instant the countdown overlay drops.
+  const recordingStartedRef = useRef(false);
+  useEffect(() => {
+    if (startPhase !== "active" || recordingStartedRef.current) return;
+    recordingStartedRef.current = true;
+    startRecording(getTapStream());
+  }, [startPhase, startRecording, getTapStream]);
 
   // Keep the script from scrolling behind the start overlay (mobile lets the
   // page itself scroll, so the lock has to live on the body, not a container).
@@ -164,6 +174,25 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     return () => clearTimeout(timer);
   }, [lineDetected]);
 
+  // Both the natural end of the script and the manual Stop button end the
+  // audition the same way: save the take, then land on its tile in My
+  // Scripts so the user can immediately review, download, or delete it.
+  const endRehearsal = useCallback(async () => {
+    const tapeId = await finishRecording();
+    navigate("/account", tapeId ? { state: { openTapeId: tapeId } } : undefined);
+  }, [finishRecording, navigate]);
+
+  // Recording stops itself automatically once the last line wraps up.
+  const isLastStep = currentStepIndex === steps.length - 1;
+  const lastLineFinished = isLastStep && (isMyLine ? lineDetected : playbackState === "ready");
+  const finishedRef = useRef(false);
+  useEffect(() => {
+    if (!lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
+    finishedRef.current = true;
+    setPaused(true);
+    void endRehearsal();
+  }, [lastLineFinished, paused, startPhase, endRehearsal]);
+
   const cueIndex = isMyLine
     ? [...steps.slice(0, currentStepIndex).keys()].reverse().find((index) => steps[index].verbalLine.trim())
     : currentStepIndex;
@@ -186,10 +215,18 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   const togglePause = useCallback(() => {
     setPaused((value) => {
-      if (!value) { stop(); setPlaybackState("paused"); }
+      if (!value) { stop(); setPlaybackState("paused"); pauseRecording(); }
+      else { resumeRecording(); }
       return !value;
     });
-  }, [stop]);
+  }, [stop, pauseRecording, resumeRecording]);
+
+  const stopRecordingManually = useCallback(() => {
+    stop();
+    setPaused(true);
+    finishedRef.current = true;
+    void endRehearsal();
+  }, [stop, endRehearsal]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -204,6 +241,24 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [startPhase, goNext, goPrev, replayCue, togglePause]);
+
+  // Guard both an actual tab close/refresh and the in-app Exit paths below
+  // while a take is in progress and not yet saved.
+  const isRecordingActive = recorderStatus === "recording" || recorderStatus === "paused" || recorderSaving;
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isRecordingActive) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isRecordingActive]);
+
+  const confirmExit = useCallback(() => {
+    if (!isRecordingActive) return true;
+    return window.confirm("You have unsaved changes. Are you sure you want to leave?");
+  }, [isRecordingActive]);
 
   if (!currentStep) return null;
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
@@ -225,17 +280,33 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     <main className="rehearsal-page">
       <header className="rehearsal-header">
         <div className="rehearsal-context">
-          <button onClick={onBack} aria-label="Back to role and voice setup" title="Back to setup">←</button>
+          <button
+            onClick={() => { if (confirmExit()) onBack(); }}
+            aria-label="Back to role and voice setup"
+            title="Back to setup"
+          >
+            ←
+          </button>
           <span title={fileName}>{fileName}</span>
         </div>
         <p><strong>Rehearsal</strong><span>Line {currentStepIndex + 1} of {steps.length}</span></p>
-        <div><Link to="/">Exit</Link></div>
+        <div>
+          <Link to="/" onClick={(event) => { if (!confirmExit()) event.preventDefault(); }}>Exit</Link>
+        </div>
       </header>
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
-        {selfTapeMode && startPhase !== "choose" && scriptId && (
-          <SelfTapeRecorder scriptId={scriptId} getTtsStream={getTapStream} autoStart onReady={handleCameraReady} />
+        {startPhase !== "idle" && scriptId && (
+          <SelfTapeRecorder
+            status={recorderStatus}
+            stream={cameraStream}
+            error={recorderError}
+            saving={recorderSaving}
+            paused={paused}
+            onTogglePause={togglePause}
+            onStop={stopRecordingManually}
+          />
         )}
 
         <section className="rehearsal-center" aria-live="polite">
@@ -261,15 +332,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
         {startPhase !== "active" && (
           <div className="rehearsal-start-overlay">
-            {startPhase === "choose" && (
+            {startPhase === "idle" && (
               <div className="rehearsal-start-choice">
                 <h2>Ready to rehearse?</h2>
-                <p>Choose how you want to run this scene.</p>
+                <p>We'll record a self-tape while you run the scene.</p>
                 <div>
-                  <button type="button" onClick={() => beginRehearsal(false)}>Practice</button>
-                  <button type="button" onClick={() => beginRehearsal(true)} disabled={!scriptId || !user}>Self-tape</button>
+                  <button type="button" onClick={beginRehearsal} disabled={!scriptId || !user}>Start</button>
                 </div>
-                {!user && <span>Sign in to record a self-tape.</span>}
+                {!user && <span>Sign in to rehearse.</span>}
               </div>
             )}
             {startPhase === "preparing" && (

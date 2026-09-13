@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-type RecorderStatus = "idle" | "requesting" | "recording" | "error";
+type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
 // First entry the browser actually supports wins — Chrome/Edge take vp9,
 // Safari/Firefox fall back down the list.
@@ -15,16 +15,19 @@ function pickMimeType(): string | undefined {
 }
 
 /**
- * Camera + mic capture for rehearsal self-tapes.
+ * Camera + mic capture for rehearsal self-tapes, split into two steps so the
+ * camera can be live (and previewed) during the start countdown while actual
+ * capture only begins once it ends:
  *
- * `start(ttsStream)` opens the camera and begins recording; the live camera
- * `stream` is exposed so the caller can bind it to a preview <video>'s
- * srcObject. If `ttsStream` is given (the scene partner's TTS audio, tapped
+ * `requestCamera()` opens the camera and exposes the live `stream` for a
+ * preview <video>. `startRecording(ttsStream)` begins capturing from that
+ * stream; if `ttsStream` is given (the scene partner's TTS audio, tapped
  * directly rather than picked up acoustically off the mic — see
  * useTtsPlayer's getTapStream), it's mixed with the mic track into the
- * recording's single audio track; the preview stream is untouched. `stop()`
- * resolves with the finished recording as a Blob and releases the camera.
- * Permission failures land in `error` rather than throwing.
+ * recording's single audio track. `pause()`/`resume()` pause and resume
+ * capture without releasing the camera. `stop()` resolves with the finished
+ * recording as a Blob and releases the camera. Permission failures land in
+ * `error` rather than throwing.
  */
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -38,7 +41,7 @@ export function useSelfTapeRecorder() {
 
   useEffect(() => {
     const cleanup = () => {
-      if (recorderRef.current?.state === "recording") {
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -48,7 +51,7 @@ export function useSelfTapeRecorder() {
     return cleanup;
   }, []);
 
-  const start = async (ttsStream?: MediaStream | null) => {
+  const requestCamera = async () => {
     setError(null);
     setStatus("requesting");
     let media: MediaStream;
@@ -65,9 +68,14 @@ export function useSelfTapeRecorder() {
       );
       return;
     }
-
     streamRef.current = media;
     setStream(media);
+    setStatus("ready");
+  };
+
+  const startRecording = (ttsStream?: MediaStream | null) => {
+    const media = streamRef.current;
+    if (!media || recorderRef.current) return;
 
     // Mix the mic with the TTS tap so the recording gets the scene partner's
     // lines directly, not whatever the mic happens to pick up off the
@@ -98,15 +106,32 @@ export function useSelfTapeRecorder() {
     setStatus("recording");
   };
 
+  // Idempotent — safe to call regardless of current state, so callers don't
+  // need to track whether a change is actually a transition.
+  const pause = () => {
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.pause();
+      setStatus("paused");
+    }
+  };
+
+  const resume = () => {
+    if (recorderRef.current?.state === "paused") {
+      recorderRef.current.resume();
+      setStatus("recording");
+    }
+  };
+
   const stop = async (): Promise<Blob | null> => {
     const recorder = recorderRef.current;
-    if (!recorder) return null;
-
-    const blob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () =>
-        resolve(new Blob(chunksRef.current, { type: recorder.mimeType }));
-      recorder.stop();
-    });
+    let blob: Blob | null = null;
+    if (recorder && recorder.state !== "inactive") {
+      blob = await new Promise<Blob>((resolve) => {
+        recorder.onstop = () =>
+          resolve(new Blob(chunksRef.current, { type: recorder.mimeType }));
+        recorder.stop();
+      });
+    }
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -121,5 +146,5 @@ export function useSelfTapeRecorder() {
     return blob;
   };
 
-  return { status, stream, start, stop, error };
+  return { status, stream, error, requestCamera, startRecording, pause, resume, stop };
 }
