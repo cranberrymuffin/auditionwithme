@@ -143,6 +143,41 @@ export default function MyAccount() {
     }
   };
 
+  const deleteScript = async (script: SavedScript) => {
+    if (
+      !window.confirm(
+        `Delete "${script.title}" and all its self-tapes? This can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    const paths = selfTapes
+      .filter((tape) => tape.script_id === script.id)
+      .map((tape) => tape.storage_path);
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from("self-tapes")
+        .remove(paths);
+      if (storageError) {
+        console.error("Failed to delete self-tape files:", storageError.message);
+        toast("Couldn't delete that audition. Please try again.");
+        return;
+      }
+    }
+    // Cascades to the script's self_tapes rows in the database automatically.
+    const { error } = await supabase.from("scripts").delete().eq("id", script.id);
+    if (error) {
+      console.error("Failed to delete script:", error.message);
+      toast("Couldn't delete that audition. Please try again.");
+      return;
+    }
+    setScripts((prev) => prev.filter((item) => item.id !== script.id));
+    setSelfTapes((prev) => prev.filter((tape) => tape.script_id !== script.id));
+    if (selfTapes.find((tape) => tape.id === expandedTapeId)?.script_id === script.id) {
+      setExpandedTapeId(null);
+    }
+  };
+
   const downloadTape = async (tape: SelfTape) => {
     const url = tapeUrls[tape.id];
     if (!url) return;
@@ -172,7 +207,7 @@ export default function MyAccount() {
       <section className="account-main">
         <header className="account-header">
           <p className="eyebrow">My account</p>
-          <h1>Your scripts</h1>
+          <h1>My Auditions</h1>
           {user?.email && <p className="account-email">{user.email}</p>}
           <p className="account-subtitle">
             Scripts you've uploaded before. Jump back into practice without
@@ -258,6 +293,13 @@ export default function MyAccount() {
                     </ul>
                   )}
                   <div className="account-script-actions">
+                    <button
+                      type="button"
+                      className="account-script-secondary"
+                      onClick={() => void deleteScript(script)}
+                    >
+                      Delete
+                    </button>
                     <button
                       type="button"
                       className="account-script-practice"
