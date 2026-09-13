@@ -47,11 +47,7 @@ export default function About() {
           </button>
         </div>
 
-        <section
-          className="about-process-panel"
-          id="how-it-works"
-          aria-labelledby="how-it-works-title"
-        >
+        <section className="about-process-panel" aria-labelledby="how-it-works-title">
           <header>
             <h2 id="how-it-works-title">How it works</h2>
           </header>

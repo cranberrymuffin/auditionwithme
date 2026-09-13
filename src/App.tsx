@@ -40,7 +40,11 @@ function App() {
             />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/about" element={<About />} />
+            <Route path="/how-it-works" element={<About />} />
+            <Route
+              path="/about"
+              element={<Navigate to="/how-it-works" replace />}
+            />
             <Route path="/pricing" element={<Pricing />} />
             <Route
               path="/billing"

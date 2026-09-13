@@ -235,7 +235,7 @@ export default function Home() {
               </button>
             )}
             {!user && (
-              <a className="demo-cta" href="/about#how-it-works">
+              <a className="demo-cta" href="/how-it-works">
                 <span className="demo-play" aria-hidden="true">
                   ▶
                 </span>
