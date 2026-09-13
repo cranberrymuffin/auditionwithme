@@ -80,13 +80,22 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const lineWordCount = (currentStep?.verbalLine ?? "").split(/\s+/).filter(Boolean).length;
   const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode);
 
+  // Nothing to record if the user isn't reading a role — just listening to
+  // the scene doesn't need a camera or a self-tape.
+  const willRecord = Boolean(selectedRole);
+
   const beginRehearsal = useCallback(() => {
+    if (!willRecord) {
+      setCountdown(COUNTDOWN_START);
+      setStartPhase("countdown");
+      return;
+    }
     setStartPhase("preparing");
     void requestCamera().then(() => {
       setCountdown(COUNTDOWN_START);
       setStartPhase("countdown");
     });
-  }, [requestCamera]);
+  }, [willRecord, requestCamera]);
 
   useEffect(() => {
     if (startPhase !== "countdown") return;
@@ -101,10 +110,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // Recording begins the instant the countdown overlay drops.
   const recordingStartedRef = useRef(false);
   useEffect(() => {
-    if (startPhase !== "active" || recordingStartedRef.current) return;
+    if (!willRecord || startPhase !== "active" || recordingStartedRef.current) return;
     recordingStartedRef.current = true;
     startRecording(getTapStream());
-  }, [startPhase, startRecording, getTapStream]);
+  }, [willRecord, startPhase, startRecording, getTapStream]);
 
   // Keep the script from scrolling behind the start overlay (mobile lets the
   // page itself scroll, so the lock has to live on the body, not a container).
@@ -187,11 +196,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const lastLineFinished = isLastStep && (isMyLine ? lineDetected : playbackState === "ready");
   const finishedRef = useRef(false);
   useEffect(() => {
-    if (!lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
+    if (!willRecord || !lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
     finishedRef.current = true;
     setPaused(true);
     void endRehearsal();
-  }, [lastLineFinished, paused, startPhase, endRehearsal]);
+  }, [willRecord, lastLineFinished, paused, startPhase, endRehearsal]);
 
   const cueIndex = isMyLine
     ? [...steps.slice(0, currentStepIndex).keys()].reverse().find((index) => steps[index].verbalLine.trim())
@@ -297,7 +306,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
-        {startPhase !== "idle" && scriptId && (
+        {willRecord && startPhase !== "idle" && scriptId && (
           <SelfTapeRecorder
             status={recorderStatus}
             stream={cameraStream}
@@ -335,11 +344,21 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
             {startPhase === "idle" && (
               <div className="rehearsal-start-choice">
                 <h2>Ready to rehearse?</h2>
-                <p>We'll record a self-tape while you run the scene.</p>
+                <p>
+                  {willRecord
+                    ? "We'll record a self-tape while you run the scene."
+                    : "Sit back and listen to the full scene."}
+                </p>
                 <div>
-                  <button type="button" onClick={beginRehearsal} disabled={!scriptId || !user}>Start</button>
+                  <button
+                    type="button"
+                    onClick={beginRehearsal}
+                    disabled={willRecord && (!scriptId || !user)}
+                  >
+                    Start
+                  </button>
                 </div>
-                {!user && <span>Sign in to rehearse.</span>}
+                {willRecord && !user && <span>Sign in to rehearse.</span>}
               </div>
             )}
             {startPhase === "preparing" && (
