@@ -3988,12 +3988,34 @@ header .flow-back:hover {
     padding: 0 16px;
   }
   .self-tape-setting {
-    top: 65px;
-    width: 100%;
+    position: fixed;
+    top: auto;
+    bottom: 16px;
+    right: 16px;
+    left: auto;
+    z-index: 30;
+    width: 108px;
     margin: 0;
-    border-left: 0;
-    border-right: 0;
-    border-radius: 0;
+    padding: 0;
+    border-radius: 12px;
+  }
+  .self-tape-video {
+    border-radius: 12px;
+  }
+  .self-tape-rec {
+    top: 6px;
+    left: 6px;
+    padding: 3px 7px;
+    font-size: 0.5625rem;
+  }
+  .self-tape-video-controls {
+    padding: 6px;
+    gap: 6px;
+  }
+  .self-tape-video-controls button {
+    width: 26px;
+    height: 26px;
+    font-size: 0.6875rem;
   }
   .rehearsal-progress {
     top: 62px;
