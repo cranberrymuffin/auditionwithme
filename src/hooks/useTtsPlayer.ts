@@ -211,6 +211,12 @@ function speakWithBrowserVoice(
  * seamless.
  */
 export function useTtsPlayer() {
+  // One <audio> element, reused for every line rather than replaced: some
+  // WebKit versions scope the "has played audible media from a gesture"
+  // autoplay unlock to the specific element that played, not the page as a
+  // whole, so a fresh `new Audio()` per line can each need their own gesture
+  // even after Start's primer already played successfully. Reusing the same
+  // element covers that case too, whichever way the unlock is actually scoped.
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   // Lazily created so most sessions (no self-tape recording) never pay for
@@ -221,7 +227,15 @@ export function useTtsPlayer() {
   const tapDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(
     null,
   );
+  // createMediaElementSource can only ever be called once per element, so
+  // this is created lazily on first use and then kept for the session —
+  // matching the one persistent audioRef element it's built from.
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+  const ensureAudioElement = useCallback(() => {
+    if (!audioRef.current) audioRef.current = new Audio();
+    return audioRef.current;
+  }, []);
 
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
@@ -275,11 +289,16 @@ export function useTtsPlayer() {
     // Must be a real, unmuted play() call made synchronously in this same
     // gesture — a resumed-but-silent AudioContext doesn't satisfy WebKit's
     // "has this page played audible media from a gesture" flag on its own.
-    new Audio(SILENT_AUDIO_DATA_URI).play().then(
+    // Played on the SAME element every subsequent line reuses (not a
+    // throwaway one) in case the unlock is scoped to that specific element
+    // rather than the page.
+    const audio = ensureAudioElement();
+    audio.src = SILENT_AUDIO_DATA_URI;
+    audio.play().then(
       () => logAudioEvent("unlock", "silent primer play() resolved"),
       (err) => logAudioEvent("unlock", `silent primer play() rejected: ${err}`),
     );
-  }, [ensureTap]);
+  }, [ensureTap, ensureAudioElement]);
 
   /** The shared context itself, for callers (self-tape recording) that need
    * to build their own nodes on it rather than duplicate an AudioContext of
@@ -291,11 +310,13 @@ export function useTtsPlayer() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.onended = null;
-      audioRef.current = null;
     }
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    sourceNodeRef.current?.disconnect();
-    sourceNodeRef.current = null;
+    // sourceNodeRef is intentionally left connected: it's created once for
+    // the one, reused <audio> element (see ensureAudioElement) and kept for
+    // the life of the session — createMediaElementSource can only ever be
+    // called once per element, so disconnecting and recreating it per line
+    // isn't an option once that element is reused rather than replaced.
     if (audioUrlRef.current) {
       URL.revokeObjectURL(audioUrlRef.current);
       audioUrlRef.current = null;
@@ -332,10 +353,12 @@ export function useTtsPlayer() {
 
       const url = URL.createObjectURL(blob);
       audioUrlRef.current = url;
-      const audio = new Audio(url);
+      // Reused, not recreated: see the comment on audioRef's declaration.
+      const audio = ensureAudioElement();
+      audio.src = url;
+      audio.currentTime = 0;
       audio.playbackRate = opts?.speed ?? 1;
-      audioRef.current = audio;
-      if (opts?.onEnded) audio.onended = opts.onEnded;
+      audio.onended = opts?.onEnded ?? null;
 
       try {
         // Route through the shared tap so a self-tape recording (if any)
@@ -347,22 +370,25 @@ export function useTtsPlayer() {
         // from "suspended"), which resume() handles even though the state
         // name doesn't match the naive equality check.
         await context.resume();
-        const source = context.createMediaElementSource(audio);
-        source.connect(context.destination);
-        source.connect(destination);
-        sourceNodeRef.current = source;
+        // createMediaElementSource can only be called once per element —
+        // now that the element is reused, so is this node, created lazily.
+        if (!sourceNodeRef.current) {
+          const source = context.createMediaElementSource(audio);
+          source.connect(context.destination);
+          source.connect(destination);
+          sourceNodeRef.current = source;
+        }
 
         await audio.play();
         logAudioEvent("play", `audio.play() resolved, ctx.state=${context.state}`);
       } catch (err) {
         if (opts?.signal?.aborted) return;
-        audioRef.current = null;
         logAudioEvent("play", `audio.play() rejected: ${describeError(err, "unknown")} — falling back`);
         opts?.onFallback?.(describeError(err, "Audio playback blocked"));
         return speakWithBrowserVoice(line.text, opts);
       }
     },
-    [stop, ensureTap],
+    [stop, ensureTap, ensureAudioElement],
   );
 
   /** Adjusts the rate of whatever is currently playing (and nothing else). */
