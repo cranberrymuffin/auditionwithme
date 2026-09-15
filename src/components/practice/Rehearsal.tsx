@@ -14,6 +14,12 @@ type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "hidden";
 type StartPhase = "idle" | "preparing" | "countdown" | "active";
 const COUNTDOWN_START = 3;
+// iOS needs a moment to settle its shared audio session once the recorder
+// engages simultaneous mic capture + audio-graph mixing — audio started too
+// soon into that transition can go missing with no signal to observe
+// (AudioContext.state reports "running" throughout). Delaying the very
+// first cue avoids racing a transition that only happens once, at start.
+const RECORDING_SETTLE_MS = 500;
 
 export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId }: {
   steps: Step[];
@@ -114,10 +120,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   // Recording begins the instant the countdown overlay drops.
   const recordingStartedRef = useRef(false);
+  const recordingReadyAtRef = useRef(0);
   useEffect(() => {
     if (!willRecord || startPhase !== "active" || recordingStartedRef.current) return;
     recordingStartedRef.current = true;
     startRecording(getTapStream(), getAudioContext());
+    recordingReadyAtRef.current = Date.now() + RECORDING_SETTLE_MS;
   }, [willRecord, startPhase, startRecording, getTapStream, getAudioContext]);
 
   // Keep the script from scrolling behind the start overlay.
@@ -170,20 +178,27 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     const line = ttsLine(currentStepIndex);
     if (!line) return;
     const controller = new AbortController();
-    setPlaybackState("playing");
-    play(line, {
-      intensity,
-      signal: controller.signal,
-      onFallback: () => setPlaybackState("error"),
-      onEnded: () => {
-        setPlaybackState("ready");
-        if (!isLast) goNextRef.current();
-      },
-    }).catch((error) => {
-      if (error?.name !== "AbortError") setPlaybackState("error");
-    });
-    return () => { controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop]);
+    const startPlayback = () => {
+      if (controller.signal.aborted) return;
+      setPlaybackState("playing");
+      play(line, {
+        intensity,
+        signal: controller.signal,
+        onFallback: () => setPlaybackState("error"),
+        onEnded: () => {
+          setPlaybackState("ready");
+          if (!isLast) goNextRef.current();
+        },
+      }).catch((error) => {
+        if (error?.name !== "AbortError") setPlaybackState("error");
+      });
+    };
+    const settleDelay = willRecord ? Math.max(0, recordingReadyAtRef.current - Date.now()) : 0;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    if (settleDelay > 0) settleTimer = setTimeout(startPlayback, settleDelay);
+    else startPlayback();
+    return () => { if (settleTimer) clearTimeout(settleTimer); controller.abort(); stop(); };
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
