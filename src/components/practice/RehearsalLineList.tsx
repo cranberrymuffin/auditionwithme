@@ -101,7 +101,7 @@ export default function RehearsalLineList({
             {active && (
               <div className="rehearsal-line-active-panel">
                 <div className={`rehearsal-status is-${status.kind}`}>
-                  {status.kind === "listening" && <span className="mic-meter" aria-label="Microphone active"><i /><i /><i /><i /></span>}
+                  {status.kind === "error" && <span className="mic-meter" aria-hidden="true"><i /><i /><i /><i /></span>}
                   <div><strong>{status.title}</strong><span>{status.detail}</span></div>
                 </div>
                 {status.kind === "error" && (
