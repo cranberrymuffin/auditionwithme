@@ -26,7 +26,9 @@ export default function MyAccount() {
     setLoading(true);
     supabase
       .from("scripts")
-      .select("id,title,language_code,language_name,characters,steps,character_voices,delivery_tags,created_at")
+      .select(
+        "id,title,language_code,language_name,characters,steps,character_voices,delivery_tags,created_at",
+      )
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!active) return;
@@ -57,7 +59,9 @@ export default function MyAccount() {
   }, [user]);
 
   useEffect(() => {
-    const pending = selfTapes.filter((tape) => !fetchedTapeIds.current.has(tape.id));
+    const pending = selfTapes.filter(
+      (tape) => !fetchedTapeIds.current.has(tape.id),
+    );
     if (pending.length === 0) return;
     pending.forEach((tape) => fetchedTapeIds.current.add(tape.id));
 
@@ -68,7 +72,7 @@ export default function MyAccount() {
           .from("self-tapes")
           .createSignedUrl(tape.storage_path, 3600);
         return [tape.id, data?.signedUrl ?? null] as const;
-      })
+      }),
     ).then((entries) => {
       if (!active) return;
       setTapeUrls((prev) => {
@@ -87,7 +91,8 @@ export default function MyAccount() {
   // Arriving straight from a just-finished audition (Rehearsal navigates
   // here with the new tape's id) opens that tape's review view immediately.
   useEffect(() => {
-    const openTapeId = (location.state as { openTapeId?: string } | null)?.openTapeId;
+    const openTapeId = (location.state as { openTapeId?: string } | null)
+      ?.openTapeId;
     if (!openTapeId || consumedOpenRequestRef.current) return;
     if (!selfTapes.some((tape) => tape.id === openTapeId)) return;
     consumedOpenRequestRef.current = true;
@@ -112,7 +117,9 @@ export default function MyAccount() {
   };
 
   const scrollToScript = (scriptId: string) => {
-    scriptRowRefs.current.get(scriptId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scriptRowRefs.current
+      .get(scriptId)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const closeExpanded = () => {
@@ -130,7 +137,10 @@ export default function MyAccount() {
       toast("Couldn't delete that self-tape. Please try again.");
       return;
     }
-    const { error } = await supabase.from("self_tapes").delete().eq("id", tape.id);
+    const { error } = await supabase
+      .from("self_tapes")
+      .delete()
+      .eq("id", tape.id);
     if (error) {
       console.error("Failed to delete self-tape:", error.message);
       toast("Couldn't delete that self-tape. Please try again.");
@@ -159,13 +169,19 @@ export default function MyAccount() {
         .from("self-tapes")
         .remove(paths);
       if (storageError) {
-        console.error("Failed to delete self-tape files:", storageError.message);
+        console.error(
+          "Failed to delete self-tape files:",
+          storageError.message,
+        );
         toast("Couldn't delete that audition. Please try again.");
         return;
       }
     }
     // Cascades to the script's self_tapes rows in the database automatically.
-    const { error } = await supabase.from("scripts").delete().eq("id", script.id);
+    const { error } = await supabase
+      .from("scripts")
+      .delete()
+      .eq("id", script.id);
     if (error) {
       console.error("Failed to delete script:", error.message);
       toast("Couldn't delete that audition. Please try again.");
@@ -173,7 +189,10 @@ export default function MyAccount() {
     }
     setScripts((prev) => prev.filter((item) => item.id !== script.id));
     setSelfTapes((prev) => prev.filter((tape) => tape.script_id !== script.id));
-    if (selfTapes.find((tape) => tape.id === expandedTapeId)?.script_id === script.id) {
+    if (
+      selfTapes.find((tape) => tape.id === expandedTapeId)?.script_id ===
+      script.id
+    ) {
       setExpandedTapeId(null);
     }
   };
@@ -198,7 +217,8 @@ export default function MyAccount() {
     }
   };
 
-  const expandedTape = selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
+  const expandedTape =
+    selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
 
   return (
     <main className="account-page">
@@ -206,7 +226,6 @@ export default function MyAccount() {
 
       <section className="account-main">
         <header className="account-header">
-          <p className="eyebrow">My account</p>
           <h1>My Auditions</h1>
           {user?.email && <p className="account-email">{user.email}</p>}
           <p className="account-subtitle">
@@ -227,7 +246,9 @@ export default function MyAccount() {
         ) : (
           <ul className="account-scripts">
             {scripts.map((script) => {
-              const tapes = selfTapes.filter((tape) => tape.script_id === script.id);
+              const tapes = selfTapes.filter(
+                (tape) => tape.script_id === script.id,
+              );
               return (
                 <li
                   key={script.id}
@@ -240,13 +261,19 @@ export default function MyAccount() {
                   <div className="account-script-info">
                     <strong>{script.title}</strong>
                     <span>
-                      {script.characters.length} {script.characters.length === 1 ? "character" : "characters"}
+                      {script.characters.length}{" "}
+                      {script.characters.length === 1
+                        ? "character"
+                        : "characters"}
                       {" · "}
-                      {new Date(script.created_at).toLocaleDateString(undefined, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
+                      {new Date(script.created_at).toLocaleDateString(
+                        undefined,
+                        {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        },
+                      )}
                     </span>
                   </div>
                   {tapes.length > 0 && (
@@ -271,21 +298,32 @@ export default function MyAccount() {
                                     // blank in some browsers; seeking forces a
                                     // frame to actually decode and paint.
                                     const video = event.currentTarget;
-                                    video.currentTime = Math.min(0.5, video.duration || 0.5);
+                                    video.currentTime = Math.min(
+                                      0.5,
+                                      video.duration || 0.5,
+                                    );
                                   }}
                                 />
                               ) : (
                                 <span className="account-tape-tile-loading" />
                               )}
-                              <span className="account-tape-tile-play" aria-hidden="true">▶</span>
+                              <span
+                                className="account-tape-tile-play"
+                                aria-hidden="true"
+                              >
+                                ▶
+                              </span>
                             </span>
                             <span className="account-tape-tile-date">
-                              {new Date(tape.created_at).toLocaleString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
+                              {new Date(tape.created_at).toLocaleString(
+                                undefined,
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
                           </button>
                         </li>
@@ -317,8 +355,16 @@ export default function MyAccount() {
 
       {expandedTape && (
         <div className="tape-modal-overlay" onClick={closeExpanded}>
-          <div className="tape-modal" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="tape-modal-close" onClick={closeExpanded} aria-label="Close">
+          <div
+            className="tape-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="tape-modal-close"
+              onClick={closeExpanded}
+              aria-label="Close"
+            >
               ✕
             </button>
             {tapeUrls[expandedTape.id] ? (
@@ -327,10 +373,17 @@ export default function MyAccount() {
               <div className="tape-modal-loading">Loading video…</div>
             )}
             <div className="tape-modal-actions">
-              <button type="button" onClick={() => void downloadTape(expandedTape)}>
+              <button
+                type="button"
+                onClick={() => void downloadTape(expandedTape)}
+              >
                 Download
               </button>
-              <button type="button" className="tape-modal-delete" onClick={() => void deleteTape(expandedTape)}>
+              <button
+                type="button"
+                className="tape-modal-delete"
+                onClick={() => void deleteTape(expandedTape)}
+              >
                 Delete
               </button>
             </div>

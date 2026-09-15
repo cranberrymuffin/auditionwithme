@@ -93,11 +93,14 @@ export default function Billing() {
     setBusy(true);
     setError(null);
     try {
-      const response = await apiFetch("/api/billing?action=cancel-subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume }),
-      });
+      const response = await apiFetch(
+        "/api/billing?action=cancel-subscription",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume }),
+        },
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         setError(payload?.error ?? "Could not update your subscription.");
@@ -116,9 +119,12 @@ export default function Billing() {
     setBusy(true);
     setError(null);
     try {
-      const response = await apiFetch("/api/billing?action=create-setup-intent", {
-        method: "POST",
-      });
+      const response = await apiFetch(
+        "/api/billing?action=create-setup-intent",
+        {
+          method: "POST",
+        },
+      );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.clientSecret) {
         setError(payload?.error ?? "Could not start payment method update.");
@@ -168,7 +174,6 @@ export default function Billing() {
 
       <section className="account-main">
         <header className="account-header">
-          <p className="eyebrow">My account</p>
           <h1>Billing</h1>
         </header>
 
@@ -215,11 +220,7 @@ export default function Billing() {
               </div>
 
               <div className="billing-card-actions">
-                <button
-                  type="button"
-                  onClick={startCardUpdate}
-                  disabled={busy}
-                >
+                <button type="button" onClick={startCardUpdate} disabled={busy}>
                   Update payment method
                 </button>
                 {subscription.cancelAtPeriodEnd ? (
