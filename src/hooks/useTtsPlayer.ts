@@ -25,6 +25,10 @@ export type TtsPlayOptions = {
   fresh?: boolean;
   signal?: AbortSignal;
   onEnded?: () => void;
+  /** Fired if the AI voice couldn't be reached/played and playback fell back
+   * to the browser's own voice, so callers can still surface the failure
+   * (e.g. the "Cue playback failed" status) even though the line still gets read. */
+  onFallback?: () => void;
 };
 
 const MAX_CACHE_ENTRIES = 60;
@@ -45,20 +49,42 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     intensity,
   ]);
 
-async function fetchTtsBlob(line: TtsLine, intensity: TtsIntensity): Promise<Blob> {
-  const res = await apiFetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: line.text,
-      voiceId: line.voiceId,
-      previousText: line.previousText,
-      nextText: line.nextText,
-      deliveryTag: line.deliveryTag,
-      performance: line.performance,
-      intensity,
-    }),
-  });
+// Mobile networks (cellular handoffs, backgrounding, spotty wifi) can leave a
+// fetch neither resolving nor rejecting for minutes. Without a timeout that
+// hang propagates all the way up through play() — no onEnded, no onFallback,
+// no error — so the cue just never gets read and the UI stays stuck on
+// "is speaking…" with no way to tell what happened. Aborting after 7s turns
+// that silent hang into an ordinary failure the retry/fallback logic already handles.
+const FETCH_TIMEOUT_MS = 7_000;
+
+async function fetchTtsBlob(
+  line: TtsLine,
+  intensity: TtsIntensity,
+): Promise<Blob> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await apiFetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: line.text,
+        voiceId: line.voiceId,
+        previousText: line.previousText,
+        nextText: line.nextText,
+        deliveryTag: line.deliveryTag,
+        performance: line.performance,
+        intensity,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error("Voice playback timed out");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const body = await res.text();
     let message = "Voice playback failed";
@@ -80,18 +106,27 @@ async function fetchTtsBlob(line: TtsLine, intensity: TtsIntensity): Promise<Blo
 // to the browser's own voice.
 const FETCH_RETRY_DELAYS_MS = [400, 1200];
 
-async function fetchTtsBlobWithRetry(line: TtsLine, intensity: TtsIntensity): Promise<Blob> {
+async function fetchTtsBlobWithRetry(
+  line: TtsLine,
+  intensity: TtsIntensity,
+): Promise<Blob> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await fetchTtsBlob(line, intensity);
     } catch (err) {
       if (attempt >= FETCH_RETRY_DELAYS_MS.length) throw err;
-      await new Promise((resolve) => setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt]));
+      await new Promise((resolve) =>
+        setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt]),
+      );
     }
   }
 }
 
-function getBlob(line: TtsLine, intensity: TtsIntensity, fresh = false): Promise<Blob> {
+function getBlob(
+  line: TtsLine,
+  intensity: TtsIntensity,
+  fresh = false,
+): Promise<Blob> {
   const key = cacheKey(line, intensity);
   if (fresh) blobCache.delete(key);
   const cached = blobCache.get(key);
@@ -115,21 +150,38 @@ function getBlob(line: TtsLine, intensity: TtsIntensity, fresh = false): Promise
  * instead of leaving the line silent. Resolves once speech starts (mirroring
  * play()'s contract) and fires onEnded when the utterance finishes.
  */
-function speakWithBrowserVoice(text: string, opts?: TtsPlayOptions): Promise<void> {
+function speakWithBrowserVoice(
+  text: string,
+  opts?: TtsPlayOptions,
+): Promise<void> {
   return new Promise((resolve) => {
     if (!text.trim() || !("speechSynthesis" in window)) {
       opts?.onEnded?.();
       resolve();
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = opts?.speed ?? 1;
-    utterance.onstart = () => resolve();
-    utterance.onend = () => opts?.onEnded?.();
-    utterance.onerror = () => {
+    // Some mobile browsers (Android Chrome after the tab was backgrounded,
+    // in particular) silently drop an utterance — neither onstart nor
+    // onerror ever fires. Without this, that hangs the rehearsal forever on
+    // a line nobody ever reads; treating it as "finished" after a timeout at
+    // least lets the scene move on.
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       opts?.onEnded?.();
       resolve();
     };
+    const timer = setTimeout(settle, 6_000);
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = opts?.speed ?? 1;
+    utterance.onstart = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    utterance.onend = settle;
+    utterance.onerror = settle;
     window.speechSynthesis.speak(utterance);
   });
 }
@@ -147,19 +199,28 @@ export function useTtsPlayer() {
   // self-tape recording can tap the line's audio directly instead of
   // picking it up acoustically off the mic.
   const audioContextRef = useRef<AudioContext | null>(null);
-  const tapDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const tapDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(
+    null,
+  );
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
       audioContextRef.current = new AudioContext();
-      tapDestinationRef.current = audioContextRef.current.createMediaStreamDestination();
+      tapDestinationRef.current =
+        audioContextRef.current.createMediaStreamDestination();
     }
-    return { context: audioContextRef.current, destination: tapDestinationRef.current! };
+    return {
+      context: audioContextRef.current,
+      destination: tapDestinationRef.current!,
+    };
   }, []);
 
   /** MediaStream carrying every line's audio, silent when nothing is playing. */
-  const getTapStream = useCallback(() => ensureTap().destination.stream, [ensureTap]);
+  const getTapStream = useCallback(
+    () => ensureTap().destination.stream,
+    [ensureTap],
+  );
 
   // Autoplay policies (Safari in particular) require the AudioContext to be
   // resumed synchronously inside a user gesture. The rehearsal's first cue
@@ -192,9 +253,12 @@ export function useTtsPlayer() {
     }
   }, []);
 
-  const prefetch = useCallback((line: TtsLine, intensity: TtsIntensity = "natural") => {
-    void getBlob(line, intensity);
-  }, []);
+  const prefetch = useCallback(
+    (line: TtsLine, intensity: TtsIntensity = "natural") => {
+      void getBlob(line, intensity);
+    },
+    [],
+  );
 
   /**
    * Plays a line; resolves once playback starts and fires onEnded when it
@@ -210,6 +274,7 @@ export function useTtsPlayer() {
         blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
       } catch {
         if (opts?.signal?.aborted) return;
+        opts?.onFallback?.();
         return speakWithBrowserVoice(line.text, opts);
       }
       if (opts?.signal?.aborted) return;
@@ -240,10 +305,11 @@ export function useTtsPlayer() {
       } catch {
         if (opts?.signal?.aborted) return;
         audioRef.current = null;
+        opts?.onFallback?.();
         return speakWithBrowserVoice(line.text, opts);
       }
     },
-    [stop, ensureTap]
+    [stop, ensureTap],
   );
 
   /** Adjusts the rate of whatever is currently playing (and nothing else). */

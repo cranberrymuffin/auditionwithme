@@ -173,6 +173,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     play(line, {
       intensity,
       signal: controller.signal,
+      onFallback: () => setPlaybackState("error"),
       onEnded: () => {
         setPlaybackState("ready");
         if (!isLast) goNextRef.current();
@@ -225,6 +226,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("playing");
     play(line, {
       intensity,
+      onFallback: () => setPlaybackState("error"),
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch(() => setPlaybackState("error"));
   }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
