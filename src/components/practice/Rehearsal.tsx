@@ -180,17 +180,18 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     const controller = new AbortController();
     const startPlayback = () => {
       if (controller.signal.aborted) return;
+      setFailureReason(null);
       setPlaybackState("playing");
       play(line, {
         intensity,
         signal: controller.signal,
-        onFallback: () => setPlaybackState("error"),
+        onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
         onEnded: () => {
           setPlaybackState("ready");
           if (!isLast) goNextRef.current();
         },
       }).catch((error) => {
-        if (error?.name !== "AbortError") setPlaybackState("error");
+        if (error?.name !== "AbortError") { setFailureReason(error?.message ?? null); setPlaybackState("error"); }
       });
     };
     const settleDelay = willRecord ? Math.max(0, recordingReadyAtRef.current - Date.now()) : 0;
@@ -219,6 +220,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const isLastStep = currentStepIndex === steps.length - 1;
   const lastLineFinished = isLastStep && (isMyLine ? lineDetected : playbackState === "ready");
   const [complete, setComplete] = useState(false);
+  const [failureReason, setFailureReason] = useState<string | null>(null);
   const finishedRef = useRef(false);
   useEffect(() => {
     if (!willRecord || !lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
@@ -239,12 +241,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     if (!line) return;
     stop();
     setPaused(false);
+    setFailureReason(null);
     setPlaybackState("playing");
     play(line, {
       intensity,
-      onFallback: () => setPlaybackState("error"),
+      onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
-    }).catch(() => setPlaybackState("error"));
+    }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
   }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
 
   const togglePause = useCallback(() => {
@@ -304,7 +307,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     : paused
       ? { title: "Rehearsal paused", detail: "Resume when you’re ready.", kind: "paused" }
       : playbackState === "error"
-        ? { title: "Cue playback failed", detail: "Replay the cue or continue manually.", kind: "error" }
+        ? { title: "Cue playback failed", detail: failureReason ?? "Replay the cue or continue manually.", kind: "error" }
         : lineDetected
           ? { title: "Got it", detail: "The next cue will play automatically.", kind: "detected" }
           : isMyLine && listening

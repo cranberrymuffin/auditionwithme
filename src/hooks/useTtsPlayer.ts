@@ -25,13 +25,21 @@ export type TtsPlayOptions = {
   fresh?: boolean;
   signal?: AbortSignal;
   onEnded?: () => void;
-  /** Fired if the AI voice couldn't be reached/played and playback fell back
-   * to the browser's own voice, so callers can still surface the failure
-   * (e.g. the "Cue playback failed" status) even though the line still gets read. */
-  onFallback?: () => void;
+  /** Fired with a human-readable reason if the AI voice couldn't be
+   * reached/played and playback fell back to the browser's own voice, so
+   * callers can surface *why* (e.g. in the "Cue playback failed" status)
+   * even though the line still gets read. */
+  onFallback?: (reason: string) => void;
 };
 
 const MAX_CACHE_ENTRIES = 60;
+
+/** Turns whatever a fetch/DOM API threw into a short, displayable reason. */
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof DOMException) return `${fallback} (${err.name})`;
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
 
 // Session-wide audio cache: replaying a line (or backing out and returning)
 // doesn't re-bill ElevenLabs, and the scene partner gives the same read on
@@ -289,9 +297,9 @@ export function useTtsPlayer() {
       let blob: Blob;
       try {
         blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
-      } catch {
+      } catch (err) {
         if (opts?.signal?.aborted) return;
-        opts?.onFallback?.();
+        opts?.onFallback?.(describeError(err, "Voice playback failed"));
         return speakWithBrowserVoice(line.text, opts);
       }
       if (opts?.signal?.aborted) return;
@@ -319,10 +327,10 @@ export function useTtsPlayer() {
         sourceNodeRef.current = source;
 
         await audio.play();
-      } catch {
+      } catch (err) {
         if (opts?.signal?.aborted) return;
         audioRef.current = null;
-        opts?.onFallback?.();
+        opts?.onFallback?.(describeError(err, "Audio playback blocked"));
         return speakWithBrowserVoice(line.text, opts);
       }
     },
