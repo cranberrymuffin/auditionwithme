@@ -6,6 +6,7 @@ import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery"
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
+import { useWakeLock } from "../../hooks/useWakeLock";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
@@ -263,6 +264,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // Guard both an actual tab close/refresh and the in-app Exit paths below
   // while a take is in progress and not yet saved.
   const isRecordingActive = recorderStatus === "recording" || recorderStatus === "paused" || recorderSaving;
+  // A phone locking its screen mid-take suspends camera/mic capture and can
+  // silently lose the recording — keep the screen awake while one's active.
+  useWakeLock(isRecordingActive);
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!isRecordingActive) return;
