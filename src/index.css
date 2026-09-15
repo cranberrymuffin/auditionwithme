@@ -3417,6 +3417,7 @@ header .flow-back:hover {
 }
 .rehearsal-line {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  scroll-margin-top: 12px;
 }
 .rehearsal-line:last-child {
   border-bottom: 0;
@@ -3977,45 +3978,18 @@ header .flow-back:hover {
   }
 }
 @media (max-width: 760px) {
-  .rehearsal-page {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
   .rehearsal-header {
     height: 62px;
     grid-template-columns: 1fr auto;
     padding: 0 16px;
   }
   .self-tape-setting {
-    position: fixed;
-    top: auto;
-    bottom: 16px;
-    right: 16px;
-    left: auto;
-    z-index: 30;
-    width: 108px;
+    position: static;
+    width: 100%;
     margin: 0;
-    padding: 0;
-    border-radius: 12px;
-  }
-  .self-tape-video {
-    border-radius: 12px;
-  }
-  .self-tape-rec {
-    top: 6px;
-    left: 6px;
-    padding: 3px 7px;
-    font-size: 0.5625rem;
-  }
-  .self-tape-video-controls {
-    padding: 6px;
-    gap: 6px;
-  }
-  .self-tape-video-controls button {
-    width: 26px;
-    height: 26px;
-    font-size: 0.6875rem;
+    border-left: 0;
+    border-right: 0;
+    border-radius: 0;
   }
   .rehearsal-progress {
     top: 62px;
@@ -4028,12 +4002,9 @@ header .flow-back:hover {
     display: none;
   }
   .rehearsal-workspace {
-    height: auto;
-    min-height: calc(100dvh - 65px);
-    display: block;
+    height: calc(100% - 65px);
   }
   .rehearsal-center {
-    overflow: visible;
     padding: 20px 16px 30px;
   }
   .rehearsal-lines {

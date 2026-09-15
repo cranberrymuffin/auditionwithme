@@ -43,8 +43,11 @@ export default function RehearsalLineList({
 }) {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
+  // Align to the top, not the centre: the active block is line text plus a tall
+  // control panel, and centring that on a short phone pushes the text itself
+  // off the top of the script pane.
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    activeRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [currentIndex]);
 
   return (

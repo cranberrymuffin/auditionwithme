@@ -115,8 +115,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     startRecording(getTapStream());
   }, [willRecord, startPhase, startRecording, getTapStream]);
 
-  // Keep the script from scrolling behind the start overlay (mobile lets the
-  // page itself scroll, so the lock has to live on the body, not a container).
+  // Keep the script from scrolling behind the start overlay.
   useEffect(() => {
     if (startPhase === "active") return;
     const previousOverflow = document.body.style.overflow;
