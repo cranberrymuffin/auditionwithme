@@ -34,6 +34,16 @@ export type TtsPlayOptions = {
 
 const MAX_CACHE_ENTRIES = 60;
 
+// One silent sample — just enough for a real HTMLMediaElement to actually
+// play. WebKit's autoplay gate isn't only about the AudioContext: it also
+// tracks, page-wide, whether *some* media element has ever audibly played as
+// a direct result of a user gesture. Every TTS line is created and played
+// from inside an async fetch chain, never synchronously inside the Start
+// click, so none of them can ever satisfy that flag themselves — playing
+// this synchronously in the click handler is what actually does.
+const SILENT_AUDIO_DATA_URI =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
 /** Turns whatever a fetch/DOM API threw into a short, displayable reason. */
 function describeError(err: unknown, fallback: string): string {
   if (err instanceof DOMException) return `${fallback} (${err.name})`;
@@ -255,6 +265,10 @@ export function useTtsPlayer() {
   const unlock = useCallback(() => {
     const { context } = ensureTap();
     void context.resume();
+    // Must be a real, unmuted play() call made synchronously in this same
+    // gesture — a resumed-but-silent AudioContext doesn't satisfy WebKit's
+    // "has this page played audible media from a gesture" flag on its own.
+    new Audio(SILENT_AUDIO_DATA_URI).play().catch(() => {});
   }, [ensureTap]);
 
   /** The shared context itself, for callers (self-tape recording) that need
