@@ -344,5 +344,18 @@ export function useTtsPlayer() {
 
   useEffect(() => stop, [stop]);
 
+  // Without this, the shared AudioContext outlives the component: leaving a
+  // rehearsal (Exit, finishing, starting another script) never closes it, so
+  // repeated sessions in the same tab pile up open contexts. iOS Safari caps
+  // how many can be open at once, so a few rehearsals in without a page
+  // refresh can leave a stale context still contending for the shared audio
+  // session — a plausible cause of playback getting progressively "mixed up".
+  useEffect(() => {
+    return () => {
+      void audioContextRef.current?.close();
+      audioContextRef.current = null;
+    };
+  }, []);
+
   return { play, prefetch, stop, setPlaybackRate, getTapStream, unlock, getAudioContext };
 }
