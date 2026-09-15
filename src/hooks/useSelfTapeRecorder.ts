@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { logAudioEvent } from "../lib/audioDiagnostics";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -94,6 +95,7 @@ export function useSelfTapeRecorder() {
     let recordingStream = media;
     const micTrack = media.getAudioTracks()[0];
     if (ttsStream?.getAudioTracks().length && micTrack && sharedContext) {
+      logAudioEvent("recorder", `mixing into shared ctx, state=${sharedContext.state}`);
       // Defensive, not load-bearing: the caller's own Start-click handler
       // already resumes this same context before the countdown even runs.
       void sharedContext.resume();
@@ -118,6 +120,7 @@ export function useSelfTapeRecorder() {
     };
     recorderRef.current = recorder;
     recorder.start();
+    logAudioEvent("recorder", `MediaRecorder.start() called, mimeType=${mimeType ?? "(default)"}`);
     setStatus("recording");
   };
 

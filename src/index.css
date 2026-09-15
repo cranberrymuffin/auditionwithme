@@ -3508,6 +3508,25 @@ header .flow-back:hover {
 .rehearsal-line-active-panel {
   padding: 0 clamp(18px, 3vw, 32px) 20px;
 }
+/* TEMPORARY: mobile audio-reliability diagnostics — remove once resolved. */
+.audio-debug-panel {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255, 205, 100, 0.5);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: rgba(248, 241, 230, 0.85);
+  max-height: 160px;
+  overflow-y: auto;
+}
+.audio-debug-panel strong {
+  display: block;
+  color: #ffcd64;
+  margin-bottom: 4px;
+}
 .rehearsal-status {
   display: flex;
   min-height: 70px;

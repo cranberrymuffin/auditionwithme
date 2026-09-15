@@ -2,6 +2,33 @@ import { useEffect, useRef } from "react";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import TrackedWords from "../TrackedWords";
+import { useAudioDiagnostics } from "../../hooks/useAudioDiagnostics";
+
+function formatLogTime(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}.${String(d.getMilliseconds()).padStart(3, "0")}`;
+}
+
+/**
+ * TEMPORARY: live feed of audio/recording/mic events for chasing the mobile
+ * cue-reliability issues. Always visible (not gated on error) so a failure
+ * with no visible symptom still leaves a trail. Remove once resolved.
+ */
+function AudioDebugPanel() {
+  const log = useAudioDiagnostics();
+  const recent = log.slice(-10);
+  return (
+    <div className="audio-debug-panel">
+      <strong>Audio debug log</strong>
+      {recent.length === 0 && <div>(no events yet)</div>}
+      {recent.map((entry, i) => (
+        <div key={i}>
+          <span>{formatLogTime(entry.time)}</span> <span>[{entry.tag}]</span> {entry.message}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type LineMode = "full" | "hidden";
 type Status = { title: string; detail: string; kind: string };
@@ -102,6 +129,7 @@ export default function RehearsalLineList({
             </button>
             {active && (
               <div className="rehearsal-line-active-panel">
+                <AudioDebugPanel />
                 {status.kind === "error" && (
                   <>
                     <div className={`rehearsal-status is-${status.kind}`}>

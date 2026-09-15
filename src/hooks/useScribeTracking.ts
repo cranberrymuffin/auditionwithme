@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { countMatchedWords } from "../lib/script";
 import { apiFetch } from "../lib/api";
+import { logAudioEvent } from "../lib/audioDiagnostics";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
@@ -63,6 +64,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
   useEffect(() => {
     setMatchedWordCount(0);
     if (!active || !line.trim() || !micStream) return;
+    logAudioEvent("scribe", `activating for "${line.slice(0, 24)}"`);
 
     const scriptWords = line.split(/\s+/).filter(Boolean);
     const state = { committed: "", closed: false };
@@ -76,6 +78,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       audioContext?.close().catch(() => {});
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
       setListening(false);
+      logAudioEvent("scribe", "deactivated");
     };
 
     const start = async () => {
@@ -118,10 +121,14 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           if (state.closed) return;
           setListening(true);
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+          logAudioEvent("scribe", `mic ctx created, initial state=${audioContext.state}`);
           // Safari can hand back a context that isn't running yet this deep
           // into an async chain (token fetch + WebSocket handshake), which
           // would otherwise leave onaudioprocess silently never firing.
-          void audioContext.resume();
+          void audioContext.resume().then(
+            () => logAudioEvent("scribe", `mic ctx resume() resolved, state=${audioContext?.state}`),
+            (err) => logAudioEvent("scribe", `mic ctx resume() rejected: ${err}`),
+          );
           const source = audioContext.createMediaStreamSource(micStream);
           // Browser autoGainControl still leaves quiet mic input under Scribe's
           // VAD threshold, so boost the signal ourselves before sending it.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiFetch } from "../lib/api";
+import { logAudioEvent } from "../lib/audioDiagnostics";
 
 /** One line of dialogue plus the context the TTS model uses for prosody. */
 export type TtsLine = {
@@ -225,6 +226,7 @@ export function useTtsPlayer() {
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
       const context = new AudioContext();
+      logAudioEvent("ctx", `created, initial state=${context.state}, sampleRate=${context.sampleRate}`);
       // Self-heals for the rest of the rehearsal instead of only being
       // resumed at specific checkpoints (Start click, before each play()).
       // On mobile, things besides the checkpoints we know about can also
@@ -232,6 +234,7 @@ export function useTtsPlayer() {
       // MediaRecorder right as the first cues are trying to play is one —
       // so react to every drop instead of guessing at every trigger.
       context.onstatechange = () => {
+        logAudioEvent("ctx", `state -> ${context.state}`);
         if (context.state !== "running" && context.state !== "closed") {
           void context.resume();
         }
@@ -264,11 +267,18 @@ export function useTtsPlayer() {
   // no sound instead of erroring or falling back.
   const unlock = useCallback(() => {
     const { context } = ensureTap();
-    void context.resume();
+    logAudioEvent("unlock", `called, state before resume=${context.state}`);
+    void context.resume().then(
+      () => logAudioEvent("unlock", `resume() resolved, state=${context.state}`),
+      (err) => logAudioEvent("unlock", `resume() rejected: ${err}`),
+    );
     // Must be a real, unmuted play() call made synchronously in this same
     // gesture — a resumed-but-silent AudioContext doesn't satisfy WebKit's
     // "has this page played audible media from a gesture" flag on its own.
-    new Audio(SILENT_AUDIO_DATA_URI).play().catch(() => {});
+    new Audio(SILENT_AUDIO_DATA_URI).play().then(
+      () => logAudioEvent("unlock", "silent primer play() resolved"),
+      (err) => logAudioEvent("unlock", `silent primer play() rejected: ${err}`),
+    );
   }, [ensureTap]);
 
   /** The shared context itself, for callers (self-tape recording) that need
@@ -308,11 +318,13 @@ export function useTtsPlayer() {
   const play = useCallback(
     async (line: TtsLine, opts?: TtsPlayOptions) => {
       stop();
+      logAudioEvent("play", `start "${line.text.slice(0, 24)}"`);
       let blob: Blob;
       try {
         blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
       } catch (err) {
         if (opts?.signal?.aborted) return;
+        logAudioEvent("play", `getBlob failed: ${describeError(err, "unknown")} — falling back`);
         opts?.onFallback?.(describeError(err, "Voice playback failed"));
         return speakWithBrowserVoice(line.text, opts);
       }
@@ -341,9 +353,11 @@ export function useTtsPlayer() {
         sourceNodeRef.current = source;
 
         await audio.play();
+        logAudioEvent("play", `audio.play() resolved, ctx.state=${context.state}`);
       } catch (err) {
         if (opts?.signal?.aborted) return;
         audioRef.current = null;
+        logAudioEvent("play", `audio.play() rejected: ${describeError(err, "unknown")} — falling back`);
         opts?.onFallback?.(describeError(err, "Audio playback blocked"));
         return speakWithBrowserVoice(line.text, opts);
       }
