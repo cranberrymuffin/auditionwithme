@@ -72,9 +72,9 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
 // fetch neither resolving nor rejecting for minutes. Without a timeout that
 // hang propagates all the way up through play() — no onEnded, no onFallback,
 // no error — so the cue just never gets read and the UI stays stuck on
-// "is speaking…" with no way to tell what happened. Aborting after 7s turns
+// "is speaking…" with no way to tell what happened. Aborting after 15s turns
 // that silent hang into an ordinary failure the retry/fallback logic already handles.
-const FETCH_TIMEOUT_MS = 7_000;
+const FETCH_TIMEOUT_MS = 15_000;
 
 async function fetchTtsBlob(
   line: TtsLine,
@@ -192,7 +192,7 @@ function speakWithBrowserVoice(
       opts?.onEnded?.();
       resolve();
     };
-    const timer = setTimeout(settle, 6_000);
+    const timer = setTimeout(settle, FETCH_TIMEOUT_MS);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = opts?.speed ?? 1;
     utterance.onstart = () => {
@@ -240,7 +240,10 @@ export function useTtsPlayer() {
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
       const context = new AudioContext();
-      logAudioEvent("ctx", `created, initial state=${context.state}, sampleRate=${context.sampleRate}`);
+      logAudioEvent(
+        "ctx",
+        `created, initial state=${context.state}, sampleRate=${context.sampleRate}`,
+      );
       // Self-heals for the rest of the rehearsal instead of only being
       // resumed at specific checkpoints (Start click, before each play()).
       // On mobile, things besides the checkpoints we know about can also
@@ -283,7 +286,8 @@ export function useTtsPlayer() {
     const { context } = ensureTap();
     logAudioEvent("unlock", `called, state before resume=${context.state}`);
     void context.resume().then(
-      () => logAudioEvent("unlock", `resume() resolved, state=${context.state}`),
+      () =>
+        logAudioEvent("unlock", `resume() resolved, state=${context.state}`),
       (err) => logAudioEvent("unlock", `resume() rejected: ${err}`),
     );
     // Must be a real, unmuted play() call made synchronously in this same
@@ -345,7 +349,10 @@ export function useTtsPlayer() {
         blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
       } catch (err) {
         if (opts?.signal?.aborted) return;
-        logAudioEvent("play", `getBlob failed: ${describeError(err, "unknown")} — falling back`);
+        logAudioEvent(
+          "play",
+          `getBlob failed: ${describeError(err, "unknown")} — falling back`,
+        );
         opts?.onFallback?.(describeError(err, "Voice playback failed"));
         return speakWithBrowserVoice(line.text, opts);
       }
@@ -380,10 +387,16 @@ export function useTtsPlayer() {
         }
 
         await audio.play();
-        logAudioEvent("play", `audio.play() resolved, ctx.state=${context.state}`);
+        logAudioEvent(
+          "play",
+          `audio.play() resolved, ctx.state=${context.state}`,
+        );
       } catch (err) {
         if (opts?.signal?.aborted) return;
-        logAudioEvent("play", `audio.play() rejected: ${describeError(err, "unknown")} — falling back`);
+        logAudioEvent(
+          "play",
+          `audio.play() rejected: ${describeError(err, "unknown")} — falling back`,
+        );
         opts?.onFallback?.(describeError(err, "Audio playback blocked"));
         return speakWithBrowserVoice(line.text, opts);
       }
@@ -411,5 +424,13 @@ export function useTtsPlayer() {
     };
   }, []);
 
-  return { play, prefetch, stop, setPlaybackRate, getTapStream, unlock, getAudioContext };
+  return {
+    play,
+    prefetch,
+    stop,
+    setPlaybackRate,
+    getTapStream,
+    unlock,
+    getAudioContext,
+  };
 }
