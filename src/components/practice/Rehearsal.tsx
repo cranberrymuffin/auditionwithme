@@ -341,6 +341,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
             onPrev={goPrev}
             onNext={goNext}
             onReplay={replayCue}
+            onStop={stopRecordingManually}
           />
         </section>
 

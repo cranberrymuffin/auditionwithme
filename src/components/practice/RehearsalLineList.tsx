@@ -19,6 +19,7 @@ export default function RehearsalLineList({
   onPrev,
   onNext,
   onReplay,
+  onStop,
 }: {
   steps: Step[];
   currentIndex: number;
@@ -32,6 +33,7 @@ export default function RehearsalLineList({
   onPrev: () => void;
   onNext: () => void;
   onReplay: () => void;
+  onStop: () => void;
 }) {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
@@ -114,7 +116,9 @@ export default function RehearsalLineList({
                 <footer>
                   <button onClick={onPrev} disabled={index === 0}>← Previous</button>
                   <span>Line {index + 1} of {steps.length}</span>
-                  <button className="next-line" onClick={onNext} disabled={index >= steps.length - 1}>Next →</button>
+                  {index >= steps.length - 1
+                    ? <button className="next-line" onClick={onStop}>Stop</button>
+                    : <button className="next-line" onClick={onNext}>Next →</button>}
                 </footer>
               </div>
             )}
