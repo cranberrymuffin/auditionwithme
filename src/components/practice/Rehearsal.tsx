@@ -197,10 +197,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // Recording stops itself automatically once the last line wraps up.
   const isLastStep = currentStepIndex === steps.length - 1;
   const lastLineFinished = isLastStep && (isMyLine ? lineDetected : playbackState === "ready");
+  const [complete, setComplete] = useState(false);
   const finishedRef = useRef(false);
   useEffect(() => {
     if (!willRecord || !lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
     finishedRef.current = true;
+    setComplete(true);
     setPaused(true);
     void endRehearsal();
   }, [willRecord, lastLineFinished, paused, startPhase, endRehearsal]);
@@ -272,19 +274,21 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   if (!currentStep) return null;
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
-  const status = paused
-    ? { title: "Rehearsal paused", detail: "Resume when you’re ready.", kind: "paused" }
-    : playbackState === "error"
-      ? { title: "Cue playback failed", detail: "Replay the cue or continue manually.", kind: "error" }
-      : lineDetected
-        ? { title: "Got it", detail: "The next cue will play automatically.", kind: "detected" }
-        : isMyLine && listening
-          ? { title: "Listening for your line…", detail: "The next cue will play after your line is detected.", kind: "listening" }
-          : isMyLine
-            ? { title: "Your line", detail: "Microphone unavailable. Read aloud, then continue.", kind: "ready" }
-            : playbackState === "playing"
-              ? { title: `${currentSpeaker || "Scene partner"} is speaking…`, detail: "Listen for your cue.", kind: "playing" }
-              : { title: "Cue complete", detail: "Moving to the next line.", kind: "ready" };
+  const status = complete
+    ? { title: "Rehearsal complete", detail: "Saving your take…", kind: "complete" }
+    : paused
+      ? { title: "Rehearsal paused", detail: "Resume when you’re ready.", kind: "paused" }
+      : playbackState === "error"
+        ? { title: "Cue playback failed", detail: "Replay the cue or continue manually.", kind: "error" }
+        : lineDetected
+          ? { title: "Got it", detail: "The next cue will play automatically.", kind: "detected" }
+          : isMyLine && listening
+            ? { title: "Listening for your line…", detail: "The next cue will play after your line is detected.", kind: "listening" }
+            : isMyLine
+              ? { title: "Your line", detail: "Microphone unavailable. Read aloud, then continue.", kind: "ready" }
+              : playbackState === "playing"
+                ? { title: `${currentSpeaker || "Scene partner"} is speaking…`, detail: "Listen for your cue.", kind: "playing" }
+                : { title: "Cue complete", detail: "Moving to the next line.", kind: "ready" };
 
   return (
     <main className="rehearsal-page">
