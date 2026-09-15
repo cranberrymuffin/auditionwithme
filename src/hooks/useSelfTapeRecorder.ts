@@ -20,14 +20,19 @@ function pickMimeType(): string | undefined {
  * capture only begins once it ends:
  *
  * `requestCamera()` opens the camera and exposes the live `stream` for a
- * preview <video>. `startRecording(ttsStream)` begins capturing from that
- * stream; if `ttsStream` is given (the scene partner's TTS audio, tapped
- * directly rather than picked up acoustically off the mic — see
- * useTtsPlayer's getTapStream), it's mixed with the mic track into the
- * recording's single audio track. `pause()`/`resume()` pause and resume
- * capture without releasing the camera. `stop()` resolves with the finished
- * recording as a Blob and releases the camera. Permission failures land in
- * `error` rather than throwing.
+ * preview <video>. `startRecording(ttsStream, sharedContext)` begins
+ * capturing from that stream; if `ttsStream` is given (the scene partner's
+ * TTS audio, tapped directly rather than picked up acoustically off the mic
+ * — see useTtsPlayer's getTapStream), it's mixed with the mic track into the
+ * recording's single audio track using `sharedContext` — the caller's own
+ * AudioContext (from useTtsPlayer), not one of our own. Sharing it means
+ * there's a single context for the whole rehearsal to keep resumed on
+ * mobile, rather than a second one liable to start (or end up) suspended
+ * this deep into an async chain, silently recording with no audio.
+ * `pause()`/`resume()` pause and resume capture without releasing the
+ * camera. `stop()` resolves with the finished recording as a Blob and
+ * releases the camera. Permission failures land in `error` rather than
+ * throwing.
  */
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -35,9 +40,14 @@ export function useSelfTapeRecorder() {
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const mixContextRef = useRef<AudioContext | null>(null);
+  const mixNodesRef = useRef<AudioNode[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  const disconnectMix = () => {
+    mixNodesRef.current.forEach((node) => node.disconnect());
+    mixNodesRef.current = [];
+  };
 
   useEffect(() => {
     const cleanup = () => {
@@ -46,7 +56,7 @@ export function useSelfTapeRecorder() {
       }
       streamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-      void mixContextRef.current?.close();
+      disconnectMix();
     };
     return cleanup;
   }, []);
@@ -73,21 +83,26 @@ export function useSelfTapeRecorder() {
     setStatus("ready");
   };
 
-  const startRecording = (ttsStream?: MediaStream | null) => {
+  const startRecording = (ttsStream?: MediaStream | null, sharedContext?: AudioContext | null) => {
     const media = streamRef.current;
     if (!media || recorderRef.current) return;
 
     // Mix the mic with the TTS tap so the recording gets the scene partner's
     // lines directly, not whatever the mic happens to pick up off the
-    // speakers. Falls back to mic-only if no tap stream was available.
+    // speakers. Falls back to mic-only if no tap stream (or shared context)
+    // was available.
     let recordingStream = media;
     const micTrack = media.getAudioTracks()[0];
-    if (ttsStream?.getAudioTracks().length && micTrack) {
-      const mixContext = new AudioContext();
-      mixContextRef.current = mixContext;
-      const destination = mixContext.createMediaStreamDestination();
-      mixContext.createMediaStreamSource(media).connect(destination);
-      mixContext.createMediaStreamSource(ttsStream).connect(destination);
+    if (ttsStream?.getAudioTracks().length && micTrack && sharedContext) {
+      // Defensive, not load-bearing: the caller's own Start-click handler
+      // already resumes this same context before the countdown even runs.
+      void sharedContext.resume();
+      const destination = sharedContext.createMediaStreamDestination();
+      const micSource = sharedContext.createMediaStreamSource(media);
+      const ttsSource = sharedContext.createMediaStreamSource(ttsStream);
+      micSource.connect(destination);
+      ttsSource.connect(destination);
+      mixNodesRef.current = [micSource, ttsSource, destination];
       recordingStream = new MediaStream([
         media.getVideoTracks()[0],
         destination.stream.getAudioTracks()[0],
@@ -137,8 +152,7 @@ export function useSelfTapeRecorder() {
     streamRef.current = null;
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     recordingStreamRef.current = null;
-    await mixContextRef.current?.close();
-    mixContextRef.current = null;
+    disconnectMix();
     recorderRef.current = null;
     chunksRef.current = [];
     setStream(null);

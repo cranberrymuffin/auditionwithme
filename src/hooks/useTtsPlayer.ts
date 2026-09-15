@@ -238,6 +238,12 @@ export function useTtsPlayer() {
     void context.resume();
   }, [ensureTap]);
 
+  /** The shared context itself, for callers (self-tape recording) that need
+   * to build their own nodes on it rather than duplicate an AudioContext of
+   * their own — one context for the whole rehearsal is one thing to keep
+   * resumed on mobile instead of several. */
+  const getAudioContext = useCallback(() => ensureTap().context, [ensureTap]);
+
   const stop = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -319,5 +325,5 @@ export function useTtsPlayer() {
 
   useEffect(() => stop, [stop]);
 
-  return { play, prefetch, stop, setPlaybackRate, getTapStream, unlock };
+  return { play, prefetch, stop, setPlaybackRate, getTapStream, unlock, getAudioContext };
 }

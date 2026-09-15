@@ -48,7 +48,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // audio effect below.
   const deliveryTagsRef = useRef(deliveryTags);
   deliveryTagsRef.current = deliveryTags;
-  const { play, prefetch, stop, getTapStream, unlock } = useTtsPlayer();
+  const { play, prefetch, stop, getTapStream, unlock, getAudioContext } = useTtsPlayer();
 
   // Builds the full synthesis request for a step: surrounding lines condition
   // the prosody, and an explicit script parenthetical outranks the AI
@@ -78,7 +78,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
   const isMyLine = Boolean(selectedRole) && currentSpeaker === selectedRole;
   const lineWordCount = (currentStep?.verbalLine ?? "").split(/\s+/).filter(Boolean).length;
-  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode);
+  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode, cameraStream);
 
   // Nothing to record if the user isn't reading a role — just listening to
   // the scene doesn't need a camera or a self-tape.
@@ -116,8 +116,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   useEffect(() => {
     if (!willRecord || startPhase !== "active" || recordingStartedRef.current) return;
     recordingStartedRef.current = true;
-    startRecording(getTapStream());
-  }, [willRecord, startPhase, startRecording, getTapStream]);
+    startRecording(getTapStream(), getAudioContext());
+  }, [willRecord, startPhase, startRecording, getTapStream, getAudioContext]);
 
   // Keep the script from scrolling behind the start overlay.
   useEffect(() => {

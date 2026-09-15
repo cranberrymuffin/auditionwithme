@@ -48,26 +48,31 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
  * `countMatchedWords` matcher (the count never regresses). Returns the matched
  * word count plus whether tracking is actually live (mic + socket up), so the
  * caller can fall back to manual advance when it isn't.
+ *
+ * Takes the caller's own mic stream (the self-tape recorder's) rather than
+ * opening a second `getUserMedia` of its own: `active` only ever goes true
+ * once a role is selected, which is exactly when that stream already exists,
+ * and a second concurrent mic session is exactly the kind of thing that can
+ * knock iOS's shared audio session into an interrupted state — surfacing as
+ * cues that mysteriously fail to play right around a line boundary.
  */
-export function useScribeTracking(active: boolean, line: string, languageCode = "en") {
+export function useScribeTracking(active: boolean, line: string, languageCode = "en", micStream: MediaStream | null) {
   const [matchedWordCount, setMatchedWordCount] = useState(0);
   const [listening, setListening] = useState(false);
 
   useEffect(() => {
     setMatchedWordCount(0);
-    if (!active || !line.trim()) return;
+    if (!active || !line.trim() || !micStream) return;
 
     const scriptWords = line.split(/\s+/).filter(Boolean);
     const state = { committed: "", closed: false };
     let ws: WebSocket | null = null;
     let audioContext: AudioContext | null = null;
-    let stream: MediaStream | null = null;
     let processor: ScriptProcessorNode | null = null;
 
     const cleanup = () => {
       state.closed = true;
       processor?.disconnect();
-      stream?.getTracks().forEach((t) => t.stop());
       audioContext?.close().catch(() => {});
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
       setListening(false);
@@ -75,13 +80,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
     const start = async () => {
       try {
-        const [tokenRes, mic] = await Promise.all([
-          apiFetch("/api/eleven-account", { method: "POST" }),
-          navigator.mediaDevices.getUserMedia({
-            audio: { autoGainControl: true, noiseSuppression: true, echoCancellation: true },
-          }),
-        ]);
-        stream = mic;
+        const tokenRes = await apiFetch("/api/eleven-account", { method: "POST" });
         const tokenData = await tokenRes.json();
         if (!tokenRes.ok || !tokenData.token) throw new Error(tokenData.error || "No Scribe token");
         if (state.closed) return cleanup();
@@ -116,10 +115,14 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         ws.onclose = () => setListening(false);
 
         ws.onopen = () => {
-          if (state.closed || !stream) return;
+          if (state.closed) return;
           setListening(true);
           audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-          const source = audioContext.createMediaStreamSource(stream);
+          // Safari can hand back a context that isn't running yet this deep
+          // into an async chain (token fetch + WebSocket handshake), which
+          // would otherwise leave onaudioprocess silently never firing.
+          void audioContext.resume();
+          const source = audioContext.createMediaStreamSource(micStream);
           // Browser autoGainControl still leaves quiet mic input under Scribe's
           // VAD threshold, so boost the signal ourselves before sending it.
           const gain = audioContext.createGain();
@@ -135,9 +138,19 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
               })
             );
           };
+          // ScriptProcessorNode only fires once it's part of a live graph
+          // reaching the destination, but the actual point is capturing this
+          // 3x-boosted mic signal, not playing it back — routing it to the
+          // destination directly would echo the user's own voice out the
+          // speaker at 3x gain, which on a phone (mic and speaker inches
+          // apart) is a feedback howl waiting to happen. A muted node keeps
+          // the graph running without making any of that audible.
+          const silent = audioContext.createGain();
+          silent.gain.value = 0;
           source.connect(gain);
           gain.connect(processor);
-          processor.connect(audioContext.destination);
+          processor.connect(silent);
+          silent.connect(audioContext.destination);
         };
       } catch (err) {
         console.error("Scribe tracking unavailable:", err);
@@ -147,7 +160,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
     start();
     return cleanup;
-  }, [active, line, languageCode]);
+  }, [active, line, languageCode, micStream]);
 
   return { matchedWordCount, listening };
 }
