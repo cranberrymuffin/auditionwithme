@@ -166,9 +166,15 @@ export function useTtsPlayer() {
   // plays seconds after the Start button is clicked (once the countdown
   // ends), well outside that gesture — so without this, the very first line
   // can silently fail to play. Call this directly from the click handler.
+  // Resume unconditionally, not just when state is "suspended": Safari's
+  // camera/mic permission prompt (which lands right after this call) can
+  // knock the context into its own "interrupted" state, which resume() also
+  // clears but the "suspended" check doesn't catch — leaving the first cue
+  // connected to a silent context that never throws, so it just plays with
+  // no sound instead of erroring or falling back.
   const unlock = useCallback(() => {
     const { context } = ensureTap();
-    if (context.state === "suspended") void context.resume();
+    void context.resume();
   }, [ensureTap]);
 
   const stop = useCallback(() => {
@@ -221,7 +227,10 @@ export function useTtsPlayer() {
         // connected to the context's own destination so normal speaker
         // playback is unchanged.
         const { context, destination } = ensureTap();
-        if (context.state === "suspended") await context.resume();
+        // Unconditional: also clears Safari's "interrupted" state (distinct
+        // from "suspended"), which resume() handles even though the state
+        // name doesn't match the naive equality check.
+        await context.resume();
         const source = context.createMediaElementSource(audio);
         source.connect(context.destination);
         source.connect(destination);
