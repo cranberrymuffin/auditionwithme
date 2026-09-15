@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { countMatchedWords } from "../lib/script";
+import { checkSemanticLineMatch, countMatchedWords } from "../lib/script";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
 
@@ -67,7 +67,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     logAudioEvent("scribe", `activating for "${line.slice(0, 24)}"`);
 
     const scriptWords = line.split(/\s+/).filter(Boolean);
-    const state = { committed: "", closed: false };
+    const state = { committed: "", closed: false, semanticChecked: "" };
     let ws: WebSocket | null = null;
     let audioContext: AudioContext | null = null;
     let processor: ScriptProcessorNode | null = null;
@@ -98,6 +98,11 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           // can't occupy a match slot or otherwise muddy word-for-word
           // comparison against the script line.
           no_verbatim: "true",
+          // Self-tape recording happens in whatever room the actor is in,
+          // not a treated studio — road noise, roommates, HVAC. Scribe can
+          // suppress that before transcribing instead of it competing with
+          // the actual line for recognition.
+          filter_background_audio: "true",
         });
         for (const term of extractKeyterms(line)) params.append("keyterms", term);
         ws = new WebSocket(`${SCRIBE_WS_BASE}?${params}`);
@@ -112,6 +117,28 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           const count = countMatchedWords(scriptWords, state.committed + partial);
           // Only advance — never walk the count backwards on partial rewrites
           setMatchedWordCount((prev) => Math.max(prev, count));
+
+          // VAD just closed out a segment (the actor paused) but exact/fuzzy
+          // matching still hasn't credited the whole line — ask the semantic
+          // fallback whether what Scribe DID transcribe still conveys the
+          // line, rather than leave the actor stuck on manual advance. Only
+          // fires once per distinct committed transcript, and only once
+          // there's enough of it to judge.
+          const committed = state.committed.trim();
+          if (
+            msg.message_type === "committed_transcript" &&
+            count < scriptWords.length &&
+            committed.split(/\s+/).length >= 2 &&
+            committed !== state.semanticChecked
+          ) {
+            state.semanticChecked = committed;
+            logAudioEvent("scribe", "word match stalled, trying semantic fallback");
+            void checkSemanticLineMatch(line, committed).then((match) => {
+              if (state.closed || !match) return;
+              logAudioEvent("scribe", "semantic fallback matched line");
+              setMatchedWordCount(scriptWords.length);
+            });
+          }
         };
 
         ws.onerror = () => setListening(false);

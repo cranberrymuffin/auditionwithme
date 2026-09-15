@@ -92,6 +92,62 @@ async function canonicalizeCharacters(req: VercelRequest, res: VercelResponse) {
   }
 }
 
+const SEMANTIC_MATCH_SCHEMA = {
+  type: "object",
+  properties: {
+    match: { type: "boolean" },
+  },
+  required: ["match"],
+  additionalProperties: false,
+} as const;
+
+// Fallback for when realtime word-for-word matching (src/lib/script.ts)
+// stalls: the actor paused (VAD committed a transcript segment) but speech-
+// to-text never assembled enough of the exact/near-exact words to credit the
+// line as spoken. Rather than leave the actor stuck on manual advance, ask
+// whether the words STT DID catch still convey the line's meaning — tolerant
+// of mishears and minor ad-libs, not a rubber stamp for silence or a
+// different line entirely.
+const SEMANTIC_MATCH_SYSTEM_PROMPT = `You judge whether a speech-to-text transcript of an actor reading a script line actually conveys that line, despite likely transcription errors.
+
+Say match:true if the transcript is consistent with the actor having spoken this line — allowing for misheard/garbled words, dropped small words, or minor ad-libbing that keeps the same meaning.
+Say match:false if the transcript is empty, unrelated, a clearly different line, or too sparse/garbled to tell.
+
+Return ONLY {"match": true} or {"match": false}.`;
+
+async function semanticLineMatch(req: VercelRequest, res: VercelResponse) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
+  }
+
+  const { line, transcript } = (req.body ?? {}) as { line?: string; transcript?: string };
+  if (typeof line !== "string" || !line.trim() || line.length > 2000) {
+    return res.status(400).json({ error: "No line provided" });
+  }
+  if (typeof transcript !== "string" || transcript.length > 2000) {
+    return res.status(400).json({ error: "Invalid transcript" });
+  }
+
+  try {
+    const response = await client.messages.parse({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 100,
+      system: SEMANTIC_MATCH_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: `Script line: "${line}"\nTranscript: "${transcript}"` }],
+      output_config: {
+        format: jsonSchemaOutputFormat(SEMANTIC_MATCH_SCHEMA),
+      },
+    });
+
+    const match = response.parsed_output?.match;
+    return res.status(200).json({ match: typeof match === "boolean" ? match : false });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Semantic line match error:", message);
+    return res.status(500).json({ error: message });
+  }
+}
+
 async function characterVoices(req: VercelRequest, res: VercelResponse) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
@@ -299,22 +355,27 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// Combines three Claude-driven casting/directing steps behind one route —
-// keeps the function count under Vercel Hobby's 12-per-deployment cap.
+// Combines four Claude-driven casting/directing/rehearsal steps behind one
+// route — keeps the function count under Vercel Hobby's 12-per-deployment cap.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const auth = await requireAuthRateLimited(req, res, {
-    bucket: "casting",
-    maxPerWindow: 30,
-  });
+  const action = req.query.action;
+
+  // semantic-match fires live, per stalled line, throughout a rehearsal —
+  // a much higher-frequency use than the one-time-per-script casting setup
+  // calls, so it gets its own budget rather than sharing theirs.
+  const auth =
+    action === "semantic-match"
+      ? await requireAuthRateLimited(req, res, { bucket: "semantic-match", maxPerWindow: 120 })
+      : await requireAuthRateLimited(req, res, { bucket: "casting", maxPerWindow: 30 });
   if (!auth) return;
 
-  const action = req.query.action;
   if (action === "canonicalize") return canonicalizeCharacters(req, res);
   if (action === "voices") return characterVoices(req, res);
   if (action === "direct-lines") return directLines(req, res);
+  if (action === "semantic-match") return semanticLineMatch(req, res);
   return res.status(400).json({ error: "Invalid or missing action" });
 }

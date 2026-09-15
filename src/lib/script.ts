@@ -1,3 +1,5 @@
+import { apiFetch } from "./api";
+
 export type Voice = {
   id: string;
   name: string;
@@ -40,6 +42,37 @@ export function normalizeSpeaker(name: string): string {
 // spoken and recognized correctly.
 const SKIP_LOOKAHEAD = 6;
 
+function levenshtein(a: string, b: string): number {
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] =
+        a[i - 1] === b[j - 1]
+          ? prev[j - 1]
+          : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return prev[b.length];
+}
+
+// STT mishears are usually a near-miss (transcribed as a similarly-spelled
+// word, e.g. "there"/"their", a dropped letter, a wrong ending) rather than
+// a completely different word. Exact-only matching treats those the same
+// as a genuine miss, which is what forces manual advance on lines that were
+// actually spoken correctly. Words under 3 characters are excluded since
+// edit-distance tolerance on them is dominated by noise (nearly any short
+// word is "close" to any other).
+function wordsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 3 || b.length < 3) return false;
+  const maxLen = Math.max(a.length, b.length);
+  return levenshtein(a, b) / maxLen <= 0.25;
+}
+
 export function countMatchedWords(scriptWords: string[], transcript: string): number {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const spoken = transcript.toLowerCase().split(/\s+/).map(norm).filter(Boolean);
@@ -49,7 +82,7 @@ export function countMatchedWords(scriptWords: string[], transcript: string): nu
   let pi = 0;
   while (si < script.length && pi < spoken.length) {
     const windowEnd = Math.min(pi + SKIP_LOOKAHEAD, spoken.length);
-    const found = spoken.slice(pi, windowEnd).indexOf(script[si]);
+    const found = spoken.slice(pi, windowEnd).findIndex((w) => wordsMatch(w, script[si]));
     if (found !== -1) {
       si++;
       pi += found + 1;
@@ -67,4 +100,27 @@ export function countMatchedWords(scriptWords: string[], transcript: string): nu
     }
   }
   return si;
+}
+
+/**
+ * Fallback for a line that stalled short of a full countMatchedWords match
+ * even after the actor paused (nothing left to transcribe for this attempt):
+ * asks the server whether the transcript it did get still conveys the
+ * line's meaning, tolerating mishears/garbling that exact/fuzzy word
+ * matching couldn't get past. Returns false (never advance) on any request
+ * failure rather than surfacing an error into the rehearsal flow.
+ */
+export async function checkSemanticLineMatch(line: string, transcript: string): Promise<boolean> {
+  try {
+    const response = await apiFetch("/api/casting?action=semantic-match", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ line, transcript }),
+    });
+    if (!response.ok) return false;
+    const data = (await response.json()) as { match?: boolean };
+    return data.match === true;
+  } catch {
+    return false;
+  }
 }
