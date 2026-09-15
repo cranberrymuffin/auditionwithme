@@ -210,8 +210,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     : currentStepIndex;
   const cueStep = cueIndex === undefined ? null : steps[cueIndex];
 
-  // fresh=true busts the audio cache — "give me a different take" on the cue.
-  const replayCue = useCallback((fresh = false) => {
+  const replayCue = useCallback(() => {
     if (cueIndex === undefined) return;
     const line = ttsLine(cueIndex);
     if (!line) return;
@@ -220,7 +219,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("playing");
     play(line, {
       intensity,
-      fresh,
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch(() => setPlaybackState("error"));
   }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
@@ -330,15 +328,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
             isMyLine={isMyLine}
             matchedWordCount={matchedWordCount}
             status={status}
-            paused={paused}
             canReplay={Boolean(cueStep)}
             onJump={goTo}
             onPrev={goPrev}
             onNext={goNext}
-            onReplay={() => replayCue()}
-            onNewTake={() => replayCue(true)}
-            onToggleHide={() => setLineMode((mode) => mode === "full" ? "hidden" : "full")}
-            onTogglePause={togglePause}
+            onReplay={replayCue}
           />
         </section>
 

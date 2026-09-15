@@ -14,15 +14,11 @@ export default function RehearsalLineList({
   isMyLine,
   matchedWordCount,
   status,
-  paused,
   canReplay,
   onJump,
   onPrev,
   onNext,
   onReplay,
-  onNewTake,
-  onToggleHide,
-  onTogglePause,
 }: {
   steps: Step[];
   currentIndex: number;
@@ -31,15 +27,11 @@ export default function RehearsalLineList({
   isMyLine: boolean;
   matchedWordCount: number;
   status: Status;
-  paused: boolean;
   canReplay: boolean;
   onJump: (index: number) => void;
   onPrev: () => void;
   onNext: () => void;
   onReplay: () => void;
-  onNewTake: () => void;
-  onToggleHide: () => void;
-  onTogglePause: () => void;
 }) {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
@@ -112,12 +104,11 @@ export default function RehearsalLineList({
                   {status.kind === "listening" && <span className="mic-meter" aria-label="Microphone active"><i /><i /><i /><i /></span>}
                   <div><strong>{status.title}</strong><span>{status.detail}</span></div>
                 </div>
-                <div className="rehearsal-controls">
-                  <button onClick={onReplay} disabled={!canReplay}>↻ Replay cue</button>
-                  <button onClick={onNewTake} disabled={!canReplay} title="Regenerate the cue for a different read">✦ New take</button>
-                  <button onClick={onToggleHide}>{lineMode === "hidden" ? "Show line" : "Hide line"}</button>
-                  <button onClick={onTogglePause}>{paused ? "Resume" : "Pause"}</button>
-                </div>
+                {status.kind === "error" && (
+                  <div className="rehearsal-controls">
+                    <button onClick={onReplay} disabled={!canReplay}>↻ Replay cue</button>
+                  </div>
+                )}
                 <footer>
                   <button onClick={onPrev} disabled={index === 0}>← Previous</button>
                   <span>Line {index + 1} of {steps.length}</span>
