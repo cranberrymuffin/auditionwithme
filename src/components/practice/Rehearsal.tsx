@@ -48,7 +48,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // audio effect below.
   const deliveryTagsRef = useRef(deliveryTags);
   deliveryTagsRef.current = deliveryTags;
-  const { play, prefetch, stop, getTapStream } = useTtsPlayer();
+  const { play, prefetch, stop, getTapStream, unlock } = useTtsPlayer();
 
   // Builds the full synthesis request for a step: surrounding lines condition
   // the prosody, and an explicit script parenthetical outranks the AI
@@ -85,6 +85,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const willRecord = Boolean(selectedRole);
 
   const beginRehearsal = useCallback(() => {
+    // Must run synchronously inside this click handler — the first cue plays
+    // seconds later, after the countdown, well outside the user gesture that
+    // autoplay policies require.
+    unlock();
     if (!willRecord) {
       setCountdown(COUNTDOWN_START);
       setStartPhase("countdown");
@@ -95,7 +99,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       setCountdown(COUNTDOWN_START);
       setStartPhase("countdown");
     });
-  }, [willRecord, requestCamera]);
+  }, [unlock, willRecord, requestCamera]);
 
   useEffect(() => {
     if (startPhase !== "countdown") return;

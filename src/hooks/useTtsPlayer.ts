@@ -73,12 +73,30 @@ async function fetchTtsBlob(line: TtsLine, intensity: TtsIntensity): Promise<Blo
   return res.blob();
 }
 
+// ElevenLabs already retries its own transient system_busy responses
+// server-side; these extra client-side attempts cover everything else that
+// can make one round trip fail transiently — a dropped connection, our own
+// function cold-starting, a one-off 5xx — before we give up and fall back
+// to the browser's own voice.
+const FETCH_RETRY_DELAYS_MS = [400, 1200];
+
+async function fetchTtsBlobWithRetry(line: TtsLine, intensity: TtsIntensity): Promise<Blob> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fetchTtsBlob(line, intensity);
+    } catch (err) {
+      if (attempt >= FETCH_RETRY_DELAYS_MS.length) throw err;
+      await new Promise((resolve) => setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 function getBlob(line: TtsLine, intensity: TtsIntensity, fresh = false): Promise<Blob> {
   const key = cacheKey(line, intensity);
   if (fresh) blobCache.delete(key);
   const cached = blobCache.get(key);
   if (cached) return cached;
-  const promise = fetchTtsBlob(line, intensity);
+  const promise = fetchTtsBlobWithRetry(line, intensity);
   promise.catch(() => {
     // Failed fetch: clear the slot so the next attempt refetches fresh
     if (blobCache.get(key) === promise) blobCache.delete(key);
@@ -89,6 +107,31 @@ function getBlob(line: TtsLine, intensity: TtsIntensity, fresh = false): Promise
     if (oldest !== undefined) blobCache.delete(oldest);
   }
   return promise;
+}
+
+/**
+ * Last resort when ElevenLabs is unreachable even after retries: the actor
+ * still needs to hear the cue, so read it with the browser's own voice
+ * instead of leaving the line silent. Resolves once speech starts (mirroring
+ * play()'s contract) and fires onEnded when the utterance finishes.
+ */
+function speakWithBrowserVoice(text: string, opts?: TtsPlayOptions): Promise<void> {
+  return new Promise((resolve) => {
+    if (!text.trim() || !("speechSynthesis" in window)) {
+      opts?.onEnded?.();
+      resolve();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = opts?.speed ?? 1;
+    utterance.onstart = () => resolve();
+    utterance.onend = () => opts?.onEnded?.();
+    utterance.onerror = () => {
+      opts?.onEnded?.();
+      resolve();
+    };
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 /**
@@ -118,12 +161,23 @@ export function useTtsPlayer() {
   /** MediaStream carrying every line's audio, silent when nothing is playing. */
   const getTapStream = useCallback(() => ensureTap().destination.stream, [ensureTap]);
 
+  // Autoplay policies (Safari in particular) require the AudioContext to be
+  // resumed synchronously inside a user gesture. The rehearsal's first cue
+  // plays seconds after the Start button is clicked (once the countdown
+  // ends), well outside that gesture — so without this, the very first line
+  // can silently fail to play. Call this directly from the click handler.
+  const unlock = useCallback(() => {
+    const { context } = ensureTap();
+    if (context.state === "suspended") void context.resume();
+  }, [ensureTap]);
+
   const stop = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.onended = null;
       audioRef.current = null;
     }
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     sourceNodeRef.current?.disconnect();
     sourceNodeRef.current = null;
     if (audioUrlRef.current) {
@@ -136,11 +190,22 @@ export function useTtsPlayer() {
     void getBlob(line, intensity);
   }, []);
 
-  /** Plays a line; resolves when audio finishes, rejects on fetch/play failure. */
+  /**
+   * Plays a line; resolves once playback starts and fires onEnded when it
+   * finishes. Falls back to the browser's own voice — rather than rejecting
+   * — if ElevenLabs can't be reached or the audio element won't play (e.g.
+   * an autoplay block), so a cue is (almost) never left unread.
+   */
   const play = useCallback(
     async (line: TtsLine, opts?: TtsPlayOptions) => {
       stop();
-      const blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
+      let blob: Blob;
+      try {
+        blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
+      } catch {
+        if (opts?.signal?.aborted) return;
+        return speakWithBrowserVoice(line.text, opts);
+      }
       if (opts?.signal?.aborted) return;
 
       const url = URL.createObjectURL(blob);
@@ -150,17 +215,24 @@ export function useTtsPlayer() {
       audioRef.current = audio;
       if (opts?.onEnded) audio.onended = opts.onEnded;
 
-      // Route through the shared tap so a self-tape recording (if any) picks
-      // this line up directly, not acoustically off the mic. Still connected
-      // to the context's own destination so normal speaker playback is unchanged.
-      const { context, destination } = ensureTap();
-      if (context.state === "suspended") await context.resume();
-      const source = context.createMediaElementSource(audio);
-      source.connect(context.destination);
-      source.connect(destination);
-      sourceNodeRef.current = source;
+      try {
+        // Route through the shared tap so a self-tape recording (if any)
+        // picks this line up directly, not acoustically off the mic. Still
+        // connected to the context's own destination so normal speaker
+        // playback is unchanged.
+        const { context, destination } = ensureTap();
+        if (context.state === "suspended") await context.resume();
+        const source = context.createMediaElementSource(audio);
+        source.connect(context.destination);
+        source.connect(destination);
+        sourceNodeRef.current = source;
 
-      await audio.play();
+        await audio.play();
+      } catch {
+        if (opts?.signal?.aborted) return;
+        audioRef.current = null;
+        return speakWithBrowserVoice(line.text, opts);
+      }
     },
     [stop, ensureTap]
   );
@@ -172,5 +244,5 @@ export function useTtsPlayer() {
 
   useEffect(() => stop, [stop]);
 
-  return { play, prefetch, stop, setPlaybackRate, getTapStream };
+  return { play, prefetch, stop, setPlaybackRate, getTapStream, unlock };
 }
