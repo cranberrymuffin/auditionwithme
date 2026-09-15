@@ -100,14 +100,16 @@ export default function RehearsalLineList({
             </button>
             {active && (
               <div className="rehearsal-line-active-panel">
-                <div className={`rehearsal-status is-${status.kind}`}>
-                  {status.kind === "error" && <span className="mic-meter" aria-hidden="true"><i /><i /><i /><i /></span>}
-                  <div><strong>{status.title}</strong><span>{status.detail}</span></div>
-                </div>
                 {status.kind === "error" && (
-                  <div className="rehearsal-controls">
-                    <button onClick={onReplay} disabled={!canReplay}>↻ Replay cue</button>
-                  </div>
+                  <>
+                    <div className={`rehearsal-status is-${status.kind}`}>
+                      <span className="mic-meter" aria-hidden="true"><i /><i /><i /><i /></span>
+                      <div><strong>{status.title}</strong><span>{status.detail}</span></div>
+                    </div>
+                    <div className="rehearsal-controls">
+                      <button onClick={onReplay} disabled={!canReplay}>↻ Replay cue</button>
+                    </div>
+                  </>
                 )}
                 <footer>
                   <button onClick={onPrev} disabled={index === 0}>← Previous</button>
