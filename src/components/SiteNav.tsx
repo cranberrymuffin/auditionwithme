@@ -141,7 +141,7 @@ export default function SiteNav() {
             }
             onClick={() => setAccountMenuOpen(false)}
           >
-            My scripts
+            My auditions
           </NavLink>
         </div>
       )}
@@ -235,7 +235,7 @@ export default function SiteNav() {
                 }
                 onClick={closeMenu}
               >
-                My scripts
+                My auditions
               </NavLink>
               <button
                 type="button"

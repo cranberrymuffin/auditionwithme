@@ -11,6 +11,7 @@ const features = [
   "Choose a voice for every character",
   "Rehearse complete scripts",
   "Follow dialogue word by word",
+  "Record self-tape auditions on camera",
   "Save your selected role and setup",
   "Replay scenes throughout your plan",
 ];
