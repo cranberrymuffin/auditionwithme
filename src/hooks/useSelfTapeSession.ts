@@ -43,9 +43,14 @@ export function useSelfTapeSession(scriptId: string | null) {
     // the same id without a round trip in between.
     const id = crypto.randomUUID();
     const path = `${user.id}/${id}.webm`;
+    // iOS Safari's fetch() can silently mishandle a Blob request body,
+    // especially one assembled from multiple recorder chunks like this one —
+    // uploads that always succeed on desktop fail every time on iPhone.
+    // Sending the raw bytes instead of the Blob works around it.
+    const bytes = await blob.arrayBuffer();
     const { error: uploadError } = await supabase.storage
       .from("self-tapes")
-      .upload(path, blob, { contentType: blob.type });
+      .upload(path, bytes, { contentType: blob.type });
     if (uploadError) {
       console.error("Failed to upload self-tape:", uploadError.message);
       setSaving(false);
