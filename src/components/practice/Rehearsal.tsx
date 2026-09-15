@@ -153,8 +153,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       setPlaybackState("ready");
       return;
     }
+    // Nothing to advance to on the last step — leave playbackState at "ready"
+    // so the auto-finish check below (which watches for exactly that) fires.
+    const isLast = currentStepIndex >= steps.length - 1;
     if (!step.verbalLine.trim()) {
       setPlaybackState("ready");
+      if (isLast) return;
       const timer = setTimeout(() => goNextRef.current(), 1200);
       return () => clearTimeout(timer);
     }
@@ -167,7 +171,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       signal: controller.signal,
       onEnded: () => {
         setPlaybackState("ready");
-        goNextRef.current();
+        if (!isLast) goNextRef.current();
       },
     }).catch((error) => {
       if (error?.name !== "AbortError") setPlaybackState("error");
