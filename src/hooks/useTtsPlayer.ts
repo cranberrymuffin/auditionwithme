@@ -206,9 +206,20 @@ export function useTtsPlayer() {
 
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
-      audioContextRef.current = new AudioContext();
-      tapDestinationRef.current =
-        audioContextRef.current.createMediaStreamDestination();
+      const context = new AudioContext();
+      // Self-heals for the rest of the rehearsal instead of only being
+      // resumed at specific checkpoints (Start click, before each play()).
+      // On mobile, things besides the checkpoints we know about can also
+      // interrupt the shared session — starting the self-tape recorder's
+      // MediaRecorder right as the first cues are trying to play is one —
+      // so react to every drop instead of guessing at every trigger.
+      context.onstatechange = () => {
+        if (context.state !== "running" && context.state !== "closed") {
+          void context.resume();
+        }
+      };
+      audioContextRef.current = context;
+      tapDestinationRef.current = context.createMediaStreamDestination();
     }
     return {
       context: audioContextRef.current,
