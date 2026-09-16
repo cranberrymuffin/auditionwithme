@@ -7,7 +7,16 @@ import { IS_BETA_TESTING } from "../lib/beta";
 const steps = [
   ["01", "Upload", "Add your PDF sides."],
   ["02", "Choose your role", "Select the character you’re rehearsing."],
-  ["03", "Rehearse", "Hear every other role and stay focused on your scene."],
+  [
+    "03",
+    "Rehearse & record",
+    "Hear every other role while your camera records a self-tape of your take.",
+  ],
+  [
+    "04",
+    "Download & submit",
+    "Save your self-tape from My Account and send it in for the audition.",
+  ],
 ];
 
 export default function About() {
@@ -18,7 +27,7 @@ export default function About() {
     <main className="cinematic-page about-page-clean">
       <Seo
         title="How It Works"
-        description="Upload your sides, choose your role, and rehearse with every other character read aloud while your lines follow along on screen."
+        description="Upload your sides, choose your role, and rehearse with every other character read aloud while your lines follow along on screen. Record a self-tape as you go and download it to submit for your audition."
         path="/how-it-works"
       />
       <div className="cinematic-backdrop" aria-hidden="true" />
@@ -31,6 +40,8 @@ export default function About() {
           <div>
             Upload your sides, choose your role, and rehearse with every other
             character read aloud while your lines follow along on screen.
+            Record a self-tape as you go, then download it to submit for
+            your audition.
           </div>
           <button
             type="button"
