@@ -19,7 +19,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!active) return;
+      if (data.session) {
+        // getSession() only reads the locally cached token — verify it's
+        // still valid server-side (it won't be if the account was deleted or
+        // the signing key that issued it was revoked) before trusting it.
+        const { error } = await supabase.auth.getUser();
+        if (error) {
+          await supabase.auth.signOut();
+          return;
+        }
+      }
       if (!active) return;
       setSession(data.session);
       setLoading(false);
