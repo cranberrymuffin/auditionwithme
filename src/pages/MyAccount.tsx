@@ -203,13 +203,30 @@ export default function MyAccount() {
     try {
       const response = await fetch(url);
       const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
       // Extension must match what was actually recorded (mp4 on Safari,
       // webm elsewhere) — storage_path already carries the right one.
       const extension = tape.storage_path.split(".").pop() ?? "webm";
-      link.download = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
+      const filename = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
+      const file = new File([blob], filename, { type: blob.type });
+
+      // iOS Safari ignores <a download> on a blob URL and instead opens its
+      // Quick Look preview page, which is a confusing dead end for saving a
+      // video from a PWA. The Web Share API triggers the native share sheet
+      // ("Save Video" / "Save to Files") directly, which is what mobile users
+      // actually expect from a download action.
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch (shareErr) {
+          if ((shareErr as Error).name !== "AbortError") throw shareErr;
+        }
+        return;
+      }
+
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
