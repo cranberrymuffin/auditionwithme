@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Modal from "../components/Modal";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
@@ -191,6 +192,11 @@ export default function Pricing() {
 
   return (
     <main className="pricing-page">
+      <Seo
+        title="Pricing"
+        description="3 free rehearsal sessions, no credit card required. Continue with Audition Plus for $7/month for unlimited rehearsals."
+        path="/pricing"
+      />
       <SiteNav />
 
       <section className="pricing-main">

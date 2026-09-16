@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { supabase } from "../lib/supabase";
 
@@ -40,6 +41,11 @@ export default function Login() {
 
   return (
     <main className="cinematic-page auth-page">
+      <Seo
+        title="Log In"
+        description="Log in to AuditionWithMe to continue rehearsing your saved scripts."
+        path="/login"
+      />
       <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 

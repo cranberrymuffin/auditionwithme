@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -14,6 +15,11 @@ export default function About() {
 
   return (
     <main className="cinematic-page about-page-clean">
+      <Seo
+        title="How It Works"
+        description="Upload your sides, choose your role, and rehearse with every other character read aloud while your lines follow along on screen."
+        path="/how-it-works"
+      />
       <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 

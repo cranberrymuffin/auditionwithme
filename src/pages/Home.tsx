@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
@@ -154,6 +155,11 @@ export default function Home() {
         if (file) handleFile(file);
       }}
     >
+      <Seo
+        title="AuditionWithMe — A rehearsal partner for actors"
+        description="Upload your script, choose your character, and rehearse every scene with responsive scene partners. 3 free sessions, no credit card required."
+        path="/"
+      />
       <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 

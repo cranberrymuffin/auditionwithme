@@ -15,6 +15,7 @@ import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { hashFile } from "../lib/scriptHash";
+import { useSeo } from "../components/Seo";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
 // Account — re-launches practice from a script that's already been parsed,
@@ -48,6 +49,12 @@ const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
   : "We couldn't reach the script service. Check your connection and try again.";
 
 export default function Practice() {
+  useSeo({
+    title: "Rehearsal",
+    description: "Rehearse your script with every other character read aloud.",
+    path: "/practice",
+    noindex: true,
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();

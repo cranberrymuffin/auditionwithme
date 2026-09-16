@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -242,6 +243,12 @@ export default function MyAccount() {
 
   return (
     <main className="account-page">
+      <Seo
+        title="My Account"
+        description="Manage your saved scripts and self-tape recordings."
+        path="/account"
+        noindex
+      />
       <SiteNav />
 
       <section className="account-main">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Modal from "../components/Modal";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
@@ -170,6 +171,12 @@ export default function Billing() {
 
   return (
     <main className="account-page billing-page">
+      <Seo
+        title="Billing"
+        description="Manage your Audition Plus subscription and billing history."
+        path="/billing"
+        noindex
+      />
       <SiteNav />
 
       <section className="account-main">

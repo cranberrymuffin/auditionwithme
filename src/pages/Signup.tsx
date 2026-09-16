@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
+import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 
 export default function Signup() {
@@ -41,6 +42,11 @@ export default function Signup() {
 
   return (
     <main className="cinematic-page auth-page">
+      <Seo
+        title="Sign Up"
+        description="Create a free AuditionWithMe account and start rehearsing your scripts today. 3 free sessions, no credit card required."
+        path="/signup"
+      />
       <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 
