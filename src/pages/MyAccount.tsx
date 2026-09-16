@@ -214,8 +214,11 @@ export default function MyAccount() {
       // Quick Look preview page, which is a confusing dead end for saving a
       // video from a PWA. The Web Share API triggers the native share sheet
       // ("Save Video" / "Save to Files") directly, which is what mobile users
-      // actually expect from a download action.
-      if (navigator.canShare?.({ files: [file] })) {
+      // actually expect from a download action. Desktop browsers (Chrome/Edge
+      // on Windows/macOS) also implement navigator.share, but a share sheet
+      // there is unexpected — desktop users just want the file saved directly.
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile && navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file] });
         } catch (shareErr) {
