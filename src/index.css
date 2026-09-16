@@ -1823,6 +1823,74 @@ header .flow-back:hover {
   font-weight: 600;
 }
 
+.feedback-gate-video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  margin-bottom: 16px;
+  border-radius: 9px;
+  background: #000;
+}
+.feedback-gate-video-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.875rem;
+}
+.feedback-gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feedback-gate-stars {
+  display: flex;
+  gap: 6px;
+}
+.feedback-gate-star {
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(248, 241, 230, 0.3);
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.feedback-gate-star:hover {
+  transform: scale(1.08);
+}
+.feedback-gate-star.is-filled {
+  color: var(--color-coral-500);
+}
+.feedback-gate-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  background: rgba(9, 14, 22, 0.35);
+  color: rgba(248, 241, 230, 0.92);
+  font: inherit;
+  resize: vertical;
+}
+.feedback-gate-textarea:focus {
+  outline: none;
+  border-color: rgba(255, 205, 183, 0.55);
+}
+.feedback-gate-submit {
+  min-height: 50px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.feedback-gate-submit:disabled {
+  opacity: 0.7;
+}
+
 .auth-layout {
   display: flex;
   height: calc(100dvh - clamp(68px, 10vh, 92px));
@@ -2286,7 +2354,9 @@ header .flow-back:hover {
   position: fixed;
   bottom: 26px;
   left: 50%;
-  z-index: 120;
+  /* Above .modal-overlay (200) so toasts (e.g. FeedbackGate's validation and
+     save-failure notices) stay visible over any open modal. */
+  z-index: 210;
   display: flex;
   width: min(430px, calc(100vw - 32px));
   flex-direction: column;

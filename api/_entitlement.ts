@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import type { Entitlement } from "../src/types.js";
+import { IS_BETA_TESTING } from "../src/lib/beta.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -130,6 +131,12 @@ export async function issueRehearsalGrant(
   userId: string,
   res: VercelResponse
 ): Promise<string | null> {
+  // Beta: rehearsals are unlimited and the free-session counter is never
+  // consulted or incremented, so nothing needs unwinding once beta ends —
+  // see src/lib/beta.ts and FeedbackGate.tsx for what replaces the paywall.
+  if (IS_BETA_TESTING) {
+    return signGrant({ userId, exp: Math.floor(Date.now() / 1000) + GRANT_TTL_SECONDS });
+  }
   const { data, error } = await serviceClient().rpc("issue_rehearsal_grant", { p_user_id: userId });
   if (error) {
     console.error("issue_rehearsal_grant RPC failed:", error.message);

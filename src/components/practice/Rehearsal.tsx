@@ -7,6 +7,7 @@ import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTt
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
+import { notifyAuditionClosed } from "../../lib/feedbackGate";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
@@ -213,6 +214,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // Scripts so the user can immediately review, download, or delete it.
   const endRehearsal = useCallback(async () => {
     const tapeId = await finishRecording();
+    // Beta: a saved audition immediately owes feedback — FeedbackGate.tsx is
+    // mounted at the app root and shows its blocking overlay the instant this
+    // fires, on top of whatever page we land on next.
+    if (tapeId) notifyAuditionClosed();
     navigate("/account", tapeId ? { state: { openTapeId: tapeId } } : undefined);
   }, [finishRecording, navigate]);
 

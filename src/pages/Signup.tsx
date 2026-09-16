@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import { IS_BETA_TESTING } from "../lib/beta";
 
 export default function Signup() {
   // Carries the visitor's original destination/intent (e.g. the home upload
@@ -44,7 +45,11 @@ export default function Signup() {
     <main className="cinematic-page auth-page">
       <Seo
         title="Sign Up"
-        description="Create a free AuditionWithMe account and start rehearsing your scripts today. 3 free sessions, no credit card required."
+        description={
+          IS_BETA_TESTING
+            ? "Create a free AuditionWithMe account and start rehearsing your scripts today. Free during beta, no credit card required."
+            : "Create a free AuditionWithMe account and start rehearsing your scripts today. 3 free sessions, no credit card required."
+        }
         path="/signup"
       />
       <div className="cinematic-backdrop" aria-hidden="true" />
@@ -65,7 +70,7 @@ export default function Signup() {
           ) : (
             <>
               <header>
-                <p>Three free sessions</p>
+                <p>{IS_BETA_TESTING ? "Beta test now" : "Three free sessions"}</p>
                 <h1>Create your account</h1>
               </header>
               <label htmlFor="signup-email">Email</label>

@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
+import { IS_BETA_TESTING } from "../lib/beta";
 
 const steps = [
   ["01", "Upload", "Add your PDF sides."],
@@ -45,7 +46,7 @@ export default function About() {
               ) : (
                 <>
                   <strong>Sign up</strong>
-                  <small>Three rehearsals for free</small>
+                  <small>{IS_BETA_TESTING ? "Beta test now" : "Three rehearsals for free"}</small>
                 </>
               )}
             </span>

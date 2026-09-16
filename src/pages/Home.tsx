@@ -8,6 +8,7 @@ import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { hashFile } from "../lib/scriptHash";
+import { IS_BETA_TESTING } from "../lib/beta";
 import type { SavedScript } from "../types";
 
 // Scanned PDFs are rendered to page images client-side (never uploaded whole),
@@ -32,12 +33,15 @@ export default function Home() {
       )
     : 0;
   const isSubscribed = entitlement?.subscription_status === "active";
+  // No paywall during beta — rehearsals are unlimited (see src/lib/beta.ts
+  // and api/_entitlement.ts), so the free-session counter never blocks.
   const isOutOfFreeSessions =
-    !!entitlement && !isSubscribed && freeSessionsRemaining === 0;
+    !IS_BETA_TESTING && !!entitlement && !isSubscribed && freeSessionsRemaining === 0;
 
-  const sessionsStatus = entitlement
-    ? `${freeSessionsRemaining} free sessions left`
-    : null;
+  const sessionsStatus =
+    !IS_BETA_TESTING && entitlement
+      ? `${freeSessionsRemaining} free sessions left`
+      : null;
   // The hero trust line right below the CTA carries the session count, so
   // the button hint stays minimal to avoid saying it twice.
   const uploadHint = "PDF supported";
@@ -157,7 +161,11 @@ export default function Home() {
     >
       <Seo
         title="AuditionWithMe — A rehearsal partner for actors"
-        description="Upload your script, choose your character, and rehearse every scene with responsive scene partners. 3 free sessions, no credit card required."
+        description={
+          IS_BETA_TESTING
+            ? "Upload your script, choose your character, and rehearse every scene with responsive scene partners. Free during beta — no credit card required."
+            : "Upload your script, choose your character, and rehearse every scene with responsive scene partners. 3 free sessions, no credit card required."
+        }
         path="/"
       />
       <div className="cinematic-backdrop" aria-hidden="true" />
@@ -252,9 +260,9 @@ export default function Home() {
 
           {!isSubscribed && (
             <p className="hero-trust">
-              {sessionsStatus
-                ? `${sessionsStatus}`
-                : "3 free sessions · No credit card required"}
+              {IS_BETA_TESTING
+                ? "Now in beta · Free for testers · No credit card required"
+                : sessionsStatus || "3 free sessions · No credit card required"}
             </p>
           )}
 

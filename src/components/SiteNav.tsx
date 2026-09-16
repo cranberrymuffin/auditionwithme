@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { supabase } from "../lib/supabase";
+import { IS_BETA_TESTING } from "../lib/beta";
 
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
@@ -37,8 +38,10 @@ export default function SiteNav() {
   const subscriptionPath = isSubscriber ? "/billing" : "/pricing";
 
   // Logged-in users get pricing/subscription access via the "My account"
-  // dropdown instead of a top-level nav link.
-  const showPricing = !loading && !user;
+  // dropdown instead of a top-level nav link. Both are off during beta —
+  // see src/lib/beta.ts.
+  const showPricing = !IS_BETA_TESTING && !loading && !user;
+  const showSubscriptionLink = !IS_BETA_TESTING;
 
   // Close the mobile menu and account dropdown on any route change.
   useEffect(() => {
@@ -91,8 +94,8 @@ export default function SiteNav() {
 
   const isAccountAreaActive =
     location.pathname === "/account" ||
-    location.pathname === "/pricing" ||
-    location.pathname === "/billing";
+    (showSubscriptionLink &&
+      (location.pathname === "/pricing" || location.pathname === "/billing"));
 
   const accountDropdown = (
     <div className="site-nav-account" ref={accountMenuRef}>
@@ -123,16 +126,18 @@ export default function SiteNav() {
       </button>
       {accountMenuOpen && (
         <div className="site-nav-account-menu" role="menu">
-          <NavLink
-            to={subscriptionPath}
-            role="menuitem"
-            className={({ isActive }) =>
-              `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
-            }
-            onClick={() => setAccountMenuOpen(false)}
-          >
-            {subscriptionLabel}
-          </NavLink>
+          {showSubscriptionLink && (
+            <NavLink
+              to={subscriptionPath}
+              role="menuitem"
+              className={({ isActive }) =>
+                `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
+              }
+              onClick={() => setAccountMenuOpen(false)}
+            >
+              {subscriptionLabel}
+            </NavLink>
+          )}
           <NavLink
             to="/account"
             role="menuitem"
@@ -219,15 +224,17 @@ export default function SiteNav() {
           {loading ? null : user ? (
             <>
               <span className="site-nav-drawer-heading">My account</span>
-              <NavLink
-                to={subscriptionPath}
-                className={({ isActive }) =>
-                  `${navLinkClass({ isActive })} site-nav-drawer-sublink`
-                }
-                onClick={closeMenu}
-              >
-                {subscriptionLabel}
-              </NavLink>
+              {showSubscriptionLink && (
+                <NavLink
+                  to={subscriptionPath}
+                  className={({ isActive }) =>
+                    `${navLinkClass({ isActive })} site-nav-drawer-sublink`
+                  }
+                  onClick={closeMenu}
+                >
+                  {subscriptionLabel}
+                </NavLink>
+              )}
               <NavLink
                 to="/account"
                 className={({ isActive }) =>
