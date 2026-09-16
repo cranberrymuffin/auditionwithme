@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { IS_BETA_TESTING } from "../lib/beta";
+import { supabase } from "../lib/supabase";
 
 export default function Signup() {
   // Carries the visitor's original destination/intent (e.g. the home upload
@@ -20,20 +21,15 @@ export default function Signup() {
     setAccountCreated(false);
     setSubmitting(true);
 
-    const response = await fetch("/api/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${window.location.origin}/login` },
     });
-
-    const payload = await response.json().catch(() => null);
-    const signUpError = !response.ok
-      ? payload?.error || "Could not create account."
-      : null;
 
     if (signUpError) {
       setSubmitting(false);
-      setError(signUpError);
+      setError(signUpError.message);
       return;
     }
 
@@ -59,12 +55,13 @@ export default function Signup() {
         <form className="auth-card" onSubmit={handleSubmit}>
           {accountCreated ? (
             <div className="auth-success" role="status">
-              <h1>Your account has been created.</h1>
+              <h1>Check your email to confirm your account.</h1>
               <p>
+                We sent a confirmation link to {email}. Click it, then{" "}
                 <Link to="/login" state={location.state}>
-                  Log in
+                  log in
                 </Link>{" "}
-                with your new credentials to continue.
+                to continue.
               </p>
             </div>
           ) : (
