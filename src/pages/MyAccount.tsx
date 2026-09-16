@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { forgetSelfTapeUrl, getSelfTapeUrl } from "../lib/selfTapeUrl";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
 
@@ -59,35 +60,25 @@ export default function MyAccount() {
     };
   }, [user]);
 
-  useEffect(() => {
-    const pending = selfTapes.filter(
-      (tape) => !fetchedTapeIds.current.has(tape.id),
-    );
-    if (pending.length === 0) return;
-    pending.forEach((tape) => fetchedTapeIds.current.add(tape.id));
-
-    let active = true;
-    Promise.all(
-      pending.map(async (tape) => {
-        const { data } = await supabase.storage
-          .from("self-tapes")
-          .createSignedUrl(tape.storage_path, 3600);
-        return [tape.id, data?.signedUrl ?? null] as const;
-      }),
-    ).then((entries) => {
-      if (!active) return;
-      setTapeUrls((prev) => {
-        const next = { ...prev };
-        for (const [id, url] of entries) {
-          if (url) next[id] = url;
-        }
-        return next;
-      });
+  // Signed URLs (and the video bytes a tile's preview then pulls) are only
+  // fetched for a tape once something actually needs it — a visible tile
+  // (IntersectionObserver, see SelfTapeTile) or the expanded modal below.
+  // Fetching every tape's URL/video up front here used to run on every
+  // /account visit regardless of how many tapes were on screen, which is
+  // what blew through Supabase's storage egress quota.
+  //
+  // getSelfTapeUrl caches the signed URL itself (module-level, outside this
+  // component), so leaving /account and coming back reuses the same URL —
+  // and the browser serves the video from its own HTTP cache — instead of
+  // minting a new token and downloading the file again.
+  const ensureTapeUrl = useCallback((tape: SelfTape) => {
+    if (fetchedTapeIds.current.has(tape.id)) return;
+    fetchedTapeIds.current.add(tape.id);
+    getSelfTapeUrl(tape.storage_path).then((url) => {
+      if (!url) return;
+      setTapeUrls((prev) => ({ ...prev, [tape.id]: url }));
     });
-    return () => {
-      active = false;
-    };
-  }, [selfTapes]);
+  }, []);
 
   // Arriving straight from a just-finished audition (Rehearsal navigates
   // here with the new tape's id) opens that tape's review view immediately.
@@ -147,6 +138,7 @@ export default function MyAccount() {
       toast("Couldn't delete that self-tape. Please try again.");
       return;
     }
+    forgetSelfTapeUrl(tape.storage_path);
     setSelfTapes((prev) => prev.filter((item) => item.id !== tape.id));
     if (expandedTapeId === tape.id) {
       setExpandedTapeId(null);
@@ -188,6 +180,7 @@ export default function MyAccount() {
       toast("Couldn't delete that audition. Please try again.");
       return;
     }
+    paths.forEach(forgetSelfTapeUrl);
     setScripts((prev) => prev.filter((item) => item.id !== script.id));
     setSelfTapes((prev) => prev.filter((tape) => tape.script_id !== script.id));
     if (
@@ -243,6 +236,12 @@ export default function MyAccount() {
 
   const expandedTape =
     selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
+
+  // The modal can be opened directly (e.g. via location.state above) before
+  // its tile has ever scrolled into view, so make sure it always has a URL.
+  useEffect(() => {
+    if (expandedTape) ensureTapeUrl(expandedTape);
+  }, [expandedTape, ensureTapeUrl]);
 
   return (
     <main className="account-page">
@@ -310,52 +309,12 @@ export default function MyAccount() {
                     <ul className="account-self-tapes">
                       {tapes.map((tape) => (
                         <li key={tape.id}>
-                          <button
-                            type="button"
-                            className="account-tape-tile"
-                            onClick={() => setExpandedTapeId(tape.id)}
-                            aria-label="Open self-tape"
-                          >
-                            <span className="account-tape-tile-frame">
-                              {tapeUrls[tape.id] ? (
-                                <video
-                                  src={tapeUrls[tape.id]}
-                                  preload="metadata"
-                                  muted
-                                  playsInline
-                                  onLoadedMetadata={(event) => {
-                                    // preload="metadata" alone leaves the canvas
-                                    // blank in some browsers; seeking forces a
-                                    // frame to actually decode and paint.
-                                    const video = event.currentTarget;
-                                    video.currentTime = Math.min(
-                                      0.5,
-                                      video.duration || 0.5,
-                                    );
-                                  }}
-                                />
-                              ) : (
-                                <span className="account-tape-tile-loading" />
-                              )}
-                              <span
-                                className="account-tape-tile-play"
-                                aria-hidden="true"
-                              >
-                                ▶
-                              </span>
-                            </span>
-                            <span className="account-tape-tile-date">
-                              {new Date(tape.created_at).toLocaleString(
-                                undefined,
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                },
-                              )}
-                            </span>
-                          </button>
+                          <SelfTapeTile
+                            tape={tape}
+                            url={tapeUrls[tape.id]}
+                            ensureUrl={ensureTapeUrl}
+                            onOpen={() => setExpandedTapeId(tape.id)}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -426,5 +385,80 @@ export default function MyAccount() {
         </div>
       )}
     </main>
+  );
+}
+
+/** A self-tape thumbnail that only requests its signed URL — and the video
+ * bytes the browser then pulls to paint a preview frame — once it actually
+ * scrolls into view, instead of every tape on the account loading at once. */
+function SelfTapeTile({
+  tape,
+  url,
+  ensureUrl,
+  onOpen,
+}: {
+  tape: SelfTape;
+  url: string | undefined;
+  ensureUrl: (tape: SelfTape) => void;
+  onOpen: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || visible) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) setVisible(true);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  useEffect(() => {
+    if (visible) ensureUrl(tape);
+  }, [visible, tape, ensureUrl]);
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      className="account-tape-tile"
+      onClick={onOpen}
+      aria-label="Open self-tape"
+    >
+      <span className="account-tape-tile-frame">
+        {url ? (
+          <video
+            src={url}
+            preload="metadata"
+            muted
+            playsInline
+            onLoadedMetadata={(event) => {
+              // preload="metadata" alone leaves the canvas blank in some
+              // browsers; seeking forces a frame to actually decode and paint.
+              const video = event.currentTarget;
+              video.currentTime = Math.min(0.5, video.duration || 0.5);
+            }}
+          />
+        ) : (
+          <span className="account-tape-tile-loading" />
+        )}
+        <span className="account-tape-tile-play" aria-hidden="true">
+          ▶
+        </span>
+      </span>
+      <span className="account-tape-tile-date">
+        {new Date(tape.created_at).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })}
+      </span>
+    </button>
   );
 }

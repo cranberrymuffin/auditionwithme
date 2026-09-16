@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Modal from "./Modal";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { getSelfTapeUrl } from "../lib/selfTapeUrl";
 import { useToast } from "../lib/toast";
 import { onAuditionClosed } from "../lib/feedbackGate";
 
@@ -57,12 +58,9 @@ export default function FeedbackGate() {
       return;
     }
     let active = true;
-    supabase.storage
-      .from("self-tapes")
-      .createSignedUrl(pending.storage_path, 3600)
-      .then(({ data }) => {
-        if (active) setVideoUrl(data?.signedUrl ?? null);
-      });
+    getSelfTapeUrl(pending.storage_path).then((url) => {
+      if (active) setVideoUrl(url);
+    });
     return () => {
       active = false;
     };
@@ -119,6 +117,7 @@ export default function FeedbackGate() {
           src={videoUrl}
           controls
           playsInline
+          preload="none"
         />
       ) : (
         <div className="feedback-gate-video feedback-gate-video-loading">
