@@ -3,16 +3,13 @@ import { logAudioEvent } from "../lib/audioDiagnostics";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
-// First entry the browser actually supports wins. mp4 is preferred where
-// available (widest playback compatibility, incl. iOS); Firefox and older
-// Chrome/Android builds without an mp4 encoder fall back to webm.
-const MIME_TYPES = [
-  "video/mp4;codecs=avc1,mp4a",
-  "video/mp4",
-  "video/webm;codecs=vp9,opus",
-  "video/webm;codecs=vp8,opus",
-  "video/webm",
-];
+// First entry the browser actually supports wins. mp4 only: it's the one
+// container iOS can play back, save to Photos, and share. Browsers with no
+// mp4 encoder (Firefox) support neither of these, so isTypeSupported() fails
+// for both and MediaRecorder falls back to that browser's own implicit
+// default (webm) — same outcome as explicitly listing webm, minus the dead
+// entries here.
+const MIME_TYPES = ["video/mp4;codecs=avc1,mp4a", "video/mp4"];
 
 function pickMimeType(): string | undefined {
   return MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
