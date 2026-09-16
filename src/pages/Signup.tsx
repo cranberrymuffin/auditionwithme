@@ -47,7 +47,7 @@ export default function Signup() {
         title="Sign Up"
         description={
           IS_BETA_TESTING
-            ? "Create a free AuditionWithMe account and start rehearsing your scripts today. Free during beta, no credit card required."
+            ? "Create a free AuditionWithMe account and start rehearsing your scripts today. Free during beta."
             : "Create a free AuditionWithMe account and start rehearsing your scripts today. 3 free sessions, no credit card required."
         }
         path="/signup"

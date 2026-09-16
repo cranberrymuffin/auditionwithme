@@ -163,7 +163,7 @@ export default function Home() {
         title="AuditionWithMe — A rehearsal partner for actors"
         description={
           IS_BETA_TESTING
-            ? "Upload your script, choose your character, and rehearse every scene with responsive scene partners. Free during beta — no credit card required."
+            ? "Upload your script, choose your character, and rehearse every scene with responsive scene partners. Free during beta."
             : "Upload your script, choose your character, and rehearse every scene with responsive scene partners. 3 free sessions, no credit card required."
         }
         path="/"
@@ -261,7 +261,7 @@ export default function Home() {
           {!isSubscribed && (
             <p className="hero-trust">
               {IS_BETA_TESTING
-                ? "Now in beta · Free for testers · No credit card required"
+                ? "Now in beta · Free for testers"
                 : sessionsStatus || "3 free sessions · No credit card required"}
             </p>
           )}
