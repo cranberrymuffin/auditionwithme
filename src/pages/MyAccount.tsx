@@ -206,7 +206,10 @@ export default function MyAccount() {
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = `self-tape-${tape.created_at.slice(0, 10)}.webm`;
+      // Extension must match what was actually recorded (mp4 on Safari,
+      // webm elsewhere) — storage_path already carries the right one.
+      const extension = tape.storage_path.split(".").pop() ?? "webm";
+      link.download = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -368,7 +371,12 @@ export default function MyAccount() {
               ✕
             </button>
             {tapeUrls[expandedTape.id] ? (
-              <video src={tapeUrls[expandedTape.id]} controls autoPlay />
+              <video
+                src={tapeUrls[expandedTape.id]}
+                controls
+                autoPlay
+                playsInline
+              />
             ) : (
               <div className="tape-modal-loading">Loading video…</div>
             )}

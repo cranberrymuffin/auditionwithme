@@ -42,7 +42,11 @@ export function useSelfTapeSession(scriptId: string | null) {
     // Generated client-side so the upload path and the row insert can share
     // the same id without a round trip in between.
     const id = crypto.randomUUID();
-    const path = `${user.id}/${id}.webm`;
+    // Extension must match the recorded container: Safari (iOS and desktop)
+    // records mp4, not webm, and a mismatched extension keeps iOS from
+    // recognizing a downloaded file as playable even though the bytes are fine.
+    const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+    const path = `${user.id}/${id}.${extension}`;
     // iOS Safari's fetch() can silently mishandle a Blob request body,
     // especially one assembled from multiple recorder chunks like this one —
     // uploads that always succeed on desktop fail every time on iPhone.

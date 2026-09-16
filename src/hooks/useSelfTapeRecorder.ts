@@ -3,9 +3,12 @@ import { logAudioEvent } from "../lib/audioDiagnostics";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
-// First entry the browser actually supports wins — Chrome/Edge take vp9,
-// Safari/Firefox fall back down the list.
+// First entry the browser actually supports wins. mp4 is preferred where
+// available (widest playback compatibility, incl. iOS); Firefox and older
+// Chrome/Android builds without an mp4 encoder fall back to webm.
 const MIME_TYPES = [
+  "video/mp4;codecs=avc1,mp4a",
+  "video/mp4",
   "video/webm;codecs=vp9,opus",
   "video/webm;codecs=vp8,opus",
   "video/webm",
