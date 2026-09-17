@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import NdaModal from "../components/NdaModal";
 import { IS_BETA_TESTING } from "../lib/beta";
 import { supabase } from "../lib/supabase";
 
@@ -14,26 +15,53 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
+  const [showNda, setShowNda] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  // The form itself just validates email/password and opens the NDA modal
+  // -- account creation happens from there, in handleAcceptAndCreateAccount,
+  // so agreeing to the NDA and creating the account are one step.
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setAccountCreated(false);
-    setSubmitting(true);
+    setShowNda(true);
+  }
 
-    const { error: signUpError } = await supabase.auth.signUp({
+  async function handleAcceptAndCreateAccount() {
+    setSubmitting(true);
+    setError(null);
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${window.location.origin}/login` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        // Read by the handle_new_user trigger (see
+        // supabase/migrations/20260916120000_nda_acceptance.sql) and
+        // written straight to entitlements.nda_accepted_at -- there's no
+        // session yet at this point (email confirmation is pending) for a
+        // client-side write gated by RLS.
+        data: { nda_accepted_at: new Date().toISOString() },
+      },
     });
 
+    setSubmitting(false);
+    setShowNda(false);
+
     if (signUpError) {
-      setSubmitting(false);
       setError(signUpError.message);
       return;
     }
 
-    setSubmitting(false);
+    // Supabase doesn't return an error for a duplicate signup when email
+    // confirmation is on -- returning one would let an attacker enumerate
+    // registered emails. Instead an existing, already-confirmed account
+    // comes back with an empty identities array, which is the documented
+    // way to detect it client-side.
+    if (data.user && data.user.identities?.length === 0) {
+      setError("An account with this email already exists. Log in instead.");
+      return;
+    }
+
     setAccountCreated(true);
   }
 
@@ -102,8 +130,7 @@ export default function Signup() {
           {!accountCreated && (
             <>
               <button type="submit" disabled={submitting}>
-                {submitting ? "Creating account…" : "Sign up"}{" "}
-                <span aria-hidden="true">→</span>
+                Sign up <span aria-hidden="true">→</span>
               </button>
 
               <footer>
@@ -116,6 +143,14 @@ export default function Signup() {
           )}
         </form>
       </section>
+
+      {showNda && (
+        <NdaModal
+          submitting={submitting}
+          onCancel={() => setShowNda(false)}
+          onAccept={() => void handleAcceptAndCreateAccount()}
+        />
+      )}
     </main>
   );
 }

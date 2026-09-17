@@ -1891,6 +1891,51 @@ header .flow-back:hover {
   opacity: 0.7;
 }
 
+.nda-modal-body {
+  max-height: 45vh;
+  margin-bottom: 18px;
+  padding-right: 6px;
+  overflow-y: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+  color: rgba(248, 241, 230, 0.82);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.nda-modal-body p {
+  margin: 0 0 12px;
+}
+.nda-modal-body p:last-child {
+  margin-bottom: 0;
+}
+.nda-modal-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+}
+.nda-modal-actions button {
+  min-height: 50px;
+  border-radius: 9px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.nda-modal-actions button:last-child {
+  flex: 1;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+}
+.nda-modal-actions button:last-child:disabled {
+  opacity: 0.7;
+}
+.nda-modal-actions button:first-child {
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: transparent;
+  color: rgba(248, 241, 230, 0.85);
+  font-weight: 600;
+}
+
 .auth-layout {
   display: flex;
   height: calc(100dvh - clamp(68px, 10vh, 92px));
