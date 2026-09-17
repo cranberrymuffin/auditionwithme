@@ -14,15 +14,17 @@ The product is designed for actors who need to rehearse without arranging a read
 - Applies delivery direction so spoken lines better match the scene
 - Saves scripts, casting choices, and rehearsal state for later use
 - Avoids reparsing scripts that have already been processed
-- Includes free rehearsal sessions and a monthly subscription for continued use
+- Records a self-tape of the actor's take during rehearsal and stores it to the account
+- Requires a rating and comment on each self-tape before the actor can start another rehearsal (beta)
+- Requires NDA acceptance at signup before any script material can be uploaded
 
 ## Architecture
 
-The application is split into four main parts.
+The application is split into three main parts.
 
 ### Web application
 
-The interface is built with React, TypeScript, and Vite. It contains the public product pages, account and billing views, PDF preview, role selection, voice casting, and rehearsal experience. The site is installable as a progressive web app and uses responsive artwork and layouts across desktop, tablet, and phone viewports.
+The interface is built with React, TypeScript, and Vite. It contains the public product pages, account views, PDF preview, role selection, voice casting, and rehearsal experience. The site is installable as a progressive web app and uses responsive artwork and layouts across desktop, tablet, and phone viewports.
 
 ### Script processing
 
@@ -34,18 +36,6 @@ Anthropic models are used where document interpretation or scene-level judgment 
 
 ElevenLabs provides the available voices and generates scene-partner speech. Voice assignments and delivery tags are stored with the script so repeat rehearsals can reuse prior casting and direction instead of rebuilding them each time.
 
-### Accounts, storage, and billing
+### Accounts and storage
 
-Supabase provides authentication, script records, PDF storage, and rehearsal entitlements. Stripe handles subscriptions and billing management. Serverless API routes enforce session limits, coordinate external services, and keep private credentials out of the browser.
-
-## Business model
-
-New accounts receive three rehearsal sessions without entering a credit card. A session is counted when a new PDF is prepared as a rehearsal; replaying an existing rehearsal does not consume another session.
-
-Audition Plus costs $7 per month and allows subscribers to create new rehearsals without the free-session limit. Billing is handled by Stripe, and saved scripts remain available through the actor’s account.
-
-## Business impact
-
-Audition With Me removes a practical scheduling problem from audition preparation: finding someone to read the other parts. Actors can rehearse more often, repeat difficult sections, test pacing, and return to saved material without coordinating with another person.
-
-For the product, saved scripts and reusable casting reduce repeated processing costs. The free-session allowance lets actors evaluate the complete rehearsal experience, while the subscription is tied to continued creation of new rehearsals rather than limiting access to material they have already prepared.
+Supabase provides authentication, script records, PDF storage, and self-tape storage. Serverless API routes coordinate external services and keep private credentials out of the browser.
