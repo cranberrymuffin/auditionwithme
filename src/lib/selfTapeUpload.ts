@@ -5,6 +5,7 @@ import {
   removePendingTape,
   type PendingSelfTape,
 } from "./selfTapeStore";
+import { notifyAuditionClosed } from "./feedbackGate";
 
 // Pub/sub so MyAccount can swap a "processing" tile for the real, playable
 // tape (or leave it staged for the next retry) the moment a background
@@ -58,6 +59,11 @@ export async function uploadPendingTape(meta: PendingSelfTape): Promise<boolean>
 
     await removePendingTape(meta.id);
     listeners.forEach((listener) => listener(meta.id, "uploaded"));
+    // Only now does the self_tapes row actually exist to be queried (and
+    // updated by the feedback form) — notifying any earlier, off of local
+    // staging alone, can race ahead of this insert and leave FeedbackGate
+    // checking for a row that isn't there yet.
+    notifyAuditionClosed();
     return true;
   } catch (err) {
     console.error("Background self-tape upload threw:", err);

@@ -7,7 +7,6 @@ import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTt
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
-import { notifyAuditionClosed } from "../../lib/feedbackGate";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
@@ -221,10 +220,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       console.error("endRehearsal: finishRecording failed unexpectedly", err);
       return null;
     });
-    // Beta: a saved audition immediately owes feedback — FeedbackGate.tsx is
-    // mounted at the app root and shows its blocking overlay the instant this
-    // fires, on top of whatever page we land on next.
-    if (tapeId) notifyAuditionClosed();
+    // Beta: a saved audition owes feedback — FeedbackGate.tsx is mounted at
+    // the app root and shows its blocking overlay on top of whatever page
+    // we land on next. It's notified from selfTapeUpload.ts once the
+    // self_tapes row is actually confirmed saved, not from here — this
+    // resolves as soon as the take is staged locally, well before that.
     navigate("/account", tapeId ? { state: { openTapeId: tapeId } } : undefined);
   }, [finishRecording, navigate]);
 
