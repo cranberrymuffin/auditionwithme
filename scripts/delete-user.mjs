@@ -100,11 +100,19 @@ async function main() {
     .list(user.id, { limit: 1000 });
   if (storageError) throw new Error(`listing storage objects failed: ${storageError.message}`);
 
+  const { data: selfTapeObjects, error: selfTapeStorageError } = await supabase.storage
+    .from("self-tapes")
+    .list(user.id, { limit: 1000 });
+  if (selfTapeStorageError) {
+    throw new Error(`listing self-tapes storage objects failed: ${selfTapeStorageError.message}`);
+  }
+
   console.log(`  entitlements: ${entitlement ? "1 row" : "none"}${
     entitlement?.stripe_customer_id ? ` (stripe customer ${entitlement.stripe_customer_id})` : ""
   }`);
   console.log(`  scripts rows: ${scriptRows?.length ?? 0}`);
-  console.log(`  storage objects: ${storageObjects?.length ?? 0}`);
+  console.log(`  scripts storage objects: ${storageObjects?.length ?? 0}`);
+  console.log(`  self-tapes storage objects: ${selfTapeObjects?.length ?? 0}`);
 
   if (includeStripe && !entitlement?.stripe_customer_id) {
     console.log("  --stripe passed but no stripe_customer_id on file; nothing to do there.");
@@ -119,7 +127,14 @@ async function main() {
     const paths = storageObjects.map((obj) => `${user.id}/${obj.name}`);
     const { error } = await supabase.storage.from("scripts").remove(paths);
     if (error) throw new Error(`deleting storage objects failed: ${error.message}`);
-    console.log(`Deleted ${paths.length} storage object(s).`);
+    console.log(`Deleted ${paths.length} scripts storage object(s).`);
+  }
+
+  if (selfTapeObjects && selfTapeObjects.length > 0) {
+    const paths = selfTapeObjects.map((obj) => `${user.id}/${obj.name}`);
+    const { error } = await supabase.storage.from("self-tapes").remove(paths);
+    if (error) throw new Error(`deleting self-tapes storage objects failed: ${error.message}`);
+    console.log(`Deleted ${paths.length} self-tapes storage object(s).`);
   }
 
   if (includeStripe && entitlement?.stripe_customer_id) {
