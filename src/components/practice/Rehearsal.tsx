@@ -213,7 +213,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // audition the same way: save the take, then land on its tile in My
   // Scripts so the user can immediately review, download, or delete it.
   const endRehearsal = useCallback(async () => {
-    const tapeId = await finishRecording();
+    // finishRecording() guards its own errors and shouldn't throw, but this
+    // still can't be allowed to skip the navigate below — an unhandled
+    // rejection here used to leave the rehearsal stuck on-screen with no
+    // feedback prompt and no way back to My Auditions.
+    const tapeId = await finishRecording().catch((err) => {
+      console.error("endRehearsal: finishRecording failed unexpectedly", err);
+      return null;
+    });
     // Beta: a saved audition immediately owes feedback — FeedbackGate.tsx is
     // mounted at the app root and shows its blocking overlay the instant this
     // fires, on top of whatever page we land on next.

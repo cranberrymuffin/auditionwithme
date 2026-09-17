@@ -3970,6 +3970,15 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.75rem;
 }
+.account-tape-tile-pending {
+  opacity: 0.7;
+}
+.tape-modal-pending-note {
+  margin: 8px 0 0;
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.85rem;
+  text-align: center;
+}
 .tape-modal-overlay {
   position: fixed;
   inset: 0;
