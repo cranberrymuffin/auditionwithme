@@ -81,6 +81,10 @@ export default function FeedbackGate() {
       toast("Pick a star rating before continuing.");
       return;
     }
+    if (rating < 5 && !comment.trim()) {
+      toast("Let us know what happened before continuing.");
+      return;
+    }
     setSubmitting(true);
     const { error } = await supabase
       .from("self_tapes")
@@ -150,7 +154,11 @@ export default function FeedbackGate() {
           className="feedback-gate-textarea"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
-          placeholder="Anything that worked well, felt off, or broke outright?"
+          placeholder={
+            rating > 0 && rating < 5
+              ? "What happened? (required for less than 5 stars)"
+              : "Anything that worked well, felt off, or broke outright?"
+          }
           rows={4}
         />
         <button
