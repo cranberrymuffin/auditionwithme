@@ -3397,7 +3397,8 @@ header .flow-back:hover {
 
 /* Word-by-word tracking states in the teleprompter */
 .word--said {
-  color: var(--color-coral-500);
+  color: #ff3b30;
+  font-weight: 700;
 }
 .word--current {
   color: var(--ink);
