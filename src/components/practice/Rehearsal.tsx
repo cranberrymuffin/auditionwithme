@@ -221,10 +221,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       return null;
     });
     // Beta: a saved audition owes feedback — FeedbackGate.tsx is mounted at
-    // the app root and shows its blocking overlay on top of whatever page
-    // we land on next. It's notified from selfTapeUpload.ts once the
-    // self_tapes row is actually confirmed saved, not from here — this
-    // resolves as soon as the take is staged locally, well before that.
+    // the app root and shows its blocking overlay on top of whatever page we
+    // land on next. It's notified from inside finishRecording() itself (see
+    // useSelfTapeSession.ts) once the take is actually saved.
     navigate("/account", tapeId ? { state: { openTapeId: tapeId } } : undefined);
   }, [finishRecording, navigate]);
 

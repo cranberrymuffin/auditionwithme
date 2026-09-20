@@ -13,7 +13,7 @@ import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
+import { saveScript, updateScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { useSeo } from "../components/Seo";
 
@@ -127,20 +127,19 @@ export default function Practice() {
     // of triggering another parse-script call.
     const contentHash = file ? await hashFile(file) : null;
 
-    const { error } = await supabase.from("scripts").insert({
-      id,
-      user_id: user.id,
-      title,
-      steps: data.steps ?? [],
-      characters: data.characters ?? [],
-      language_code: data.languageCode ?? "en",
-      language_name: data.languageName ?? "English",
-      content_hash: contentHash,
-    });
-    if (error) {
-      console.error("Failed to save script to account:", error.message);
-    } else {
+    try {
+      await saveScript(user.id, {
+        id,
+        title,
+        steps: data.steps ?? [],
+        characters: data.characters ?? [],
+        languageCode: data.languageCode ?? "en",
+        languageName: data.languageName ?? "English",
+        contentHash,
+      });
       setScriptId(id);
+    } catch (err) {
+      console.error("Failed to save script to account:", err);
     }
   };
 
@@ -385,14 +384,9 @@ export default function Practice() {
     if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
     persistedTagsRef.current = true;
     if (replayScript?.deliveryTags) return; // already stored on the row
-    void supabase
-      .from("scripts")
-      .update({ delivery_tags: deliveryTags })
-      .eq("id", scriptId)
-      .then(({ error }) => {
-        if (error)
-          console.error("Failed to save delivery tags:", error.message);
-      });
+    void updateScript(scriptId, { deliveryTags }).catch((err) =>
+      console.error("Failed to save delivery tags:", err),
+    );
   }, [user, scriptId, deliveryTags, replayScript]);
 
   // Full voice catalog, so the user can override auto-assigned voices
@@ -435,14 +429,9 @@ export default function Practice() {
     // Persist the confirmed casting so replaying this script keeps the same
     // scene partner instead of re-running auto-casting.
     if (user && scriptId) {
-      void supabase
-        .from("scripts")
-        .update({ character_voices: next })
-        .eq("id", scriptId)
-        .then(({ error }) => {
-          if (error)
-            console.error("Failed to save voice casting:", error.message);
-        });
+      void updateScript(scriptId, { characterVoices: next }).catch((err) =>
+        console.error("Failed to save voice casting:", err),
+      );
     }
   };
 

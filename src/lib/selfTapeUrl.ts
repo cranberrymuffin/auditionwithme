@@ -1,30 +1,27 @@
-import { supabase } from "./supabase";
+import { getTapeBlob } from "./selfTapeStore";
 
-// Self-tapes upload with Supabase Storage's default 1hr Cache-Control, so a
-// signed URL that's reused verbatim is served straight from the browser's
-// own HTTP cache on a repeat request — no bytes cross the network again.
-// Module-level (outside React) so the cache survives component remounts:
-// navigating away from /account and back, or FeedbackGate and MyAccount
-// both wanting the same tape's URL, reuse one signed URL instead of minting
-// a fresh token each time and busting that cache.
-const SIGNED_URL_TTL_SECONDS = 3600;
-const REUSE_WINDOW_MS = 55 * 60 * 1000;
+// Module-level cache (outside React) so navigating away from a tape and back
+// — or FeedbackGate and My Account both wanting the same tape's URL — reuses
+// one object URL instead of re-reading the blob out of IndexedDB and minting
+// a new one. Callers must not revoke the URL themselves; forgetSelfTapeUrl
+// does that once, here, so the same URL can be shared safely.
+const cache = new Map<string, Promise<string | null>>();
 
-const cache = new Map<string, { promise: Promise<string | null>; fetchedAt: number }>();
-
-export function getSelfTapeUrl(storagePath: string): Promise<string | null> {
-  const cached = cache.get(storagePath);
-  if (cached && Date.now() - cached.fetchedAt < REUSE_WINDOW_MS) {
-    return cached.promise;
-  }
-  const promise = supabase.storage
-    .from("self-tapes")
-    .createSignedUrl(storagePath, SIGNED_URL_TTL_SECONDS)
-    .then(({ data }) => data?.signedUrl ?? null);
-  cache.set(storagePath, { promise, fetchedAt: Date.now() });
+export function getSelfTapeUrl(tapeId: string): Promise<string | null> {
+  const cached = cache.get(tapeId);
+  if (cached) return cached;
+  const promise = getTapeBlob(tapeId).then((blob) =>
+    blob ? URL.createObjectURL(blob) : null,
+  );
+  cache.set(tapeId, promise);
   return promise;
 }
 
-export function forgetSelfTapeUrl(storagePath: string) {
-  cache.delete(storagePath);
+export function forgetSelfTapeUrl(tapeId: string) {
+  const cached = cache.get(tapeId);
+  if (!cached) return;
+  cache.delete(tapeId);
+  void cached.then((url) => {
+    if (url) URL.revokeObjectURL(url);
+  });
 }

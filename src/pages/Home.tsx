@@ -6,10 +6,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
-import { supabase } from "../lib/supabase";
+import { findScriptByContentHash } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { IS_BETA_TESTING } from "../lib/beta";
-import type { SavedScript } from "../types";
 
 // Scanned PDFs are rendered to page images client-side (never uploaded whole),
 // so the cap only guards browser memory.
@@ -87,30 +86,20 @@ export default function Home() {
       // matching the My Account "practice again" path, shouldn't burn a
       // free session/rehearsal grant for it either).
       const contentHash = await hashFile(file);
-      const { data: existing } = await supabase
-        .from("scripts")
-        .select(
-          "id,title,language_code,language_name,characters,steps,content_hash,character_voices,delivery_tags",
-        )
-        .eq("user_id", user.id)
-        .eq("content_hash", contentHash)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const existing = await findScriptByContentHash(user.id, contentHash);
 
       if (existing) {
-        const saved = existing as SavedScript;
         navigate("/practice", {
           state: {
             replayScript: {
-              id: saved.id,
-              title: saved.title,
-              steps: saved.steps,
-              characters: saved.characters,
-              languageCode: saved.language_code,
-              languageName: saved.language_name,
-              characterVoices: saved.character_voices,
-              deliveryTags: saved.delivery_tags,
+              id: existing.id,
+              title: existing.title,
+              steps: existing.steps,
+              characters: existing.characters,
+              languageCode: existing.language_code,
+              languageName: existing.language_name,
+              characterVoices: existing.character_voices,
+              deliveryTags: existing.delivery_tags,
             },
           },
         });

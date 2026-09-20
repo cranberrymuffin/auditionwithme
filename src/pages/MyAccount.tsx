@@ -3,19 +3,16 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
-import { supabase } from "../lib/supabase";
 import { forgetSelfTapeUrl, getSelfTapeUrl } from "../lib/selfTapeUrl";
 import {
-  getPendingTapeBlob,
-  listPendingTapes,
-  removePendingTape,
-  type PendingSelfTape,
+  deleteTape as deleteTapeRecord,
+  deleteTapesForScript,
+  extensionForMimeType,
+  listTapes,
 } from "../lib/selfTapeStore";
-import { onTapeUploadSettled, retryPendingTapes } from "../lib/selfTapeUpload";
+import { deleteScript as deleteScriptRecord, listScripts } from "../lib/scriptStore";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
-
-type StagedTape = PendingSelfTape & { blobUrl: string };
 
 export default function MyAccount() {
   const { user } = useAuth();
@@ -24,28 +21,31 @@ export default function MyAccount() {
   const toast = useToast();
   const [scripts, setScripts] = useState<SavedScript[]>([]);
   const [selfTapes, setSelfTapes] = useState<SelfTape[]>([]);
-  const [pendingTapes, setPendingTapes] = useState<StagedTape[]>([]);
   const [loading, setLoading] = useState(true);
   const [tapeUrls, setTapeUrls] = useState<Record<string, string>>({});
   const [expandedTapeId, setExpandedTapeId] = useState<string | null>(null);
   const fetchedTapeIds = useRef(new Set<string>());
   const scriptRowRefs = useRef(new Map<string, HTMLLIElement>());
   const consumedOpenRequestRef = useRef(false);
+  // navigator.share() throws InvalidStateError if called again before an
+  // earlier call resolves — a real risk here since the share sheet can take
+  // a moment to animate in, inviting an impatient second tap.
+  const downloadingRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
     setLoading(true);
-    supabase
-      .from("scripts")
-      .select(
-        "id,title,language_code,language_name,characters,steps,character_voices,delivery_tags,created_at",
-      )
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
+    listScripts(user.id)
+      .then((data) => {
         if (!active) return;
-        if (error) console.error("Failed to load scripts:", error.message);
-        setScripts(error ? [] : (data as SavedScript[]));
+        setScripts(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error("Failed to load scripts:", err);
+        setScripts([]);
         setLoading(false);
       });
     return () => {
@@ -56,106 +56,32 @@ export default function MyAccount() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    supabase
-      .from("self_tapes")
-      .select("id,script_id,storage_path,created_at")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) console.error("Failed to load self-tapes:", error.message);
-        setSelfTapes(error ? [] : (data as SelfTape[]));
-      });
-    return () => {
-      active = false;
-    };
-  }, [user]);
-
-  // Takes that finished recording but hadn't confirmed their account upload
-  // yet (still local-only, or the tab closed mid-upload last time) — staged
-  // in IndexedDB by useSelfTapeSession so Rehearsal never has to block on
-  // the network. Shown as "Uploading…" tiles below, playable straight from
-  // the local blob in the meantime.
-  useEffect(() => {
-    if (!user) return;
-    let active = true;
-    void retryPendingTapes(user.id);
-    listPendingTapes(user.id)
-      .then(async (metas) => {
-        if (!active) return;
-        const staged = await Promise.all(
-          metas.map(async (meta) => {
-            const blob = await getPendingTapeBlob(meta.id);
-            return blob ? { ...meta, blobUrl: URL.createObjectURL(blob) } : null;
-          }),
-        );
-        if (active) setPendingTapes(staged.filter((tape): tape is StagedTape => tape !== null));
+    listTapes(user.id)
+      .then((data) => {
+        if (active) setSelfTapes(data);
       })
-      .catch((err) => console.error("Failed to load staged self-tapes:", err));
+      .catch((err) => {
+        if (!active) return;
+        console.error("Failed to load self-tapes:", err);
+        setSelfTapes([]);
+      });
     return () => {
       active = false;
     };
   }, [user]);
 
-  // A background upload settling (from this tab's own session, or a retry
-  // pass) drops the tile from "Uploading…" into the real, saved list — or
-  // leaves it staged for the next retry on failure.
-  useEffect(() => {
-    if (!user) return;
-    return onTapeUploadSettled((id, outcome) => {
-      setPendingTapes((prev) => {
-        const tape = prev.find((item) => item.id === id);
-        if (tape) URL.revokeObjectURL(tape.blobUrl);
-        return prev.filter((item) => item.id !== id);
-      });
-      if (outcome === "uploaded") {
-        supabase
-          .from("self_tapes")
-          .select("id,script_id,storage_path,created_at")
-          .eq("id", id)
-          .single()
-          .then(({ data, error }) => {
-            if (error || !data) return;
-            setSelfTapes((prev) => [data as SelfTape, ...prev]);
-          });
-      }
-    });
-  }, [user]);
-
-  // Retry any takes still staged (failed upload, or offline) once the
-  // connection comes back, instead of waiting for the next full page load.
-  useEffect(() => {
-    if (!user) return;
-    const onOnline = () => void retryPendingTapes(user.id);
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [user]);
-
-  // Revoke any still-staged blob URLs on unmount — one created per pending
-  // tile above, otherwise leaked for the life of the tab.
-  useEffect(() => {
-    return () => {
-      setPendingTapes((prev) => {
-        prev.forEach((tape) => URL.revokeObjectURL(tape.blobUrl));
-        return prev;
-      });
-    };
-  }, []);
-
-  // Signed URLs (and the video bytes a tile's preview then pulls) are only
-  // fetched for a tape once something actually needs it — a visible tile
-  // (IntersectionObserver, see SelfTapeTile) or the expanded modal below.
-  // Fetching every tape's URL/video up front here used to run on every
-  // /account visit regardless of how many tapes were on screen, which is
-  // what blew through Supabase's storage egress quota.
+  // A tape's blob (and the object URL it's read into) is only pulled out of
+  // IndexedDB once something actually needs it — a visible tile
+  // (IntersectionObserver, see SelfTapeTile) or the expanded modal below —
+  // rather than every tape on the account loading at once.
   //
-  // getSelfTapeUrl caches the signed URL itself (module-level, outside this
-  // component), so leaving /account and coming back reuses the same URL —
-  // and the browser serves the video from its own HTTP cache — instead of
-  // minting a new token and downloading the file again.
+  // getSelfTapeUrl caches the object URL itself (module-level, outside this
+  // component), so leaving /account and coming back reuses the same URL
+  // instead of re-reading the blob and minting a new one.
   const ensureTapeUrl = useCallback((tape: SelfTape) => {
     if (fetchedTapeIds.current.has(tape.id)) return;
     fetchedTapeIds.current.add(tape.id);
-    getSelfTapeUrl(tape.storage_path).then((url) => {
+    getSelfTapeUrl(tape.id).then((url) => {
       if (!url) return;
       setTapeUrls((prev) => ({ ...prev, [tape.id]: url }));
     });
@@ -167,13 +93,11 @@ export default function MyAccount() {
     const openTapeId = (location.state as { openTapeId?: string } | null)
       ?.openTapeId;
     if (!openTapeId || consumedOpenRequestRef.current) return;
-    const exists =
-      selfTapes.some((tape) => tape.id === openTapeId) ||
-      pendingTapes.some((tape) => tape.id === openTapeId);
+    const exists = selfTapes.some((tape) => tape.id === openTapeId);
     if (!exists) return;
     consumedOpenRequestRef.current = true;
     setExpandedTapeId(openTapeId);
-  }, [location.state, selfTapes, pendingTapes]);
+  }, [location.state, selfTapes]);
 
   const practice = (script: SavedScript) => {
     navigate("/practice", {
@@ -200,51 +124,23 @@ export default function MyAccount() {
 
   const closeExpanded = () => {
     const tape = selfTapes.find((item) => item.id === expandedTapeId);
-    const pendingTape = pendingTapes.find((item) => item.id === expandedTapeId);
     setExpandedTapeId(null);
     if (tape) scrollToScript(tape.script_id);
-    else if (pendingTape) scrollToScript(pendingTape.scriptId);
   };
 
   const deleteTape = async (tape: SelfTape) => {
-    const { error: storageError } = await supabase.storage
-      .from("self-tapes")
-      .remove([tape.storage_path]);
-    if (storageError) {
-      console.error("Failed to delete self-tape file:", storageError.message);
+    try {
+      await deleteTapeRecord(tape.id);
+    } catch (err) {
+      console.error("Failed to delete self-tape:", err);
       toast("Couldn't delete that self-tape. Please try again.");
       return;
     }
-    const { error } = await supabase
-      .from("self_tapes")
-      .delete()
-      .eq("id", tape.id);
-    if (error) {
-      console.error("Failed to delete self-tape:", error.message);
-      toast("Couldn't delete that self-tape. Please try again.");
-      return;
-    }
-    forgetSelfTapeUrl(tape.storage_path);
+    forgetSelfTapeUrl(tape.id);
     setSelfTapes((prev) => prev.filter((item) => item.id !== tape.id));
     if (expandedTapeId === tape.id) {
       setExpandedTapeId(null);
       scrollToScript(tape.script_id);
-    }
-  };
-
-  const deletePendingTape = async (tape: StagedTape) => {
-    try {
-      await removePendingTape(tape.id);
-    } catch (err) {
-      console.error("Failed to delete staged self-tape:", err);
-      toast("Couldn't delete that self-tape. Please try again.");
-      return;
-    }
-    URL.revokeObjectURL(tape.blobUrl);
-    setPendingTapes((prev) => prev.filter((item) => item.id !== tape.id));
-    if (expandedTapeId === tape.id) {
-      setExpandedTapeId(null);
-      scrollToScript(tape.scriptId);
     }
   };
 
@@ -256,33 +152,16 @@ export default function MyAccount() {
     ) {
       return;
     }
-    const paths = selfTapes
-      .filter((tape) => tape.script_id === script.id)
-      .map((tape) => tape.storage_path);
-    if (paths.length > 0) {
-      const { error: storageError } = await supabase.storage
-        .from("self-tapes")
-        .remove(paths);
-      if (storageError) {
-        console.error(
-          "Failed to delete self-tape files:",
-          storageError.message,
-        );
-        toast("Couldn't delete that audition. Please try again.");
-        return;
-      }
-    }
-    // Cascades to the script's self_tapes rows in the database automatically.
-    const { error } = await supabase
-      .from("scripts")
-      .delete()
-      .eq("id", script.id);
-    if (error) {
-      console.error("Failed to delete script:", error.message);
+    let deletedTapeIds: string[];
+    try {
+      deletedTapeIds = await deleteTapesForScript(script.id);
+      await deleteScriptRecord(script.id);
+    } catch (err) {
+      console.error("Failed to delete script:", err);
       toast("Couldn't delete that audition. Please try again.");
       return;
     }
-    paths.forEach(forgetSelfTapeUrl);
+    deletedTapeIds.forEach(forgetSelfTapeUrl);
     setScripts((prev) => prev.filter((item) => item.id !== script.id));
     setSelfTapes((prev) => prev.filter((tape) => tape.script_id !== script.id));
     if (
@@ -297,13 +176,16 @@ export default function MyAccount() {
   // Look preview page, which is a confusing dead end for saving a video from
   // a PWA. The Web Share API triggers the native share sheet ("Save Video" /
   // "Save to Files") directly, which is what mobile users actually expect
-  // from a download action. Desktop browsers (Chrome/Edge on Windows/macOS)
-  // also implement navigator.share, but a share sheet there is unexpected —
-  // desktop users just want the file saved directly.
+  // from a download action. Gated on actual device type, not just
+  // canShare() — desktop Chrome/Edge can report canShare: true for files
+  // without the share actually completing, so feature detection alone
+  // isn't reliable enough to trust; desktop always gets the plain download
+  // regardless of what canShare() claims.
+  const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   const shareOrDownloadBlob = async (blob: Blob, filename: string) => {
     const file = new File([blob], filename, { type: blob.type });
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile && navigator.canShare?.({ files: [file] })) {
+    if (isMobileDevice() && navigator.canShare?.({ files: [file] })) {
       try {
         await navigator.share({ files: [file] });
       } catch (shareErr) {
@@ -323,42 +205,40 @@ export default function MyAccount() {
   };
 
   const downloadTape = async (tape: SelfTape) => {
-    const url = tapeUrls[tape.id];
-    if (!url) return;
+    if (downloadingRef.current) return;
+    downloadingRef.current = true;
     try {
+      // getSelfTapeUrl shares its cache with ensureTapeUrl, which already
+      // kicked off (and by click time, almost always finished) this same
+      // lookup when the tile/modal opened — so this resolves as an
+      // already-settled promise rather than a fresh IndexedDB read. That
+      // matters because a fresh read is slow enough to cross into the next
+      // event-loop turn, and on mobile that's long enough to burn through
+      // the "recent user gesture" window navigator.share() below requires —
+      // it then rejects with NotAllowedError instead of opening the share
+      // sheet. Reading tapeUrls state directly isn't enough on its own: it
+      // can still be unset the instant the modal opens, which silently
+      // no-ops the whole thing instead of erroring.
+      const url = await getSelfTapeUrl(tape.id);
+      if (!url) return;
       const response = await fetch(url);
       const blob = await response.blob();
-      // Extension must match what was actually recorded (mp4 on Safari,
-      // webm elsewhere) — storage_path already carries the right one.
-      const extension = tape.storage_path.split(".").pop() ?? "webm";
+      const extension = extensionForMimeType(blob.type);
       const filename = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
       await shareOrDownloadBlob(blob, filename);
     } catch (err) {
       console.error("Failed to download self-tape:", err);
       toast("Couldn't download that self-tape. Please try again.");
-    }
-  };
-
-  const downloadPendingTape = async (tape: StagedTape) => {
-    try {
-      const blob = await getPendingTapeBlob(tape.id);
-      if (!blob) return;
-      const filename = `self-tape-${tape.createdAt.slice(0, 10)}.${tape.extension}`;
-      await shareOrDownloadBlob(blob, filename);
-    } catch (err) {
-      console.error("Failed to download self-tape:", err);
-      toast("Couldn't download that self-tape. Please try again.");
+    } finally {
+      downloadingRef.current = false;
     }
   };
 
   const expandedTape =
     selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
-  const expandedPendingTape =
-    pendingTapes.find((tape) => tape.id === expandedTapeId) ?? null;
 
   // The modal can be opened directly (e.g. via location.state above) before
   // its tile has ever scrolled into view, so make sure it always has a URL.
-  // Pending tapes already have their blob URL — nothing to fetch.
   useEffect(() => {
     if (expandedTape) ensureTapeUrl(expandedTape);
   }, [expandedTape, ensureTapeUrl]);
@@ -398,9 +278,6 @@ export default function MyAccount() {
               const tapes = selfTapes.filter(
                 (tape) => tape.script_id === script.id,
               );
-              const pendingForScript = pendingTapes.filter(
-                (tape) => tape.scriptId === script.id,
-              );
               return (
                 <li
                   key={script.id}
@@ -428,16 +305,8 @@ export default function MyAccount() {
                       )}
                     </span>
                   </div>
-                  {(tapes.length > 0 || pendingForScript.length > 0) && (
+                  {tapes.length > 0 && (
                     <ul className="account-self-tapes">
-                      {pendingForScript.map((tape) => (
-                        <li key={tape.id}>
-                          <PendingSelfTapeTile
-                            tape={tape}
-                            onOpen={() => setExpandedTapeId(tape.id)}
-                          />
-                        </li>
-                      ))}
                       {tapes.map((tape) => (
                         <li key={tape.id}>
                           <SelfTapeTile
@@ -473,7 +342,7 @@ export default function MyAccount() {
         )}
       </section>
 
-      {(expandedTape || expandedPendingTape) && (
+      {expandedTape && (
         <div className="tape-modal-overlay" onClick={closeExpanded}>
           <div
             className="tape-modal"
@@ -487,11 +356,9 @@ export default function MyAccount() {
             >
               ✕
             </button>
-            {expandedPendingTape ? (
-              <video src={expandedPendingTape.blobUrl} controls autoPlay playsInline />
-            ) : tapeUrls[expandedTape!.id] ? (
+            {tapeUrls[expandedTape.id] ? (
               <video
-                src={tapeUrls[expandedTape!.id]}
+                src={tapeUrls[expandedTape.id]}
                 controls
                 autoPlay
                 playsInline
@@ -499,28 +366,14 @@ export default function MyAccount() {
             ) : (
               <div className="tape-modal-loading">Loading video…</div>
             )}
-            {expandedPendingTape && (
-              <p className="tape-modal-pending-note">Saving to your account…</p>
-            )}
             <div className="tape-modal-actions">
-              <button
-                type="button"
-                onClick={() =>
-                  expandedPendingTape
-                    ? void downloadPendingTape(expandedPendingTape)
-                    : void downloadTape(expandedTape!)
-                }
-              >
+              <button type="button" onClick={() => void downloadTape(expandedTape)}>
                 Download
               </button>
               <button
                 type="button"
                 className="tape-modal-delete"
-                onClick={() =>
-                  expandedPendingTape
-                    ? void deletePendingTape(expandedPendingTape)
-                    : void deleteTape(expandedTape!)
-                }
+                onClick={() => void deleteTape(expandedTape)}
               >
                 Delete
               </button>
@@ -532,9 +385,10 @@ export default function MyAccount() {
   );
 }
 
-/** A self-tape thumbnail that only requests its signed URL — and the video
- * bytes the browser then pulls to paint a preview frame — once it actually
- * scrolls into view, instead of every tape on the account loading at once. */
+/** A self-tape thumbnail that only reads its blob out of IndexedDB — and
+ * mints the object URL the browser then decodes a preview frame from — once
+ * it actually scrolls into view, instead of every tape on the account
+ * loading at once. */
 function SelfTapeTile({
   tape,
   url,
@@ -603,43 +457,6 @@ function SelfTapeTile({
           minute: "2-digit",
         })}
       </span>
-    </button>
-  );
-}
-
-/** A self-tape that's finished recording and is staged locally (IndexedDB)
- * but hasn't confirmed its account upload yet — played back straight from
- * that local blob, no network round trip needed. */
-function PendingSelfTapeTile({
-  tape,
-  onOpen,
-}: {
-  tape: StagedTape;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="account-tape-tile account-tape-tile-pending"
-      onClick={onOpen}
-      aria-label="Self-tape uploading"
-    >
-      <span className="account-tape-tile-frame">
-        <video
-          src={tape.blobUrl}
-          preload="metadata"
-          muted
-          playsInline
-          onLoadedMetadata={(event) => {
-            const video = event.currentTarget;
-            video.currentTime = Math.min(0.5, video.duration || 0.5);
-          }}
-        />
-        <span className="account-tape-tile-play" aria-hidden="true">
-          ⏳
-        </span>
-      </span>
-      <span className="account-tape-tile-date">Uploading…</span>
     </button>
   );
 }

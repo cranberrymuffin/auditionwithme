@@ -26,8 +26,13 @@ export type SavedScript = {
 export type SelfTape = {
   id: string;
   script_id: string;
-  storage_path: string;
   created_at: string;
+  /** Beta requirement: a rating (and comment, below 5 stars) owed before the
+   * app stops blocking on it — see FeedbackGate.tsx. */
+  feedback_required: boolean;
+  feedback_rating: number | null;
+  feedback_comment: string | null;
+  feedback_submitted_at: string | null;
 };
 
 export type Entitlement = {
