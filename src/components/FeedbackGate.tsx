@@ -36,7 +36,10 @@ export default function FeedbackGate() {
       .limit(1)
       .maybeSingle();
     if (error) {
-      console.error("Failed to check pending audition feedback:", error.message);
+      console.error(
+        "Failed to check pending audition feedback:",
+        error.message,
+      );
       return;
     }
     setPending(data as PendingTape | null);
@@ -112,8 +115,8 @@ export default function FeedbackGate() {
         How did this audition go?
       </h2>
       <p className="mb-3 text-sm text-ink-soft">
-        Recorded {recordedAt}. We're in beta — a quick note after every
-        audition helps us fix what's broken before you record another one.
+        Recorded {recordedAt}. We're in beta — a quick note after every audition
+        helps us fix what's broken before you record another one.
       </p>
       {videoUrl ? (
         <video
@@ -156,7 +159,7 @@ export default function FeedbackGate() {
           onChange={(event) => setComment(event.target.value)}
           placeholder={
             rating > 0 && rating < 5
-              ? "What happened? (required for less than 5 stars)"
+              ? "What happened?"
               : "Anything that worked well, felt off, or broke outright?"
           }
           rows={4}
