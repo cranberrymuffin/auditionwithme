@@ -2,8 +2,12 @@
 // Supabase Storage bucket and self_tapes table. A take is saved here the
 // instant recording finishes (see useSelfTapeSession.ts); My Account,
 // FeedbackGate, and playback all read straight from IndexedDB, no network
-// round trip and no separate upload step.
+// round trip and no separate upload step. Audition feedback (rating/comment)
+// is the one exception: it's written to the public.self_tape_feedback table
+// in Supabase (see submitFeedback below) so the team can read it — only the
+// "still owe feedback" flag stays local, for gating FeedbackGate.tsx.
 import { SELF_TAPES_STORE, withStore } from "./localDb";
+import { supabase } from "./supabase";
 import type { SelfTape } from "../types";
 
 type TapeRecord = {
@@ -14,8 +18,6 @@ type TapeRecord = {
   blob: Blob;
   createdAt: string;
   feedbackRequired: boolean;
-  feedbackRating: number | null;
-  feedbackComment: string | null;
   feedbackSubmittedAt: string | null;
 };
 
@@ -39,8 +41,6 @@ function toSelfTape(record: TapeRecord): SelfTape {
     script_id: record.scriptId,
     created_at: record.createdAt,
     feedback_required: record.feedbackRequired,
-    feedback_rating: record.feedbackRating,
-    feedback_comment: record.feedbackComment,
     feedback_submitted_at: record.feedbackSubmittedAt,
   };
 }
@@ -51,8 +51,6 @@ export async function saveTape(meta: NewSelfTape, blob: Blob): Promise<void> {
     blob,
     createdAt: new Date().toISOString(),
     feedbackRequired: true,
-    feedbackRating: null,
-    feedbackComment: null,
     feedbackSubmittedAt: null,
   };
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(record));
@@ -111,10 +109,19 @@ export async function submitFeedback(
     (store) => store.get(id),
   );
   if (!existing) return;
+
+  const { error } = await supabase.from("self_tape_feedback").insert({
+    user_id: existing.userId,
+    tape_id: existing.id,
+    script_id: existing.scriptId,
+    rating,
+    comment,
+    recorded_at: existing.createdAt,
+  });
+  if (error) throw error;
+
   const updated: TapeRecord = {
     ...existing,
-    feedbackRating: rating,
-    feedbackComment: comment,
     feedbackSubmittedAt: new Date().toISOString(),
   };
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(updated));

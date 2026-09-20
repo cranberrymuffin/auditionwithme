@@ -28,10 +28,10 @@ export type SelfTape = {
   script_id: string;
   created_at: string;
   /** Beta requirement: a rating (and comment, below 5 stars) owed before the
-   * app stops blocking on it — see FeedbackGate.tsx. */
+   * app stops blocking on it — see FeedbackGate.tsx. The rating/comment
+   * themselves aren't kept locally; submitFeedback sends them straight to
+   * the self_tape_feedback table in Supabase. */
   feedback_required: boolean;
-  feedback_rating: number | null;
-  feedback_comment: string | null;
   feedback_submitted_at: string | null;
 };
 
