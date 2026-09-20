@@ -1479,6 +1479,104 @@ header .flow-back:hover {
   }
 }
 
+/* FAQ: SEO landing page, single-column accordion */
+.faq-page {
+  min-height: 100vh;
+  background: radial-gradient(
+    ellipse 72% 42% at 50% 25%,
+    #1b2b42 0%,
+    #121f30 55%,
+    #0e1927 100%
+  );
+  color: #f8f1e6;
+}
+.faq-page .site-nav .text-hero-ink,
+.faq-page .site-nav .eyebrow {
+  color: #f8f1e6;
+}
+.faq-page .site-nav {
+  background: rgba(12, 23, 36, 0.38);
+}
+.faq-hero {
+  width: min(760px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: clamp(56px, 8vh, 92px) 0 clamp(30px, 4vh, 48px);
+  text-align: center;
+}
+.faq-hero > p {
+  margin: 0 0 14px;
+  color: #ef9a78;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+.faq-hero h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 5vw, 3.75rem);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+}
+.faq-hero > div {
+  max-width: 520px;
+  margin: 18px auto 0;
+  color: rgba(248, 241, 230, 0.78);
+  font-size: 1.0625rem;
+  line-height: 1.58;
+}
+.faq-list {
+  width: min(760px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 8px 0 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+.faq-list details {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+.faq-list summary {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  cursor: pointer;
+  color: rgba(248, 241, 230, 0.9);
+  font-size: 1rem;
+  font-weight: 600;
+  list-style: none;
+}
+.faq-list summary::-webkit-details-marker {
+  display: none;
+}
+.faq-list summary span {
+  color: #ef9a78;
+  font-size: 1.1rem;
+  transition: transform 0.2s ease;
+}
+.faq-list details[open] summary span {
+  transform: rotate(45deg);
+}
+.faq-list details p {
+  margin: -4px 25px 22px 0;
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.faq-cta {
+  display: flex;
+  justify-content: center;
+  padding: 12px 32px 88px;
+}
+
+@media (max-width: 520px) {
+  .faq-hero {
+    padding: 44px 0 28px;
+  }
+  .faq-cta {
+    padding: 8px 20px 64px;
+  }
+}
+
 /* My Account: past scripts, listed with quick actions */
 .account-page {
   min-height: 100vh;

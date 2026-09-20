@@ -84,6 +84,9 @@ export default function SiteNav() {
           How it works
         </NavLink>
       )}
+      <NavLink to="/faq" className={navLinkClass} onClick={closeMenu}>
+        FAQ
+      </NavLink>
       {showPricing && (
         <NavLink to="/pricing" className={navLinkClass} onClick={closeMenu}>
           Pricing
