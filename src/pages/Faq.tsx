@@ -15,11 +15,11 @@ const faqs = [
   ],
   [
     "Does AuditionWithMe use a teleprompter while I rehearse?",
-    "Yes. As the scene plays, your lines track word by word on screen so you always know where you are, and you can look at the camera instead of down at a script. It works the same way while you're recording, so what you see while rehearsing is what you see while taping.",
+    "Yes. As the scene plays, your lines track on screen so you always know where you are, and you can look at the camera instead of down at a script. It works the same way while you're recording, so what you see while rehearsing is what you see while taping.",
   ],
   [
     "Does AuditionWithMe hold onto my files?",
-    "No — neither your script nor your self-tapes are stored on our servers. Your script PDF is read once to generate the rehearsal, then discarded, and your self-tape recordings are saved locally in your browser rather than uploaded to us. That means they stay on this device until you delete them yourself: they won't appear if you sign in from a different browser or device, and clearing your browser's site data removes them too.",
+    "No, neither your script nor your self-tapes are stored on our servers. Everything is kept on your device unless you choose to upload it.",
   ],
   [
     "Do I need to sign an NDA to use AuditionWithMe?",
@@ -31,7 +31,7 @@ const faqs = [
   ],
   [
     "What browsers and devices does AuditionWithMe work best on?",
-    "Chrome and Safari, on both desktop and mobile. Self-tape recording is built around mp4, which those browsers can capture, play back, and download directly; Firefox can't record mp4, so recording there falls back to a format the rest of the app isn't built around. On iPhone or iPad, add AuditionWithMe to your home screen from Safari instead of using it in a browser tab — since your scripts and self-tapes are saved locally rather than on our servers, this matters more here than on most sites: Safari periodically clears locally stored data for sites you haven't opened in a while, and installing it as an app avoids that.",
+    "Chrome, Safari, or downloaded from the app store. Devices must have a working camera and microphone.",
   ],
   [
     "Is AuditionWithMe free to use?",
@@ -72,11 +72,10 @@ export default function Faq() {
       <SiteNav />
 
       <section className="faq-hero">
-        <p>Common questions</p>
         <h1>Frequently asked questions</h1>
         <div>
-          Everything actors ask before their first self-tape, from how rehearsal
-          works to what happens to your files.
+          What actors ask before their first self-tape, from how rehearsal works
+          to what happens to your data.
         </div>
       </section>
 

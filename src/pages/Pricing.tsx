@@ -11,7 +11,7 @@ import { useEntitlement } from "../hooks/useEntitlement";
 const features = [
   "Choose a voice for every character",
   "Rehearse complete scripts",
-  "Follow dialogue word by word",
+  "Follow dialogue live",
   "Record self-tape auditions on camera",
   "Save your selected role and setup",
   "Replay scenes throughout your plan",

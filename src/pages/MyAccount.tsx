@@ -10,7 +10,10 @@ import {
   extensionForMimeType,
   listTapes,
 } from "../lib/selfTapeStore";
-import { deleteScript as deleteScriptRecord, listScripts } from "../lib/scriptStore";
+import {
+  deleteScript as deleteScriptRecord,
+  listScripts,
+} from "../lib/scriptStore";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
 
@@ -181,7 +184,8 @@ export default function MyAccount() {
   // without the share actually completing, so feature detection alone
   // isn't reliable enough to trust; desktop always gets the plain download
   // regardless of what canShare() claims.
-  const isMobileDevice = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isMobileDevice = () =>
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   const shareOrDownloadBlob = async (blob: Blob, filename: string) => {
     const file = new File([blob], filename, { type: blob.type });
@@ -258,8 +262,8 @@ export default function MyAccount() {
           <h1>My Auditions</h1>
           {user?.email && <p className="account-email">{user.email}</p>}
           <p className="account-subtitle">
-            Scripts you've uploaded before. Jump back into practice without
-            re-processing the script.
+            Scripts you've uploaded on this device before. Jump back into
+            practice now!
           </p>
         </header>
 
@@ -267,7 +271,7 @@ export default function MyAccount() {
           <p className="account-empty">Loading your scripts…</p>
         ) : scripts.length === 0 ? (
           <div className="account-empty">
-            <p>You haven't uploaded a script yet.</p>
+            <p>You haven't uploaded a script on this device.</p>
             <button type="button" onClick={() => navigate("/")}>
               Upload a script <span>→</span>
             </button>
@@ -367,7 +371,10 @@ export default function MyAccount() {
               <div className="tape-modal-loading">Loading video…</div>
             )}
             <div className="tape-modal-actions">
-              <button type="button" onClick={() => void downloadTape(expandedTape)}>
+              <button
+                type="button"
+                onClick={() => void downloadTape(expandedTape)}
+              >
                 Download
               </button>
               <button
