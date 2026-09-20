@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Deletes a Supabase Auth user and everything that belongs to them:
-// entitlements + scripts rows (cascade via FK), scripts storage objects,
-// and (with --stripe) their Stripe customer.
+// entitlements + self_tape_feedback rows (cascade via FK) and, with
+// --stripe, their Stripe customer. Scripts and self-tapes themselves live in
+// IndexedDB now, not Supabase, so there's nothing server-side to clean up
+// for those.
 //
 // Usage:
 //   node scripts/delete-user.mjs <email>              dry run, prints what would be deleted
@@ -89,30 +91,16 @@ async function main() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const { data: scriptRows, error: scriptsError } = await supabase
-    .from("scripts")
-    .select("id, title")
+  const { count: feedbackCount, error: feedbackError } = await supabase
+    .from("self_tape_feedback")
+    .select("id", { count: "exact", head: true })
     .eq("user_id", user.id);
-  if (scriptsError) throw new Error(`fetching scripts failed: ${scriptsError.message}`);
-
-  const { data: storageObjects, error: storageError } = await supabase.storage
-    .from("scripts")
-    .list(user.id, { limit: 1000 });
-  if (storageError) throw new Error(`listing storage objects failed: ${storageError.message}`);
-
-  const { data: selfTapeObjects, error: selfTapeStorageError } = await supabase.storage
-    .from("self-tapes")
-    .list(user.id, { limit: 1000 });
-  if (selfTapeStorageError) {
-    throw new Error(`listing self-tapes storage objects failed: ${selfTapeStorageError.message}`);
-  }
+  if (feedbackError) throw new Error(`fetching self_tape_feedback failed: ${feedbackError.message}`);
 
   console.log(`  entitlements: ${entitlement ? "1 row" : "none"}${
     entitlement?.stripe_customer_id ? ` (stripe customer ${entitlement.stripe_customer_id})` : ""
   }`);
-  console.log(`  scripts rows: ${scriptRows?.length ?? 0}`);
-  console.log(`  scripts storage objects: ${storageObjects?.length ?? 0}`);
-  console.log(`  self-tapes storage objects: ${selfTapeObjects?.length ?? 0}`);
+  console.log(`  self_tape_feedback rows: ${feedbackCount ?? 0}`);
 
   if (includeStripe && !entitlement?.stripe_customer_id) {
     console.log("  --stripe passed but no stripe_customer_id on file; nothing to do there.");
@@ -121,20 +109,6 @@ async function main() {
   if (!confirm) {
     console.log("\nDry run only — no data was deleted. Re-run with --confirm to actually delete.");
     return;
-  }
-
-  if (storageObjects && storageObjects.length > 0) {
-    const paths = storageObjects.map((obj) => `${user.id}/${obj.name}`);
-    const { error } = await supabase.storage.from("scripts").remove(paths);
-    if (error) throw new Error(`deleting storage objects failed: ${error.message}`);
-    console.log(`Deleted ${paths.length} scripts storage object(s).`);
-  }
-
-  if (selfTapeObjects && selfTapeObjects.length > 0) {
-    const paths = selfTapeObjects.map((obj) => `${user.id}/${obj.name}`);
-    const { error } = await supabase.storage.from("self-tapes").remove(paths);
-    if (error) throw new Error(`deleting self-tapes storage objects failed: ${error.message}`);
-    console.log(`Deleted ${paths.length} self-tapes storage object(s).`);
   }
 
   if (includeStripe && entitlement?.stripe_customer_id) {
@@ -149,9 +123,9 @@ async function main() {
     console.log(`Deleted Stripe customer ${entitlement.stripe_customer_id}.`);
   }
 
-  // Deleting the auth user cascades entitlements + scripts rows via FK
-  // (on delete cascade — see supabase/migrations/*_init_entitlements.sql
-  // and *_scripts.sql).
+  // Deleting the auth user cascades entitlements + self_tape_feedback rows
+  // via FK (on delete cascade — see supabase/migrations/*_init_entitlements.sql
+  // and *_self_tape_feedback_standalone.sql).
   const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
   if (deleteError) throw new Error(`deleting auth user failed: ${deleteError.message}`);
 
