@@ -123,7 +123,10 @@ export default function RehearsalLineList({
             >
               <span className="rehearsal-line-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="rehearsal-line-copy">
-                <strong>{speaker || "Stage direction"}</strong>
+                <strong>
+                  {active && isOwnLine && <span className="rehearsal-live-dot" aria-hidden="true" />}
+                  {speaker || "Stage direction"}
+                </strong>
                 {bodyNodes}
               </span>
             </button>

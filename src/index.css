@@ -3670,6 +3670,12 @@ header .flow-back:hover {
 .rehearsal-line.is-active .rehearsal-line-row::before {
   background: #ef9a78;
 }
+.rehearsal-line.is-active.is-user .rehearsal-line-row {
+  background: rgba(255, 59, 48, 0.08);
+}
+.rehearsal-line.is-active.is-user .rehearsal-line-row::before {
+  background: #ff3b30;
+}
 .rehearsal-line-number {
   padding-top: 3px;
   color: rgba(248, 241, 230, 0.42);
@@ -3684,6 +3690,23 @@ header .flow-back:hover {
   color: #f1a081;
   font-size: 0.8125rem;
   font-weight: 600;
+}
+.rehearsal-line.is-active.is-user .rehearsal-line-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ff3b30;
+}
+.rehearsal-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: rehearsal-live-dot-blink 1s ease-in-out infinite;
+}
+@keyframes rehearsal-live-dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
 }
 .rehearsal-line-copy em {
   display: block;
