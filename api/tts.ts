@@ -131,9 +131,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       upstream = await synthesize(FALLBACK_MODEL);
     }
 
+    // Surfaced on every response (not just 429s) so useTtsPlayer.ts's retry
+    // logic can respect real guidance from ElevenLabs instead of guessing at
+    // a backoff, and so utilization is visible in the network tab before a
+    // 429 actually happens — see
+    // https://elevenlabs.io/blog/ai-rate-limiting-for-voice, whose core point
+    // is that the limit that matters is concurrency, not request count.
+    const currentConcurrent = upstream.headers.get("current-concurrent-requests");
+    const maxConcurrent = upstream.headers.get("maximum-concurrent-requests");
+    if (currentConcurrent) res.setHeader("X-TTS-Current-Concurrent", currentConcurrent);
+    if (maxConcurrent) res.setHeader("X-TTS-Max-Concurrent", maxConcurrent);
+    if (currentConcurrent && maxConcurrent && Number(currentConcurrent) >= Number(maxConcurrent) - 1) {
+      console.warn(
+        `ElevenLabs concurrency near limit: ${currentConcurrent}/${maxConcurrent}`,
+      );
+    }
+
     if (!upstream.ok) {
       const err = await upstream.text();
       console.error("ElevenLabs error:", err);
+      const retryAfter = upstream.headers.get("retry-after");
+      if (retryAfter) res.setHeader("Retry-After", retryAfter);
       return res.status(upstream.status).json({ error: err });
     }
 

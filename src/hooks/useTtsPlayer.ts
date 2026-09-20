@@ -113,17 +113,52 @@ async function fetchTtsBlob(
     } catch {
       if (body) message = body;
     }
+    if (res.status === 429) {
+      const retryAfterHeader = res.headers.get("Retry-After");
+      const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+      throw new TtsRateLimitError(
+        message,
+        Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : null,
+      );
+    }
     throw new Error(message);
   }
   return res.blob();
 }
 
+/** A 429 from api/tts.ts, carrying ElevenLabs' own Retry-After guidance (in
+ * ms) when it sent one, so the retry below can wait exactly as long as it's
+ * told instead of guessing. */
+class TtsRateLimitError extends Error {
+  retryAfterMs: number | null;
+  constructor(message: string, retryAfterMs: number | null) {
+    super(message);
+    this.name = "TtsRateLimitError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
 // ElevenLabs already retries its own transient system_busy responses
 // server-side; these extra client-side attempts cover everything else that
 // can make one round trip fail transiently — a dropped connection, our own
-// function cold-starting, a one-off 5xx — before we give up and fall back
-// to the browser's own voice.
-const FETCH_RETRY_DELAYS_MS = [400, 1200];
+// function cold-starting, a one-off 5xx or 429 — before we give up and fall
+// back to the browser's own voice.
+const MAX_RETRIES = 2;
+const BASE_RETRY_DELAY_MS = 400;
+const MAX_RETRY_DELAY_MS = 4000;
+// A real Retry-After is trusted over our own guess, but still capped: a
+// rehearsal line stuck waiting on a long server-requested delay is worse UX
+// than falling back to the browser voice a little early.
+const RETRY_AFTER_CAP_MS = 6000;
+
+// Exponential backoff with jitter (per
+// https://elevenlabs.io/blog/ai-rate-limiting-for-voice) rather than a fixed
+// delay, so repeated failures back off instead of retrying in lockstep with
+// whatever caused the first one.
+function backoffDelayMs(attempt: number): number {
+  const exp = Math.min(BASE_RETRY_DELAY_MS * 2 ** attempt, MAX_RETRY_DELAY_MS);
+  return Math.round(exp * (0.7 + Math.random() * 0.6)); // ±30% jitter
+}
 
 async function fetchTtsBlobWithRetry(
   line: TtsLine,
@@ -133,10 +168,12 @@ async function fetchTtsBlobWithRetry(
     try {
       return await fetchTtsBlob(line, intensity);
     } catch (err) {
-      if (attempt >= FETCH_RETRY_DELAYS_MS.length) throw err;
-      await new Promise((resolve) =>
-        setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt]),
-      );
+      if (attempt >= MAX_RETRIES) throw err;
+      const delay =
+        err instanceof TtsRateLimitError && err.retryAfterMs !== null
+          ? Math.min(err.retryAfterMs, RETRY_AFTER_CAP_MS)
+          : backoffDelayMs(attempt);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }
