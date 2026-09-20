@@ -28,7 +28,7 @@ const questions = [
   ],
   [
     "What happens after my free sessions?",
-    "You can continue creating new rehearsals with Audition Plus for $7 per month.",
+    "You can continue creating new rehearsals with Audition Plus for $11 per month.",
   ],
   [
     "Can I cancel anytime?",
@@ -194,7 +194,7 @@ export default function Pricing() {
     <main className="pricing-page">
       <Seo
         title="Pricing"
-        description="3 free rehearsal sessions, no credit card required. Continue with Audition Plus for $7/month for unlimited rehearsals."
+        description="3 free rehearsal sessions, no credit card required. Continue with Audition Plus for $11/month for unlimited rehearsals."
         path="/pricing"
       />
       <SiteNav />
@@ -225,8 +225,8 @@ export default function Pricing() {
             Everything you need to rehearse complete scenes with a responsive
             scene partner.
           </p>
-          <p className="plan-price" aria-label="Seven dollars per month">
-            <strong>$7</strong>
+          <p className="plan-price" aria-label="Eleven dollars per month">
+            <strong>$11</strong>
             <span>/month</span>
           </p>
 

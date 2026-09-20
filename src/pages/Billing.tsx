@@ -199,7 +199,7 @@ export default function Billing() {
               <div className="billing-card-row">
                 <div>
                   <span className="billing-card-label">Plan</span>
-                  <strong>Audition Plus — $7/month</strong>
+                  <strong>Audition Plus — $11/month</strong>
                 </div>
                 <span className="billing-status-pill">{statusLabel}</span>
               </div>

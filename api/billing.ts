@@ -127,7 +127,7 @@ async function getBillingSummary(
   }
 }
 
-// Starts a subscription checkout for the single $7/month plan and returns a
+// Starts a subscription checkout for the single $11/month plan and returns a
 // Checkout Session client secret for the embedded Payment Element to confirm.
 // Never writes subscription_status — only the webhook does that (plan
 // Principle 3).
