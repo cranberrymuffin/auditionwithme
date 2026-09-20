@@ -19,7 +19,7 @@ const faqs = [
   ],
   [
     "Does AuditionWithMe hold onto my files?",
-    "Your script PDF is read once to generate the rehersal, then discarded.",
+    "No — neither your script nor your self-tapes are stored on our servers. Your script PDF is read once to generate the rehearsal, then discarded, and your self-tape recordings are saved locally in your browser rather than uploaded to us. That means they stay on this device until you delete them yourself: they won't appear if you sign in from a different browser or device, and clearing your browser's site data removes them too.",
   ],
   [
     "Do I need to sign an NDA to use AuditionWithMe?",
@@ -31,7 +31,7 @@ const faqs = [
   ],
   [
     "What browsers and devices does AuditionWithMe work best on?",
-    "Chrome and Safari, on both desktop and mobile. Self-tape recording is built around mp4, which those browsers can capture, play back, and download directly; Firefox can't record mp4, so recording there falls back to a format the rest of the app isn't built around. On iPhone or iPad, add AuditionWithMe to your home screen from Safari instead of using it in a browser tab — Safari periodically clears locally stored data for sites you haven't opened in a while, and installing it as an app avoids that.",
+    "Chrome and Safari, on both desktop and mobile. Self-tape recording is built around mp4, which those browsers can capture, play back, and download directly; Firefox can't record mp4, so recording there falls back to a format the rest of the app isn't built around. On iPhone or iPad, add AuditionWithMe to your home screen from Safari instead of using it in a browser tab — since your scripts and self-tapes are saved locally rather than on our servers, this matters more here than on most sites: Safari periodically clears locally stored data for sites you haven't opened in a while, and installing it as an app avoids that.",
   ],
   [
     "Is AuditionWithMe free to use?",
