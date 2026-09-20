@@ -364,7 +364,11 @@ export default function MyAccount() {
               <video
                 src={tapeUrls[expandedTape.id]}
                 controls
-                autoPlay
+                // A tape that still owes feedback gets its review video
+                // playing inside FeedbackGate instead (mounted above this
+                // modal, z-index 200 vs. 60) — autoplaying it here too would
+                // just run silently/behind that overlay.
+                autoPlay={!(expandedTape.feedback_required && !expandedTape.feedback_submitted_at)}
                 playsInline
               />
             ) : (

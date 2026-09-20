@@ -108,8 +108,8 @@ export default function FeedbackGate() {
           className="feedback-gate-video"
           src={videoUrl}
           controls
+          autoPlay
           playsInline
-          preload="none"
         />
       ) : (
         <div className="feedback-gate-video feedback-gate-video-loading">
