@@ -14,6 +14,9 @@ export type TtsLine = {
   deliveryTag?: string;
   /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
   performance?: string;
+  /** Adds a beat of silence before the line starts — scene-partner lines
+   * only, so the read doesn't cut in over an actor's trailing words. */
+  leadingPause?: boolean;
 };
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
@@ -65,6 +68,7 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     line.performance ?? "",
     line.previousText ?? "",
     line.nextText ?? "",
+    line.leadingPause ?? false,
     intensity,
   ]);
 
@@ -94,6 +98,7 @@ async function fetchTtsBlob(
         nextText: line.nextText,
         deliveryTag: line.deliveryTag,
         performance: line.performance,
+        leadingPause: line.leadingPause,
         intensity,
       }),
       signal: controller.signal,

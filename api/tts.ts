@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { text, voiceId, previousText, nextText, deliveryTag, performance, intensity } =
+  const { text, voiceId, previousText, nextText, deliveryTag, performance, leadingPause, intensity } =
     (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
@@ -60,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       deliveryTag?: string;
       /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
       performance?: string;
+      leadingPause?: boolean;
       intensity?: string;
     };
   if (!text?.trim()) {
@@ -78,7 +79,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // enforces that, so treat a request carrying both as tag-only.
   const markup = tag ? null : sanitizePerformance(performance, text);
   const expressiveText = markup ?? (tag ? `[${tag}] ${text}` : text);
+  // Stability/expressiveness only react to a *directorial* tag — a leading
+  // pause alone shouldn't push the read into the more "Creative" range.
   const directed = Boolean(tag) || /\[[a-z ]+\]/.test(expressiveText);
+  const pausedText = leadingPause === true ? `[pause] ${expressiveText}` : expressiveText;
   const context = {
     ...(typeof previousText === "string" && previousText.trim()
       ? { previous_text: previousText.slice(-CONTEXT_CHAR_LIMIT) }
@@ -100,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify(
           modelId === EXPRESSIVE_MODEL
             ? {
-                text: expressiveText,
+                text: pausedText,
                 model_id: modelId,
                 voice_settings: { stability: v3Stability(level, directed) },
               }
