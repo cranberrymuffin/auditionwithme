@@ -14,6 +14,9 @@ type TapeRecord = {
   id: string;
   userId: string;
   scriptId: string;
+  /** Character read for this take; missing on rows saved before this field
+   * existed. */
+  role?: string;
   mimeType: string;
   blob: Blob;
   createdAt: string;
@@ -25,6 +28,7 @@ export type NewSelfTape = {
   id: string;
   userId: string;
   scriptId: string;
+  role: string;
   mimeType: string;
 };
 
@@ -39,6 +43,7 @@ function toSelfTape(record: TapeRecord): SelfTape {
   return {
     id: record.id,
     script_id: record.scriptId,
+    role: record.role ?? "",
     created_at: record.createdAt,
     feedback_required: record.feedbackRequired,
     feedback_submitted_at: record.feedbackSubmittedAt,

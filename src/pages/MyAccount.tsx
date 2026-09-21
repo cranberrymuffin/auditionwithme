@@ -18,6 +18,15 @@ import { displayCharacterName } from "../lib/script";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
 
+// Tapes recorded before the per-take role field existed have none saved.
+// When the script's only ever been read as one character, that's an
+// unambiguous stand-in; with more than one, guessing wrong is worse than
+// showing nothing.
+function roleForTape(tape: SelfTape, script: SavedScript | null | undefined): string {
+  if (tape.role) return tape.role;
+  return script?.roles_read.length === 1 ? script.roles_read[0] : "";
+}
+
 export default function MyAccount() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -253,6 +262,10 @@ export default function MyAccount() {
 
   const expandedTape =
     selfTapes.find((tape) => tape.id === expandedTapeId) ?? null;
+  const expandedScript = expandedTape
+    ? (scripts.find((script) => script.id === expandedTape.script_id) ?? null)
+    : null;
+  const expandedRole = expandedTape ? roleForTape(expandedTape, expandedScript) : "";
 
   // The modal can be opened directly (e.g. via location.state above) before
   // its tile has ever scrolled into view, so make sure it always has a URL.
@@ -292,8 +305,16 @@ export default function MyAccount() {
         ) : (
           <ul className="account-scripts">
             {scripts.map((script) => {
+              const defaultRole =
+                script.roles_read[script.roles_read.length - 1] ?? "";
+              const selectedRoleForScript = roleChoice[script.id] ?? defaultRole;
+              // Tapes with no recorded role (saved before that field existed)
+              // can't be attributed to a specific read, so they stay visible
+              // no matter which role is picked rather than silently vanishing.
               const tapes = selfTapes.filter(
-                (tape) => tape.script_id === script.id,
+                (tape) =>
+                  tape.script_id === script.id &&
+                  (!tape.role || tape.role === selectedRoleForScript),
               );
               return (
                 <li
@@ -339,30 +360,13 @@ export default function MyAccount() {
                     {script.characters.length}{" "}
                     {script.characters.length === 1 ? "character" : "characters"}
                   </span>
-                  {tapes.length > 0 && (
-                    <ul className="account-self-tapes">
-                      {tapes.map((tape) => (
-                        <li key={tape.id}>
-                          <SelfTapeTile
-                            tape={tape}
-                            url={tapeUrls[tape.id]}
-                            ensureUrl={ensureTapeUrl}
-                            onOpen={() => setExpandedTapeId(tape.id)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                   {script.roles_read.length > 0 && (
                     <div className="account-script-actions">
                       <label className="account-script-role-picker">
                         <span>Read as</span>
                         <select
                           aria-label="Choose which role to practice as"
-                          value={
-                            roleChoice[script.id] ??
-                            script.roles_read[script.roles_read.length - 1]
-                          }
+                          value={selectedRoleForScript}
                           onChange={(event) =>
                             setRoleChoice((prev) => ({
                               ...prev,
@@ -380,17 +384,26 @@ export default function MyAccount() {
                       <button
                         type="button"
                         className="account-script-btn account-script-btn--solid"
-                        onClick={() =>
-                          practiceAsRole(
-                            script,
-                            roleChoice[script.id] ??
-                              script.roles_read[script.roles_read.length - 1],
-                          )
-                        }
+                        onClick={() => practiceAsRole(script, selectedRoleForScript)}
                       >
                         Go →
                       </button>
                     </div>
+                  )}
+                  {tapes.length > 0 && (
+                    <ul className="account-self-tapes">
+                      {tapes.map((tape) => (
+                        <li key={tape.id}>
+                          <SelfTapeTile
+                            tape={tape}
+                            role={roleForTape(tape, script)}
+                            url={tapeUrls[tape.id]}
+                            ensureUrl={ensureTapeUrl}
+                            onOpen={() => setExpandedTapeId(tape.id)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </li>
               );
@@ -413,6 +426,18 @@ export default function MyAccount() {
             >
               ✕
             </button>
+            <div className="tape-modal-detail">
+              {expandedScript && <strong>{expandedScript.title}</strong>}
+              <span>
+                {expandedRole && `Reading as ${displayCharacterName(expandedRole)} · `}
+                {new Date(expandedTape.created_at).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
             {tapeUrls[expandedTape.id] ? (
               <video
                 src={tapeUrls[expandedTape.id]}
@@ -455,11 +480,13 @@ export default function MyAccount() {
  * loading at once. */
 function SelfTapeTile({
   tape,
+  role,
   url,
   ensureUrl,
   onOpen,
 }: {
   tape: SelfTape;
+  role: string;
   url: string | undefined;
   ensureUrl: (tape: SelfTape) => void;
   onOpen: () => void;
@@ -512,6 +539,12 @@ function SelfTapeTile({
         <span className="account-tape-tile-play" aria-hidden="true">
           ▶
         </span>
+        {role && (
+          <span className="account-tape-tile-role">
+            <span className="account-tape-tile-role-dot" aria-hidden="true" />
+            {displayCharacterName(role)}
+          </span>
+        )}
       </span>
       <span className="account-tape-tile-date">
         {new Date(tape.created_at).toLocaleString(undefined, {

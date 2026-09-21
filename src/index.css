@@ -4188,6 +4188,33 @@ header .flow-back:hover {
   font-size: 0.75rem;
   transform: translate(-50%, -50%);
 }
+.account-tape-tile-role {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - 12px);
+  padding: 3px 8px 3px 6px;
+  border-radius: 999px;
+  background: rgba(8, 14, 22, 0.72);
+  backdrop-filter: blur(2px);
+  color: #f8f1e6;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-tape-tile-role-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #eb6a6a;
+  box-shadow: 0 0 4px rgba(235, 106, 106, 0.8);
+}
 .account-tape-tile-date {
   padding: 0 8px 8px;
   color: rgba(248, 241, 230, 0.62);
@@ -4224,6 +4251,20 @@ header .flow-back:hover {
   border-radius: 14px;
   background: #101d2c;
   box-shadow: 0 22px 55px rgba(0, 0, 0, 0.4);
+}
+.tape-modal-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: -4px 32px 0 0;
+}
+.tape-modal-detail strong {
+  font-size: 1rem;
+  font-weight: 600;
+}
+.tape-modal-detail span {
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.8125rem;
 }
 .tape-modal video {
   width: 100%;

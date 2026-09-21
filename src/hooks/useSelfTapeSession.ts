@@ -11,7 +11,7 @@ import { useToast } from "../lib/toast";
  * account. `finish()` is the single "stop and save" entry point, used both
  * when the script runs out and when the user stops manually.
  */
-export function useSelfTapeSession(scriptId: string | null) {
+export function useSelfTapeSession(scriptId: string | null, role: string) {
   const { user } = useAuth();
   const { status, stream, error, requestCamera, startRecording, pause, resume, stop } =
     useSelfTapeRecorder();
@@ -39,7 +39,7 @@ export function useSelfTapeSession(scriptId: string | null) {
 
       const id = crypto.randomUUID();
       try {
-        await saveTape({ id, userId: user.id, scriptId, mimeType: blob.type }, blob);
+        await saveTape({ id, userId: user.id, scriptId, role, mimeType: blob.type }, blob);
       } catch (saveError) {
         console.error("Failed to save self-tape locally:", saveError);
         toast("Your self-tape couldn't be saved. Please try again.");
@@ -57,7 +57,7 @@ export function useSelfTapeSession(scriptId: string | null) {
     } finally {
       setSaving(false);
     }
-  }, [stop, user, scriptId, toast]);
+  }, [stop, user, scriptId, role, toast]);
 
   return { user, status, stream, error, saving, requestCamera, startRecording, pause, resume, finish };
 }

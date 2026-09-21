@@ -5,6 +5,7 @@ import { getPendingFeedbackTape, submitFeedback } from "../lib/selfTapeStore";
 import { getSelfTapeUrl } from "../lib/selfTapeUrl";
 import { useToast } from "../lib/toast";
 import { onAuditionClosed } from "../lib/feedbackGate";
+import { displayCharacterName } from "../lib/script";
 import type { SelfTape } from "../types";
 
 // Beta requirement: a piece of feedback is owed for every audition (self-tape)
@@ -100,8 +101,10 @@ export default function FeedbackGate() {
         How did this audition go?
       </h2>
       <p className="mb-3 text-sm text-ink-soft">
-        Recorded {recordedAt}. We're in beta — a quick note after every audition
-        helps us fix what's broken before you record another one.
+        Recorded {recordedAt}
+        {pending.role && <> as {displayCharacterName(pending.role)}</>}. We're in
+        beta — a quick note after every audition helps us fix what's broken
+        before you record another one.
       </p>
       {videoUrl ? (
         <video

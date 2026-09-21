@@ -29,6 +29,9 @@ export type SavedScript = {
 export type SelfTape = {
   id: string;
   script_id: string;
+  /** Character the actor read for this take. Empty on tapes recorded before
+   * this field existed, or when the actor chose "Listen to the full scene". */
+  role: string;
   created_at: string;
   /** Beta requirement: a rating (and comment, below 5 stars) owed before the
    * app stops blocking on it — see FeedbackGate.tsx. The rating/comment

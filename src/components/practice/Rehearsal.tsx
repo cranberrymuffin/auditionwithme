@@ -46,7 +46,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     pause: pauseRecording,
     resume: resumeRecording,
     finish: finishRecording,
-  } = useSelfTapeSession(scriptId);
+  } = useSelfTapeSession(scriptId, selectedRole);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
