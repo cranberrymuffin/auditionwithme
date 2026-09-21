@@ -92,7 +92,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
   const isMyLine = Boolean(selectedRole) && currentSpeaker === selectedRole;
   const lineWordCount = (currentStep?.verbalLine ?? "").split(/\s+/).filter(Boolean).length;
-  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && startPhase === "active", currentStep?.verbalLine ?? "", languageCode, cameraStream);
+  // Started as soon as the countdown begins, not when it hits zero — the
+  // Scribe connection (token fetch + WebSocket handshake) can take longer
+  // than a short opening line, so if it only spun up at "active" the actor
+  // could start speaking before the mic was actually being transcribed.
+  const scribeWarm = startPhase === "countdown" || startPhase === "active";
+  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && scribeWarm, currentStep?.verbalLine ?? "", languageCode, cameraStream);
 
   // Nothing to record if the user isn't reading a role — just listening to
   // the scene doesn't need a camera or a self-tape.
