@@ -32,6 +32,8 @@ type ReplayScript = {
   characterVoices?: Record<string, string> | null;
   /** AI-director delivery tags from a past parse, aligned with steps. */
   deliveryTags?: (string | null)[] | null;
+  /** Characters previously rehearsed as, from the saved script row. */
+  rolesRead?: string[] | null;
 };
 
 type ParseData = {
@@ -65,6 +67,14 @@ export default function Practice() {
   const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
   const replayScript: ReplayScript | null =
     location.state?.replayScript ?? null;
+  // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
+  // with a previously-confirmed cast, skipping RolePicker/VoiceCasting.
+  // Undefined (not just falsy — "" is a valid role, "listen to the full
+  // scene") means "no preset", i.e. the ordinary/Recast flow through both
+  // screens.
+  const presetRoleRaw: unknown = location.state?.selectedRole;
+  const hasPresetRole = typeof presetRoleRaw === "string";
+  const presetRole = hasPresetRole ? (presetRoleRaw as string) : "";
 
   const [loading, setLoading] = useState(false);
   const [processingPhase, setProcessingPhase] = useState<
@@ -89,6 +99,9 @@ export default function Practice() {
   );
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
+  // Characters the user has confirmed a full cast for and rehearsed as, this
+  // script's saved row plus anything newly confirmed this session.
+  const [rolesRead, setRolesRead] = useState<string[]>([]);
   const [scriptLanguage, setScriptLanguage] = useState({
     code: "en",
     name: "English",
@@ -166,7 +179,16 @@ export default function Practice() {
       setCharacterVoices(replayScript.characterVoices);
     }
     if (replayScript.deliveryTags) setDeliveryTags(replayScript.deliveryTags);
-  }, [replayScript]);
+    if (replayScript.rolesRead) setRolesRead(replayScript.rolesRead);
+    // A role read before already has a complete cast saved on this row (see
+    // startReading below) — skip straight to Rehearsal instead of re-running
+    // RolePicker/VoiceCasting.
+    if (hasPresetRole) {
+      setRoleDraft(presetRole || null);
+      setSelectedRole(presetRole);
+      setVoicesConfirmed(true);
+    }
+  }, [replayScript, hasPresetRole, presetRole]);
 
   useEffect(() => {
     if (replayScript) return;
@@ -426,11 +448,31 @@ export default function Practice() {
     });
     setCharacterVoices(next);
     setVoicesConfirmed(true);
+    const nextRolesRead =
+      selectedRole && !rolesRead.includes(selectedRole)
+        ? [...rolesRead, selectedRole]
+        : rolesRead;
+    if (nextRolesRead !== rolesRead) setRolesRead(nextRolesRead);
     // Persist the confirmed casting so replaying this script keeps the same
-    // scene partner instead of re-running auto-casting.
+    // scene partner instead of re-running auto-casting, and so My Account can
+    // offer "Practice as X" for this role without going through casting again.
     if (user && scriptId) {
-      void updateScript(scriptId, { characterVoices: next }).catch((err) =>
-        console.error("Failed to save voice casting:", err),
+      void updateScript(scriptId, {
+        characterVoices: next,
+        rolesRead: nextRolesRead,
+      }).catch((err) => console.error("Failed to save voice casting:", err));
+    }
+  };
+
+  // Monologues (no other characters to voice) never reach startReading —
+  // VoiceCasting is skipped entirely — so record the role here instead.
+  const recordRoleReadWithNoCasting = (role: string) => {
+    if (!role || rolesRead.includes(role)) return;
+    const next = [...rolesRead, role];
+    setRolesRead(next);
+    if (user && scriptId) {
+      void updateScript(scriptId, { rolesRead: next }).catch((err) =>
+        console.error("Failed to save role history:", err),
       );
     }
   };
@@ -574,6 +616,9 @@ export default function Practice() {
           setRoleDraft(role || null);
           setSelectedRole(role);
           setVoicesConfirmed(false);
+          if (role && characters.filter((s) => s !== role).length === 0) {
+            recordRoleReadWithNoCasting(role);
+          }
         }}
       />
     );
@@ -610,6 +655,11 @@ export default function Practice() {
       selectedRole={selectedRole ?? ""}
       characterVoices={characterVoices}
       deliveryTags={deliveryTags ?? []}
+      // A replay session that didn't jump straight in via a "Practice as X"
+      // preset went through RolePicker/VoiceCasting again — i.e. Recast —
+      // so every line should be freshly generated rather than served from
+      // this tab's TTS cache, even if the same voice gets picked again.
+      forceFreshAudio={Boolean(replayScript) && !hasPresetRole}
       onBack={() => {
         if (voiceableSpeakers.length > 0) {
           setVoicesConfirmed(false);

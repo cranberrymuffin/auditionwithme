@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
-import { normalizeSpeaker } from "../../lib/script";
+import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
 import { Wordmark } from "../SiteNav";
 
 export default function RolePicker({
@@ -23,9 +23,6 @@ export default function RolePicker({
 
   const linesFor = (name: string) =>
     steps.filter((step) => normalizeSpeaker(step.speaker) === name && step.verbalLine.trim());
-
-  const displayName = (name: string) =>
-    name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 
   return (
     <main className="role-page">
@@ -85,7 +82,7 @@ export default function RolePicker({
         </div>
         <div className="role-actions">
           <button className="role-continue" disabled={!selected} onClick={() => selected && onChoose(selected)}>
-            {selected ? `Continue as ${displayName(selected)}` : "Choose a role to continue"}<span>→</span>
+            {selected ? `Continue as ${displayCharacterName(selected)}` : "Choose a role to continue"}<span>→</span>
           </button>
         </div>
       </section>

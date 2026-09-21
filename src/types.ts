@@ -20,6 +20,9 @@ export type SavedScript = {
   character_voices: Record<string, string> | null;
   /** AI-director delivery tags, aligned by index with steps */
   delivery_tags: (string | null)[] | null;
+  /** Characters the user has rehearsed as (read the human part for), so My
+   * Auditions can offer "Practice as X" without re-casting every time. */
+  roles_read: string[];
   created_at: string;
 };
 

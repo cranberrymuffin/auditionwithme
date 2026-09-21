@@ -14,6 +14,7 @@ import {
   deleteScript as deleteScriptRecord,
   listScripts,
 } from "../lib/scriptStore";
+import { displayCharacterName } from "../lib/script";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
 
@@ -27,6 +28,9 @@ export default function MyAccount() {
   const [loading, setLoading] = useState(true);
   const [tapeUrls, setTapeUrls] = useState<Record<string, string>>({});
   const [expandedTapeId, setExpandedTapeId] = useState<string | null>(null);
+  // Which previously-read role is picked in each script's "Practice as"
+  // dropdown, keyed by script id — falls back to the most recent role read.
+  const [roleChoice, setRoleChoice] = useState<Record<string, string>>({});
   const fetchedTapeIds = useRef(new Set<string>());
   const scriptRowRefs = useRef(new Map<string, HTMLLIElement>());
   const consumedOpenRequestRef = useRef(false);
@@ -102,21 +106,30 @@ export default function MyAccount() {
     setExpandedTapeId(openTapeId);
   }, [location.state, selfTapes]);
 
-  const practice = (script: SavedScript) => {
+  const replayScriptFor = (script: SavedScript) => ({
+    id: script.id,
+    title: script.title,
+    steps: script.steps,
+    characters: script.characters,
+    languageCode: script.language_code,
+    languageName: script.language_name,
+    characterVoices: script.character_voices,
+    deliveryTags: script.delivery_tags,
+    rolesRead: script.roles_read,
+  });
+
+  // Jumps straight into Rehearsal as a role already read before, reusing its
+  // saved cast — no RolePicker/VoiceCasting detour.
+  const practiceAsRole = (script: SavedScript, role: string) => {
     navigate("/practice", {
-      state: {
-        replayScript: {
-          id: script.id,
-          title: script.title,
-          steps: script.steps,
-          characters: script.characters,
-          languageCode: script.language_code,
-          languageName: script.language_name,
-          characterVoices: script.character_voices,
-          deliveryTags: script.delivery_tags,
-        },
-      },
+      state: { replayScript: replayScriptFor(script), selectedRole: role },
     });
+  };
+
+  // Recast (or the very first practice on this script): RolePicker, then
+  // VoiceCasting if there's anyone else to voice.
+  const practice = (script: SavedScript) => {
+    navigate("/practice", { state: { replayScript: replayScriptFor(script) } });
   };
 
   const scrollToScript = (scriptId: string) => {
@@ -291,24 +304,41 @@ export default function MyAccount() {
                     else scriptRowRefs.current.delete(script.id);
                   }}
                 >
-                  <div className="account-script-info">
-                    <strong>{script.title}</strong>
-                    <span>
-                      {script.characters.length}{" "}
-                      {script.characters.length === 1
-                        ? "character"
-                        : "characters"}
-                      {" · "}
-                      {new Date(script.created_at).toLocaleDateString(
-                        undefined,
-                        {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        },
-                      )}
-                    </span>
+                  <div className="account-script-header">
+                    <strong className="account-script-title">{script.title}</strong>
+                    <div className="account-script-corner">
+                      <button
+                        type="button"
+                        className={
+                          script.roles_read.length > 0
+                            ? "account-script-btn account-script-btn--outline"
+                            : "account-script-btn account-script-btn--solid"
+                        }
+                        onClick={() => practice(script)}
+                      >
+                        {script.roles_read.length > 0 ? "Recast" : "Practice →"}
+                      </button>
+                      <button
+                        type="button"
+                        className="account-script-btn account-script-btn--danger"
+                        onClick={() => void deleteScript(script)}
+                        aria-label={`Delete "${script.title}"`}
+                        title="Delete"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" />
+                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
+                  <span className="account-script-subtitle">
+                    {script.characters.length}{" "}
+                    {script.characters.length === 1 ? "character" : "characters"}
+                  </span>
                   {tapes.length > 0 && (
                     <ul className="account-self-tapes">
                       {tapes.map((tape) => (
@@ -323,22 +353,45 @@ export default function MyAccount() {
                       ))}
                     </ul>
                   )}
-                  <div className="account-script-actions">
-                    <button
-                      type="button"
-                      className="account-script-secondary"
-                      onClick={() => void deleteScript(script)}
-                    >
-                      Delete
-                    </button>
-                    <button
-                      type="button"
-                      className="account-script-practice"
-                      onClick={() => practice(script)}
-                    >
-                      Practice <span>→</span>
-                    </button>
-                  </div>
+                  {script.roles_read.length > 0 && (
+                    <div className="account-script-actions">
+                      <label className="account-script-role-picker">
+                        <span>Read as</span>
+                        <select
+                          aria-label="Choose which role to practice as"
+                          value={
+                            roleChoice[script.id] ??
+                            script.roles_read[script.roles_read.length - 1]
+                          }
+                          onChange={(event) =>
+                            setRoleChoice((prev) => ({
+                              ...prev,
+                              [script.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          {script.roles_read.map((role) => (
+                            <option key={role} value={role}>
+                              {displayCharacterName(role)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="account-script-btn account-script-btn--solid"
+                        onClick={() =>
+                          practiceAsRole(
+                            script,
+                            roleChoice[script.id] ??
+                              script.roles_read[script.roles_read.length - 1],
+                          )
+                        }
+                      >
+                        Go →
+                      </button>
+                    </div>
+                  )}
                 </li>
               );
             })}

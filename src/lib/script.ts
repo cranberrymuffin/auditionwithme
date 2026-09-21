@@ -24,6 +24,11 @@ export function humanizeVoiceLabel(value: string): string {
   return value.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+/** Title-cases an ALL-CAPS script character name for display, e.g. "MARY" -> "Mary". */
+export function displayCharacterName(name: string): string {
+  return name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+}
+
 export function normalizeSpeaker(name: string): string {
   return name
     .replace(/\s*\(cont['']?d\.?\)/gi, "")

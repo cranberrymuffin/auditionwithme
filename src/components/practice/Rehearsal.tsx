@@ -21,7 +21,7 @@ const COUNTDOWN_START = 3;
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, forceFreshAudio = false }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -30,6 +30,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   languageCode: string;
   fileName: string;
   scriptId: string | null;
+  /** Skip the TTS cache for every line — a Recast session, where even
+   * re-picking the same voice should read as a new take. */
+  forceFreshAudio?: boolean;
 }) {
   const navigate = useNavigate();
   const {
@@ -189,6 +192,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       play(line, {
         intensity,
         signal: controller.signal,
+        fresh: forceFreshAudio,
         onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
         onEnded: () => {
           setPlaybackState("ready");
@@ -203,7 +207,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     if (settleDelay > 0) settleTimer = setTimeout(startPlayback, settleDelay);
     else startPlayback();
     return () => { if (settleTimer) clearTimeout(settleTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord, forceFreshAudio]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -260,10 +264,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("playing");
     play(line, {
       intensity,
+      fresh: forceFreshAudio,
       onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
-  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
+  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop, forceFreshAudio]);
 
   const togglePause = useCallback(() => {
     setPaused((value) => {

@@ -15,6 +15,9 @@ type ScriptRecord = {
   contentHash: string | null;
   characterVoices: Record<string, string> | null;
   deliveryTags: (string | null)[] | null;
+  /** Characters the user has rehearsed as; missing on rows saved before this
+   * field existed, so readers fall back to an empty list. */
+  rolesRead?: string[];
   createdAt: string;
 };
 
@@ -39,6 +42,7 @@ function toSavedScript(record: ScriptRecord): SavedScript {
     content_hash: record.contentHash,
     character_voices: record.characterVoices,
     delivery_tags: record.deliveryTags,
+    roles_read: record.rolesRead ?? [],
     created_at: record.createdAt,
   };
 }
@@ -49,6 +53,7 @@ export async function saveScript(userId: string, script: NewScript): Promise<voi
     userId,
     characterVoices: {},
     deliveryTags: null,
+    rolesRead: [],
     createdAt: new Date().toISOString(),
   };
   await withStore(SCRIPTS_STORE, "readwrite", (store) => store.put(record));
@@ -77,7 +82,7 @@ export async function findScriptByContentHash(
 
 export async function updateScript(
   id: string,
-  patch: Partial<Pick<ScriptRecord, "characterVoices" | "deliveryTags">>,
+  patch: Partial<Pick<ScriptRecord, "characterVoices" | "deliveryTags" | "rolesRead">>,
 ): Promise<void> {
   const existing = await withStore<ScriptRecord | undefined>(
     SCRIPTS_STORE,

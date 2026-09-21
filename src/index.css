@@ -1657,6 +1657,7 @@ header .flow-back:hover {
   list-style: none;
 }
 .account-script-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1666,59 +1667,114 @@ header .flow-back:hover {
   border-radius: 11px;
   background: linear-gradient(145deg, #1d2d43, #142236);
 }
-.account-script-info {
+.account-script-header {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
+  align-items: flex-end;
+  gap: 12px 16px;
 }
-.account-script-info strong {
+.account-script-corner {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-left: auto;
+}
+.account-script-title {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: 1.0625rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.account-script-info span {
+.account-script-subtitle {
+  display: block;
+  margin-top: -11px;
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.8125rem;
 }
 .account-script-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
-.account-script-secondary,
-.account-script-practice {
-  flex: 1;
-  justify-content: center;
+.account-script-actions .account-script-btn {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 0.8125rem;
 }
-.account-script-secondary {
-  padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(248, 241, 230, 0.85);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.account-script-secondary:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-}
-.account-script-practice {
-  display: inline-flex;
+.account-script-role-picker {
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border: 1px solid rgba(255, 205, 183, 0.55);
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+.account-script-role-picker span {
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.account-script-role-picker select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 24px 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 7px;
+  outline: none;
+  background: #142236;
+  color: #f8f1e6;
+  font-size: 0.8125rem;
+}
+.account-script-role-picker select:focus {
+  border-color: #ef9a78;
+}
+
+/* Consolidated action-button system: one base (sizing/shape) plus a solid
+   (primary CTA — Practice, Practice as X), outline (Recast — a lighter-touch
+   redo, not the primary action), and danger (Delete) variant. */
+.account-script-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 18px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #f4a583, #e98464);
-  color: #1b120c;
   font-size: 0.875rem;
   font-weight: 600;
+  white-space: nowrap;
 }
-.account-script-practice:hover {
+.account-script-btn--solid {
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #1b120c;
+}
+.account-script-btn--solid:hover {
   filter: brightness(1.05);
+}
+.account-script-btn--outline {
+  border: 1px solid rgba(248, 241, 230, 0.3);
+  background: transparent;
+  color: rgba(248, 241, 230, 0.7);
+}
+.account-script-btn--outline:hover {
+  border-color: #e98464;
+  color: #f4a583;
+}
+.account-script-btn--danger {
+  width: 40px;
+  padding: 0;
+  border: 1px solid #eb6a6a;
+  background: #eb6a6a;
+  color: #1b120c;
+}
+.account-script-btn--danger:hover {
+  filter: brightness(1.08);
 }
 
 .billing-card {
