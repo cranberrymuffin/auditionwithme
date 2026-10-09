@@ -110,6 +110,20 @@ check("silence advances are counted apart from semantic ones", () => {
   assert.equal(row.lines_semantic_advanced, 0);
 });
 
+check("live fetches stay null until counted, then count up from 0", () => {
+  const m = new TakeMetrics();
+  assert.equal(m.toRow(noDevice).live_fetches_during_take, null);
+  m.liveFetchesDuringTake = 0;
+  assert.equal(m.toRow(noDevice).live_fetches_during_take, 0);
+  m.recordLiveFetch();
+  m.recordLiveFetch();
+  assert.equal(m.toRow(noDevice).live_fetches_during_take, 2);
+  // A take that never zeroed the counter still reports what it saw.
+  const unzeroed = new TakeMetrics();
+  unzeroed.recordLiveFetch();
+  assert.equal(unzeroed.toRow(noDevice).live_fetches_during_take, 1);
+});
+
 check("the row is numeric only (plus device class)", () => {
   const m = new TakeMetrics();
   m.recordLineCompleted("auto", 0);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
 import { cacheKey, type TtsIntensity, type TtsLine } from "../lib/ttsCacheKey";
+import { loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
 
 export { cacheKey } from "../lib/ttsCacheKey";
 export type { TtsIntensity, TtsLine } from "../lib/ttsCacheKey";
@@ -237,21 +238,72 @@ export async function fetchTtsBlobWithRetry(
   }
 }
 
+// The on-device store normally answers in a few ms. If it doesn't (another
+// tab blocking the v2 upgrade, a wedged IndexedDB on iOS), stop waiting and
+// fetch live — the actor is waiting on this line.
+const STORED_AUDIO_TIMEOUT_MS = 1000;
+
+async function loadStoredAudio(key: string): Promise<Blob | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), STORED_AUDIO_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([loadReaderAudio(key).catch(() => null), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Per-player context for a lookup: where live-fetched audio is stored, and
+ * who to tell when a line had to come from (or wait on) the network. */
+type LookupContext = {
+  scriptId?: string | null;
+  onLiveFetch?: () => void;
+  /** Playback is blocked on this lookup (play), not just warming (prefetch). */
+  waiting?: boolean;
+};
+
+/**
+ * Three tiers: the in-memory cache, then the on-device reader-audio store
+ * (pre-generated or previously fetched lines, surviving reloads), then a
+ * live ElevenLabs fetch — whose result is stored on-device too when the
+ * player knows the script, so the next take or a reload doesn't pay again.
+ */
 function getBlob(
   line: TtsLine,
   intensity: TtsIntensity,
   fresh = false,
+  ctx: LookupContext = {},
 ): Promise<Blob> {
   const key = cacheKey(line, intensity);
   if (fresh) blobCache.delete(key);
   const cached = blobCache.get(key);
   if (cached && pregenInFlight.has(cached)) {
-    // trackPregenFetch's own rejection handler (registered first) has
-    // already cleared the slot by the time this retry runs.
-    return cached.catch(() => getBlob(line, intensity));
+    // Pre-generation hasn't finished this line: playback waiting on it is a
+    // live fetch as far as the actor's concerned. trackPregenFetch's own
+    // rejection handler (registered first) has already cleared the slot by
+    // the time the retry below runs; it isn't counted again.
+    if (ctx.waiting) ctx.onLiveFetch?.();
+    return cached.catch(() =>
+      getBlob(line, intensity, false, { ...ctx, onLiveFetch: ctx.waiting ? undefined : ctx.onLiveFetch }),
+    );
   }
   if (cached) return cached;
-  const promise = fetchTtsBlobWithRetry(line, intensity);
+  const promise = (async () => {
+    if (!fresh) {
+      const stored = await loadStoredAudio(key);
+      if (stored) return stored;
+    }
+    ctx.onLiveFetch?.();
+    const blob = await fetchTtsBlobWithRetry(line, intensity);
+    if (ctx.scriptId) {
+      void saveReaderAudio(key, ctx.scriptId, blob).catch((err) =>
+        console.warn("Couldn't store reader audio on-device:", err),
+      );
+    }
+    return blob;
+  })();
   promise.catch(() => {
     // Failed fetch: clear the slot so the next attempt refetches fresh
     if (blobCache.get(key) === promise) blobCache.delete(key);
@@ -307,7 +359,17 @@ function speakWithBrowserVoice(
  * prefetches the next AI line while the current step plays to keep auto-flow
  * seamless.
  */
-export function useTtsPlayer() {
+export function useTtsPlayer(options?: {
+  /** Saved script whose live-fetched lines get stored on-device. */
+  scriptId?: string | null;
+  /** Called whenever a line has to come from (or wait on) the network
+   * instead of a cache — the rehearsal counts these during a take. */
+  onLiveFetch?: () => void;
+}) {
+  // Latest options, read at lookup time so play/prefetch stay stable.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   // One <audio> element, reused for every line rather than replaced: some
   // WebKit versions scope the "has played audible media from a gesture"
   // autoplay unlock to the specific element that played, not the page as a
@@ -448,7 +510,7 @@ export function useTtsPlayer() {
 
   const prefetch = useCallback(
     (line: TtsLine, intensity: TtsIntensity = "natural") => {
-      void getBlob(line, intensity);
+      void getBlob(line, intensity, false, { ...optionsRef.current, waiting: false });
     },
     [],
   );
@@ -465,7 +527,10 @@ export function useTtsPlayer() {
       logAudioEvent("play", `start "${line.text.slice(0, 24)}"`);
       let blob: Blob;
       try {
-        blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh);
+        blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh, {
+          ...optionsRef.current,
+          waiting: true,
+        });
       } catch (err) {
         if (opts?.signal?.aborted) return;
         logAudioEvent(

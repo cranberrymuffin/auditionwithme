@@ -76,7 +76,16 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // audio effect below.
   const deliveryTagsRef = useRef(deliveryTags);
   deliveryTagsRef.current = deliveryTags;
-  const { play, prefetch, stop, setVolume, getTapStream, unlock, getAudioContext } = useTtsPlayer();
+  // Lines fetched live are stored under this script for next time; during a
+  // take each one (pre-generation hadn't got there) is counted in telemetry.
+  const startPhaseRef = useRef(startPhase);
+  startPhaseRef.current = startPhase;
+  const { play, prefetch, stop, setVolume, getTapStream, unlock, getAudioContext } = useTtsPlayer({
+    scriptId,
+    onLiveFetch: () => {
+      if (startPhaseRef.current === "active") takeMetricsRef.current.recordLiveFetch();
+    },
+  });
   const changeReaderVolume = (volume: number) => {
     setReaderVolume(volume);
     setVolume(volume);
@@ -126,6 +135,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
 
   const beginRehearsal = useCallback(() => {
     takeMetricsRef.current = new TakeMetrics();
+    takeMetricsRef.current.liveFetchesDuringTake = 0;
     // Must run synchronously inside this click handler — the first cue plays
     // seconds later, after the countdown, well outside the user gesture that
     // autoplay policies require.

@@ -63,10 +63,12 @@ export class TakeMetrics {
   linesManualNext = 0;
   linesSemanticAdvanced = 0;
   linesSilenceAdvanced = 0;
-  // Pre-generation lands later; until then these stay unmeasured (null), not
-  // 0 — a 0 would falsely claim no live fetches happened.
+  // Copied from reader-audio pre-generation (useReaderAudioPregen) when the
+  // take ends. null = unmeasured, never a stand-in 0.
   pregenMs: number | null = null;
   pregenFailedLines: number | null = null;
+  // TTS fetches the take had to make, or wait on, because pre-generation
+  // hadn't reached the line yet. null until a take starts counting (0).
   liveFetchesDuringTake: number | null = null;
   private pendingAdvanceAt: number | null = null;
 
@@ -77,6 +79,10 @@ export class TakeMetrics {
     else if (kind === "semantic") this.linesSemanticAdvanced += 1;
     else this.linesSilenceAdvanced += 1;
     this.pendingAdvanceAt = at;
+  }
+
+  recordLiveFetch() {
+    this.liveFetchesDuringTake = (this.liveFetchesDuringTake ?? 0) + 1;
   }
 
   recordManualNext() {
