@@ -15,6 +15,41 @@ function pickMimeType(): string | undefined {
   return MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
 }
 
+// Not in lib.dom's MediaTrackCapabilities/Constraints yet — `zoom` is part of
+// the Image Capture extensions, supported only on some browsers/devices.
+type ZoomCapabilities = MediaTrackCapabilities & { zoom?: { min: number; max: number } };
+
+/**
+ * Narrows an ultra-wide front camera's field of view toward a normal
+ * self-tape framing, where the browser exposes a zoom control at all. Purely
+ * best-effort: many browsers lack getCapabilities() or the zoom constraint,
+ * and a failure here must never block recording.
+ */
+async function applyFrontCameraZoom(track: MediaStreamTrack): Promise<void> {
+  try {
+    if (typeof track.getCapabilities !== "function") return;
+    const zoom = (track.getCapabilities() as ZoomCapabilities).zoom;
+    if (!zoom) return;
+    const target = Math.min(Math.max(1.5, zoom.min), zoom.max);
+    await track.applyConstraints({
+      advanced: [{ zoom: target } as MediaTrackConstraintSet],
+    });
+    logAudioEvent("camera", `zoom applied: ${target} (range ${zoom.min}-${zoom.max})`);
+  } catch (err) {
+    logAudioEvent("camera", `zoom not applied: ${err}`);
+  }
+}
+
+/** iPadOS 13+ Safari reports a desktop Mac user agent by default, so "iPad"
+ * alone misses most real iPads — a touch-capable "Mac" is the tell. */
+export function isIpad(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    navigator.userAgent.includes("iPad") ||
+    (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)
+  );
+}
+
 /**
  * Camera + mic capture for rehearsal self-tapes, split into two steps so the
  * camera can be live (and previewed) during the start countdown while actual
@@ -67,8 +102,18 @@ export function useSelfTapeRecorder() {
     setStatus("requesting");
     let media: MediaStream;
     try {
+      // `video: true` lets iPad Safari hand back its native front-camera
+      // format, which on ultra-wide front cameras records a distorted,
+      // wide-FOV tape instead of a standard 16:9 self-tape frame. All
+      // `ideal`, never `exact`: a device that can't match falls back to its
+      // closest format rather than failing getUserMedia outright.
       media = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: {
+          facingMode: "user",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          aspectRatio: { ideal: 16 / 9 },
+        },
         audio: true,
       });
     } catch (err) {
@@ -78,6 +123,18 @@ export function useSelfTapeRecorder() {
         "We couldn't access your camera. Check your browser permissions and try again.",
       );
       return;
+    }
+    const videoTrack = media.getVideoTracks()[0];
+    if (videoTrack) {
+      // Constraints are only hints, so log what the camera actually gave us —
+      // the only way to tell from a beta report whether a wide tape came from
+      // the browser ignoring the constraints or from something downstream.
+      const settings = videoTrack.getSettings();
+      logAudioEvent(
+        "camera",
+        `opened ${settings.width}x${settings.height}, aspectRatio=${settings.aspectRatio?.toFixed(3) ?? "?"}, facingMode=${settings.facingMode ?? "?"}`,
+      );
+      await applyFrontCameraZoom(videoTrack);
     }
     streamRef.current = media;
     setStream(media);

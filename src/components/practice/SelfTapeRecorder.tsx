@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isIpad } from "../../hooks/useSelfTapeRecorder";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -27,6 +28,10 @@ export default function SelfTapeRecorder({
   }, [stream]);
 
   const isRecording = status === "recording" || status === "paused";
+  // Center Stage digitally pans/zooms the front camera to follow the face,
+  // overriding our framing constraints; it can only be turned off by the
+  // user (Control Center), so tell iPad users before they start a take.
+  const showCenterStageHint = Boolean(stream) && !isRecording && isIpad();
 
   return (
     <div className="self-tape-setting">
@@ -37,6 +42,11 @@ export default function SelfTapeRecorder({
           <div className="self-tape-placeholder">
             {status === "requesting" ? "Waiting for camera access…" : error ?? "Camera preview"}
           </div>
+        )}
+        {showCenterStageHint && (
+          <p className="self-tape-hint">
+            Tip: turn off Center Stage in Control Center for steady framing.
+          </p>
         )}
         {isRecording && (
           <span className={`self-tape-rec ${status === "paused" ? "is-paused" : ""}`}>

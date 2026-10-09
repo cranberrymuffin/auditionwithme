@@ -4048,7 +4048,9 @@ header .flow-back:hover {
 .self-tape-preview {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* Matches the 16:9 frame useSelfTapeRecorder requests, so the preview
+     shows exactly what ends up on the tape instead of a cropped 4:3 view. */
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   background: #000;
 }
@@ -4056,11 +4058,25 @@ header .flow-back:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   padding: 16px;
   text-align: center;
   color: rgba(248, 241, 230, 0.6);
   font-size: 0.8125rem;
+}
+.self-tape-hint {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  text-align: center;
 }
 .self-tape-rec {
   position: absolute;
