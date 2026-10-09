@@ -127,7 +127,11 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           }
           const partial =
             msg.message_type === "partial_transcript" ? msg.text ?? "" : "";
-          const count = countMatchedWords(scriptWords, state.committed + partial);
+          // A commit means VAD heard the actor stop, which is the only time a
+          // line that's just its last word or two short may be credited.
+          const count = countMatchedWords(scriptWords, state.committed + partial, {
+            atPause: msg.message_type === "committed_transcript",
+          });
           // Only advance — never walk the count backwards on partial rewrites
           setMatchedWordCount((prev) => Math.max(prev, count));
           if (count >= scriptWords.length && !lineCompletionRef.current) {

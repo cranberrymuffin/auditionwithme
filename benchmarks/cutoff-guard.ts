@@ -34,9 +34,10 @@ function check(name: string, fn: () => void) {
 }
 
 /** What useScribeTracking does on a commit, assuming the semantic check says
- * yes: true when the line would be force-advanced to fully matched. */
+ * yes: true when the line would be force-advanced to fully matched. Counted
+ * `atPause` like a real commit, so the last-word tolerance is in play too. */
 function wouldAdvance(transcript: string): boolean {
-  const count = countMatchedWords(scriptWords, transcript);
+  const count = countMatchedWords(scriptWords, transcript, { atPause: true });
   if (count >= scriptWords.length) return true; // plain word match
   return (
     shouldTrySemanticFallback(scriptWords, count, transcript) &&
@@ -115,6 +116,17 @@ check("trailing check compares whole normalized words, not substrings", () => {
   assert.equal(semanticMatchMayAdvance(long, `${words(0, 50)} and dont ran`), true);
   // ...but "ran" isn't satisfied just because "grand" contains it.
   assert.equal(semanticMatchMayAdvance(long, `${words(0, 50)} and dont grand`), false);
+});
+
+check("pause at 50%: last-word tolerance doesn't apply at a pause mid-line", () => {
+  const transcript = words(0, half);
+  assert.ok(countMatchedWords(scriptWords, transcript, { atPause: true }) < scriptWords.length);
+});
+
+check("pause 3 words from the end: tolerance (max 2 words) doesn't apply", () => {
+  const transcript = words(0, -3);
+  assert.equal(countMatchedWords(scriptWords, transcript, { atPause: true }), scriptWords.length - 3);
+  assert.equal(wouldAdvance(transcript), false);
 });
 
 console.log(`\n${passed} checks passed`);
