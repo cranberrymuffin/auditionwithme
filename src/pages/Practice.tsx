@@ -550,8 +550,9 @@ export default function Practice() {
   // Pre-generate the scene partner's lines from the moment "Start rehearsal"
   // is clicked on VoiceCasting (never while just browsing voices — every line
   // costs credits), and keep going through Rehearsal so the take itself makes
-  // no ElevenLabs round trips. Stops if the user changes a voice or backs out
-  // to casting; restarts with only the changed lines on the next click.
+  // no ElevenLabs round trips. The voice controls are hidden while preparing,
+  // so the cast can't change mid-run; backing out stops it, and the next click
+  // restarts with only the changed lines.
   const rehearsalShowing =
     !loading &&
     !pendingParse &&
@@ -702,12 +703,9 @@ export default function Practice() {
         steps={steps}
         voices={voices}
         characterVoices={characterVoices}
-        onPick={(speaker, voiceId) => {
-          // A recast mid-preparation cancels it; the next click restarts
-          // with the new voice, reusing every line already generated.
-          setPreparing(false);
-          setCharacterVoices((prev) => ({ ...prev, [speaker]: voiceId }));
-        }}
+        onPick={(speaker, voiceId) =>
+          setCharacterVoices((prev) => ({ ...prev, [speaker]: voiceId }))
+        }
         preparing={preparing}
         pregen={pregen}
         onStart={beginPreparing}

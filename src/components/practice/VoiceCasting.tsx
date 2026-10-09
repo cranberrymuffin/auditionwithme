@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import {
@@ -60,15 +60,21 @@ export default function VoiceCasting({
   const [previewing, setPreviewing] = useState(false);
   const [filters, setFilters] = useState<Record<FilterKey, string>>({ accent: "", gender: "", age: "", tone: "" });
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
+  const preparingHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
     if (!preparing) {
       setStartAnywayOffered(false);
       return;
     }
+    // The voice controls are gone while preparing: silence any preview still
+    // playing and move focus off the vanished Start button.
+    stop();
+    setPreviewing(false);
+    preparingHeadingRef.current?.focus();
     const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [preparing]);
+  }, [preparing, stop]);
 
   const languageVoices = useMemo(() => {
     const matches = voices.filter((voice) => voice.language === languageCode);
@@ -166,95 +172,118 @@ export default function VoiceCasting({
         </div>
 
         <div className="voice-selector-panel">
-          {speakers.length > 1 && (
-            <div className="speaker-tabs" role="tablist" aria-label="Scene partners">
-              {speakers.map((speaker) => (
-                <button
-                  key={speaker}
-                  role="tab"
-                  aria-selected={activeSpeaker === speaker}
-                  onClick={() => { stop(); setPreviewing(false); setActiveSpeaker(speaker); }}
-                >
-                  {displayCharacter(speaker)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <header className="voice-panel-heading">
-            <div><p>Choose a voice for</p><h2>{displayCharacter(activeSpeaker)}</h2></div>
-            <span>{dialogue.length} {dialogue.length === 1 ? "dialogue turn" : "dialogue turns"}</span>
-          </header>
-
-          <div className="voice-filter-bar">
-            <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
-            <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
-          </div>
-          <div className="voice-setup-filters">
-            {(["accent", "gender", "age", "tone"] as FilterKey[]).map((key) => (
-              <label key={key}>
-                <span>{key === "gender" ? "Voice type" : humanizeVoiceLabel(key)}</span>
-                <select
-                  value={filters[key]}
-                  onChange={(event) => applyFilters({ ...filters, [key]: event.target.value })}
-                >
-                  <option value="">Any ({facetTotal(key)})</option>
-                  {facetOptions(key).map(({ value, count }) => (
-                    <option key={value} value={value} disabled={count === 0}>
-                      {humanizeVoiceLabel(value)} ({count})
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-
-          {filteredVoices.length === 0 && (
-            <p className="voice-filter-empty" role="status">
-              No additional voices match this combination. Your selected voice is unchanged.
-            </p>
-          )}
-
-          <div className="selected-voice">
-            <div className="selected-voice-heading"><span>Selected voice</span><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
-            {currentVoice && <p>{describeVoice(currentVoice)}</p>}
-            <select
-              aria-label={`Selected voice for ${activeSpeaker}`}
-              value={currentVoice?.id ?? ""}
-              onChange={(event) => onPick(activeSpeaker, event.target.value)}
-            >
-              {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
-            </select>
-            <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
-              <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
-              {previewing ? "Pause preview" : "Preview voice"}
-            </button>
-            <q>{previewLine}</q>
-          </div>
-
           {preparing ? (
-            <>
-              <button className="start-rehearsal is-preparing" disabled aria-describedby="start-rehearsal-status">
+            <div className="preparing-panel">
+              <header>
+                <p>Cast locked in</p>
+                <h2 ref={preparingHeadingRef} tabIndex={-1}>Preparing your scene partners</h2>
+              </header>
+              <ul className="preparing-cast" aria-label="Your cast">
+                {speakers.map((speaker) => {
+                  const voice = voices.find((candidate) => candidate.id === characterVoices[speaker]);
+                  const descriptor = voice ? describeVoice(voice) : "";
+                  return (
+                    <li key={speaker}>
+                      <span>{displayCharacter(speaker)}</span>
+                      <strong>
+                        {voice ? voiceDisplayName(voice.name) : "Default voice"}
+                        {descriptor && <small> · {descriptor}</small>}
+                      </strong>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="preparing-progress">
                 <i aria-hidden="true" style={{ width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%` }} />
-                <span id="start-rehearsal-status" role="status">
+                <span role="status">
                   {pregen.waitingForDirection || pregen.total === 0
                     ? "Directing the scene…"
                     : `Preparing your scene partner’s lines · ${pregen.ready} of ${pregen.total}`}
                 </span>
-              </button>
-              <div className="start-rehearsal-note">
-                {pregen.failed > 0
-                  ? <span>Some lines couldn’t be pre-loaded; they’ll load as you go.</span>
-                  : <span>Rehearsal opens as soon as the first lines are ready.</span>}
+              </div>
+              <div className="preparing-note">
+                <p>
+                  {pregen.failed > 0
+                    ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
+                    : "Rehearsal opens as soon as the first lines are ready."}
+                </p>
                 {(startAnywayOffered || pregen.failed > 0) && (
                   <button type="button" onClick={onStartAnyway}>Start anyway</button>
                 )}
               </div>
-            </>
+            </div>
           ) : (
-            <button className="start-rehearsal" disabled={!currentVoice} onClick={() => { stop(); setPreviewing(false); onStart(); }}>
-              Start rehearsal <span>→</span>
-            </button>
+            <>
+              {speakers.length > 1 && (
+                <div className="speaker-tabs" role="tablist" aria-label="Scene partners">
+                  {speakers.map((speaker) => (
+                    <button
+                      key={speaker}
+                      role="tab"
+                      aria-selected={activeSpeaker === speaker}
+                      onClick={() => { stop(); setPreviewing(false); setActiveSpeaker(speaker); }}
+                    >
+                      {displayCharacter(speaker)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <header className="voice-panel-heading">
+                <div><p>Choose a voice for</p><h2>{displayCharacter(activeSpeaker)}</h2></div>
+                <span>{dialogue.length} {dialogue.length === 1 ? "dialogue turn" : "dialogue turns"}</span>
+              </header>
+
+              <div className="voice-filter-bar">
+                <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
+                <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
+              </div>
+              <div className="voice-setup-filters">
+                {(["accent", "gender", "age", "tone"] as FilterKey[]).map((key) => (
+                  <label key={key}>
+                    <span>{key === "gender" ? "Voice type" : humanizeVoiceLabel(key)}</span>
+                    <select
+                      value={filters[key]}
+                      onChange={(event) => applyFilters({ ...filters, [key]: event.target.value })}
+                    >
+                      <option value="">Any ({facetTotal(key)})</option>
+                      {facetOptions(key).map(({ value, count }) => (
+                        <option key={value} value={value} disabled={count === 0}>
+                          {humanizeVoiceLabel(value)} ({count})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+
+              {filteredVoices.length === 0 && (
+                <p className="voice-filter-empty" role="status">
+                  No additional voices match this combination. Your selected voice is unchanged.
+                </p>
+              )}
+
+              <div className="selected-voice">
+                <div className="selected-voice-heading"><span>Selected voice</span><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
+                {currentVoice && <p>{describeVoice(currentVoice)}</p>}
+                <select
+                  aria-label={`Selected voice for ${activeSpeaker}`}
+                  value={currentVoice?.id ?? ""}
+                  onChange={(event) => onPick(activeSpeaker, event.target.value)}
+                >
+                  {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
+                </select>
+                <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
+                  <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
+                  {previewing ? "Pause preview" : "Preview voice"}
+                </button>
+                <q>{previewLine}</q>
+              </div>
+
+              <button className="start-rehearsal" disabled={!currentVoice} onClick={onStart}>
+                Start rehearsal <span>→</span>
+              </button>
+            </>
           )}
         </div>
       </section>

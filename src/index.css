@@ -3054,42 +3054,91 @@ header .flow-back:hover {
   box-shadow: none;
   color: rgba(248, 241, 230, 0.4);
 }
-.start-rehearsal.is-preparing {
+.preparing-panel > header p {
+  margin: 0 0 3px;
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.8125rem;
+}
+.preparing-panel > header h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2vw, 1.55rem);
+  font-weight: 600;
+  outline: none;
+}
+.preparing-cast {
+  margin: 20px 0 0;
+  padding: 4px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  background: rgba(8, 18, 30, 0.38);
+  list-style: none;
+}
+.preparing-cast li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 12px 0;
+}
+.preparing-cast li + li {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.preparing-cast li > span {
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.875rem;
+}
+.preparing-cast strong {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: right;
+}
+.preparing-cast small {
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+.preparing-progress {
   position: relative;
+  display: flex;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  cursor: progress;
+  margin-top: 22px;
   padding: 0 14px;
-  border-color: rgba(255, 205, 183, 0.24);
+  border: 1px solid rgba(255, 205, 183, 0.24);
+  border-radius: 9px;
+  background: rgba(248, 241, 230, 0.1);
   color: rgba(248, 241, 230, 0.82);
   font-size: 0.8125rem;
   font-weight: 600;
   text-align: center;
 }
-.start-rehearsal.is-preparing:hover {
-  filter: none;
-  transform: none;
-}
-.start-rehearsal.is-preparing i {
+.preparing-progress i {
   position: absolute;
   inset: 0 auto 0 0;
   background: linear-gradient(135deg, rgba(244, 165, 131, 0.32), rgba(233, 132, 100, 0.32));
   transition: width 0.3s ease;
 }
-.start-rehearsal.is-preparing span {
+.preparing-progress span {
   position: relative;
 }
-.start-rehearsal-note {
+.preparing-note {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px 12px;
   margin-top: 10px;
-  color: rgba(248, 241, 230, 0.5);
-  font-size: 0.75rem;
-  line-height: 1.4;
 }
-.start-rehearsal-note button {
+.preparing-note p {
+  margin: 0;
+  color: rgba(248, 241, 230, 0.6);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.preparing-note button {
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid rgba(255, 205, 183, 0.58);
@@ -3098,8 +3147,24 @@ header .flow-back:hover {
   font-size: 0.8125rem;
   font-weight: 700;
 }
-.start-rehearsal-note button:hover {
+.preparing-note button:hover {
   background: rgba(244, 165, 131, 0.1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .preparing-progress i {
+    transition: none;
+  }
+}
+@media (max-width: 560px) {
+  .preparing-cast {
+    padding: 2px 14px;
+  }
+  .preparing-cast li {
+    flex-direction: column;
+  }
+  .preparing-cast strong {
+    text-align: left;
+  }
 }
 
 @media (max-width: 850px) {
