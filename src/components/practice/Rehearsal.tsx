@@ -3,13 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import { buildReaderCue, type ReaderCue } from "../../lib/readerLines";
-import {
-  loadReaderVolume,
-  MAX_READER_VOLUME,
-  useTtsPlayer,
-  type TtsIntensity,
-  type TtsLine,
-} from "../../hooks/useTtsPlayer";
+import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
@@ -72,7 +66,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // Pinned: emotion comes from the director's per-line audio tags, not a
   // global intensity knob ("dramatic" read every tagged line over the top).
   const intensity: TtsIntensity = "natural";
-  const [readerVolume, setReaderVolume] = useState(loadReaderVolume);
   // Refs so mid-line updates (AI delivery tags arriving) don't restart the
   // audio effect below.
   const deliveryTagsRef = useRef(deliveryTags);
@@ -81,16 +74,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // take each one (pre-generation hadn't got there) is counted in telemetry.
   const startPhaseRef = useRef(startPhase);
   startPhaseRef.current = startPhase;
-  const { play, prefetch, stop, setVolume, getTapStream, unlock, getAudioContext } = useTtsPlayer({
+  const { play, prefetch, stop, getTapStream, unlock, getAudioContext } = useTtsPlayer({
     scriptId,
     onLiveFetch: () => {
       if (startPhaseRef.current === "active") takeMetricsRef.current.recordLiveFetch();
     },
   });
-  const changeReaderVolume = (volume: number) => {
-    setReaderVolume(volume);
-    setVolume(volume);
-  };
 
   // Same builder pre-generation uses (lib/readerLines.ts), so the request —
   // and its cache key — match what was generated before Start. The cue also
@@ -443,20 +432,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
         </div>
         <p><strong>Rehearsal</strong><span>Line {currentStepIndex + 1} of {steps.length}</span></p>
         <div>
-          <label className="rehearsal-volume" title="Scene partner volume">
-            <span aria-hidden="true">Reader</span>
-            <input
-              type="range"
-              min="0"
-              max={MAX_READER_VOLUME}
-              step="0.1"
-              value={readerVolume}
-              onChange={(event) => changeReaderVolume(Number(event.target.value))}
-              aria-label="Scene partner volume"
-              aria-valuetext={`${Math.round(readerVolume * 100)}%`}
-            />
-            <output>{Math.round(readerVolume * 100)}%</output>
-          </label>
           <Link to="/" onClick={(event) => { if (!confirmExit()) event.preventDefault(); }}>Exit</Link>
         </div>
       </header>

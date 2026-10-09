@@ -3725,22 +3725,6 @@ header .flow-back:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rehearsal-volume {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: rgba(248, 241, 230, 0.55);
-  font-size: 0.75rem;
-}
-.rehearsal-volume input {
-  width: 96px;
-  accent-color: #ef9a78;
-}
-.rehearsal-volume output {
-  min-width: 3.5ch;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
 .rehearsal-context {
   gap: 11px !important;
 }
@@ -4628,8 +4612,7 @@ header .flow-back:hover {
   .rehearsal-header > p {
     display: none;
   }
-  .rehearsal-header > div:last-child a,
-  .rehearsal-volume > span {
+  .rehearsal-header > div:last-child a {
     display: none;
   }
   .rehearsal-workspace {
