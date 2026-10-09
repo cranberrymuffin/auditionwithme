@@ -1,13 +1,14 @@
 // Checks for the word matcher's stall fixes (src/lib/lineMatch.ts):
-// contraction/number normalization and the last-word tolerance for lines VAD
-// clipped at the end. The cut-off guarantees live in cutoff-guard.ts.
+// contraction/number normalization, the last-word tolerance for lines VAD
+// clipped at the end, and the silence-based advance rule. The cut-off
+// guarantees live in cutoff-guard.ts.
 //
 //   npm run test:match
 //
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { countMatchedWords } from "../src/lib/lineMatch";
+import { countMatchedWords, shouldSilenceAdvance, type SilenceInputs } from "../src/lib/lineMatch";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -85,6 +86,69 @@ check("misheard last word (not just missing) is handled by the matcher, not tole
   // "most" heard as "mist": a fuzzy near-miss, matched outright.
   const transcript = [...LINE.slice(0, -1), "mist"].join(" ");
   assert.equal(countMatchedWords(LINE, transcript), LINE.length);
+});
+
+// Silence-based advance: Scribe quiet AND mic quiet AND >= 80% heard.
+const at = (heard: number, overrides: Partial<SilenceInputs> = {}): SilenceInputs => ({
+  scriptWords: LINE,
+  matchedCount: heard,
+  transcript: LINE.slice(0, heard).join(" "),
+  msSinceTextChange: 1500,
+  msSinceMicActive: 1500,
+  ...overrides,
+});
+const eighty = Math.ceil(LINE.length * 0.8);
+
+check("silence: 80% matched + 1.2s of silence -> advance", () => {
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceTextChange: 1200, msSinceMicActive: 1200 })), true);
+});
+
+check("silence: actor still speaking but Scribe lagging -> no advance", () => {
+  // No new text for a while, but the mic says the actor is still talking.
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceTextChange: 3000, msSinceMicActive: 0 })), false);
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceTextChange: 3000, msSinceMicActive: 600 })), false);
+});
+
+check("silence: mic quiet but Scribe still producing text -> no advance", () => {
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceTextChange: 400 })), false);
+});
+
+check("silence: 50% matched + long silence -> no advance", () => {
+  const half = Math.floor(LINE.length / 2);
+  assert.equal(shouldSilenceAdvance(at(half, { msSinceTextChange: 10_000, msSinceMicActive: 10_000 })), false);
+});
+
+check("silence: just under 80% -> no advance", () => {
+  assert.equal(shouldSilenceAdvance(at(eighty - 1)), false);
+});
+
+check("silence: no Scribe text yet, or mic level unmeasured -> no advance", () => {
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceTextChange: null })), false);
+  assert.equal(shouldSilenceAdvance(at(eighty, { msSinceMicActive: null })), false);
+});
+
+check("silence: already fully matched -> nothing to do", () => {
+  assert.equal(shouldSilenceAdvance(at(LINE.length)), false);
+});
+
+const MONOLOGUE = split(
+  "You want to know why I stayed in this town after everyone else left? " +
+    "Because somebody had to keep the lights on at the diner, somebody had to " +
+    "remember the names of the regulars, and somebody had to sit with my father " +
+    "every evening while he forgot a little more of himself. I never wanted " +
+    "applause for it. I just wanted one person to notice before the winter came.",
+);
+
+check("silence: long line paused at 85% without its ending -> no advance", () => {
+  const heard = Math.ceil(MONOLOGUE.length * 0.85);
+  const inputs = at(heard, { scriptWords: MONOLOGUE, transcript: MONOLOGUE.slice(0, heard).join(" ") });
+  assert.equal(shouldSilenceAdvance(inputs), false);
+});
+
+check("silence: long line with a garbled stretch but its ending heard -> advance", () => {
+  const heard = Math.ceil(MONOLOGUE.length * 0.85);
+  const transcript = `${MONOLOGUE.slice(0, heard).join(" ")} mumble ${MONOLOGUE.slice(-3).join(" ")}`;
+  assert.equal(shouldSilenceAdvance(at(heard, { scriptWords: MONOLOGUE, transcript })), true);
 });
 
 console.log(`\n${passed} checks passed`);

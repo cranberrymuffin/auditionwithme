@@ -184,3 +184,46 @@ export function semanticMatchMayAdvance(scriptWords: string[], committed: string
   const heard = tokensOf(committed);
   return trailing.every((word) => heard.some((spoken) => wordsMatch(spoken, word)));
 }
+
+// Silence-based advance. Scribe's realtime API never says "the actor went
+// quiet", and a line whose last word or two never transcribe can sit
+// unmatched forever. So silence is inferred from two independent signals:
+// Scribe has stopped producing new text, and the mic itself is quiet (the
+// first alone would also be true while the actor is still speaking but
+// Scribe is lagging behind). Only then, with most of the line already heard,
+// is the line credited.
+export const SILENCE_ADVANCE_MS = 1200;
+// RMS of the 3x-boosted mic signal useScribeTracking taps (about -40 dBFS).
+export const SILENCE_RMS = 0.01;
+const SILENCE_MIN_MATCHED_FRACTION = 0.8;
+
+export type SilenceInputs = {
+  scriptWords: string[];
+  matchedCount: number;
+  /** Everything Scribe has transcribed for this line (commits + partial). */
+  transcript: string;
+  /** Since the last Scribe message that changed transcript text; null if
+   * none has arrived yet. */
+  msSinceTextChange: number | null;
+  /** Since the mic level was last at or above SILENCE_RMS; null if the mic
+   * level isn't being measured. */
+  msSinceMicActive: number | null;
+};
+
+/** Whether the actor has gone quiet with enough of the line heard that it
+ * should be credited as finished. */
+export function shouldSilenceAdvance({
+  scriptWords,
+  matchedCount,
+  transcript,
+  msSinceTextChange,
+  msSinceMicActive,
+}: SilenceInputs): boolean {
+  if (!scriptWords.length || matchedCount >= scriptWords.length) return false;
+  if (msSinceTextChange === null || msSinceTextChange < SILENCE_ADVANCE_MS) return false;
+  if (msSinceMicActive === null || msSinceMicActive < SILENCE_ADVANCE_MS) return false;
+  if (matchedCount / scriptWords.length < SILENCE_MIN_MATCHED_FRACTION) return false;
+  // Same rule as the semantic fallback: on a long line, a pause isn't the end
+  // until the line's last few words have been heard.
+  return semanticMatchMayAdvance(scriptWords, transcript);
+}

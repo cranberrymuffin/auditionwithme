@@ -3,7 +3,9 @@ import { checkSemanticLineMatch } from "../lib/script";
 import {
   countMatchedWords,
   semanticMatchMayAdvance,
+  shouldSilenceAdvance,
   shouldTrySemanticFallback,
+  SILENCE_RMS,
 } from "../lib/lineMatch";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
@@ -11,6 +13,8 @@ import type { LineCompletion } from "../lib/takeMetrics";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
+// How often the mic level is sampled and the silence-advance rule re-checked.
+const MIC_LEVEL_POLL_MS = 200;
 
 // Bias Scribe toward this line's distinctive vocabulary (character names,
 // unusual script words) — the words most likely to be misheard by a generic
@@ -63,10 +67,14 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
  * knock iOS's shared audio session into an interrupted state — surfacing as
  * cues that mysteriously fail to play right around a line boundary.
  *
- * `lineCompletionRef` holds when (client time of the Scribe message, or of
- * the semantic match resolving) and how the current line was first credited
- * as fully matched — the start of the reader-latency sample in
- * lib/takeMetrics.ts. Null until then; reset whenever the line changes.
+ * Also credits the line when the actor goes quiet with most of it heard
+ * (`shouldSilenceAdvance` in lib/lineMatch.ts): no new Scribe text AND a
+ * quiet mic, measured by an AnalyserNode on the boosted mic signal.
+ *
+ * `lineCompletionRef` holds when (client time of the Scribe message, of the
+ * semantic match resolving, or of the silence rule firing) and how the
+ * current line was first credited as fully matched — the start of the
+ * reader-latency sample in lib/takeMetrics.ts. Null until then; reset whenever the line changes.
  */
 export function useScribeTracking(active: boolean, line: string, languageCode = "en", micStream: MediaStream | null) {
   const [matchedWordCount, setMatchedWordCount] = useState(0);
@@ -80,13 +88,24 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     logAudioEvent("scribe", `activating for "${line.slice(0, 24)}"`);
 
     const scriptWords = line.split(/\s+/).filter(Boolean);
-    const state = { committed: "", closed: false, semanticChecked: "" };
+    const state = {
+      committed: "",
+      partial: "",
+      closed: false,
+      semanticChecked: "",
+      matchedCount: 0,
+      lastTextChangeAt: null as number | null,
+      lastMicActiveAt: null as number | null,
+      silenceAdvanced: false,
+    };
     let ws: WebSocket | null = null;
     let audioContext: AudioContext | null = null;
     let processor: ScriptProcessorNode | null = null;
+    let micLevelTimer: ReturnType<typeof setInterval> | null = null;
 
     const cleanup = () => {
       state.closed = true;
+      if (micLevelTimer) clearInterval(micLevelTimer);
       processor?.disconnect();
       audioContext?.close().catch(() => {});
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
@@ -122,17 +141,24 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data);
+          const text: string = msg.text ?? "";
           if (msg.message_type === "committed_transcript") {
-            state.committed += (msg.text ?? "") + " ";
+            // A commit restating the in-progress partial isn't new speech.
+            if (text.trim() && text !== state.partial) state.lastTextChangeAt = Date.now();
+            state.committed += text + " ";
+            state.partial = "";
+          } else if (msg.message_type === "partial_transcript" && text !== state.partial) {
+            state.partial = text;
+            state.lastTextChangeAt = Date.now();
           }
-          const partial =
-            msg.message_type === "partial_transcript" ? msg.text ?? "" : "";
+          const partial = state.partial;
           // A commit means VAD heard the actor stop, which is the only time a
           // line that's just its last word or two short may be credited.
           const count = countMatchedWords(scriptWords, state.committed + partial, {
             atPause: msg.message_type === "committed_transcript",
           });
           // Only advance — never walk the count backwards on partial rewrites
+          state.matchedCount = Math.max(state.matchedCount, count);
           setMatchedWordCount((prev) => Math.max(prev, count));
           if (count >= scriptWords.length && !lineCompletionRef.current) {
             lineCompletionRef.current = { kind: "auto", at: Date.now() };
@@ -214,6 +240,37 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           gain.connect(processor);
           processor.connect(silent);
           silent.connect(audioContext.destination);
+
+          // Mic level for the silence-advance rule, read off the same boosted
+          // signal Scribe gets. Fed into the muted node like the processor,
+          // so it's pulled by the graph without ever being audible.
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 2048;
+          gain.connect(analyser);
+          analyser.connect(silent);
+          const samples = new Float32Array(analyser.fftSize);
+          state.lastMicActiveAt = Date.now();
+          micLevelTimer = setInterval(() => {
+            if (state.closed) return;
+            analyser.getFloatTimeDomainData(samples);
+            let sum = 0;
+            for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+            const now = Date.now();
+            if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = now;
+            if (state.silenceAdvanced || lineCompletionRef.current) return;
+            const quiet = shouldSilenceAdvance({
+              scriptWords,
+              matchedCount: state.matchedCount,
+              transcript: state.committed + state.partial,
+              msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
+              msSinceMicActive: state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
+            });
+            if (!quiet) return;
+            state.silenceAdvanced = true;
+            logAudioEvent("scribe", "actor went quiet with most of the line heard, advancing");
+            lineCompletionRef.current = { kind: "silence", at: now };
+            setMatchedWordCount(scriptWords.length);
+          }, MIC_LEVEL_POLL_MS);
         };
       } catch (err) {
         console.error("Scribe tracking unavailable:", err);
