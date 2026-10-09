@@ -102,6 +102,7 @@ export default function Home() {
               languageCode: existing.language_code,
               languageName: existing.language_name,
               characterVoices: existing.character_voices,
+              characterVolumes: existing.character_volumes,
               deliveryTags: existing.delivery_tags,
               directorVersion: existing.director_version,
               rolesRead: existing.roles_read,

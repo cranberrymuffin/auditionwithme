@@ -15,6 +15,8 @@ type ScriptRecord = {
   steps: Step[];
   contentHash: string | null;
   characterVoices: Record<string, string> | null;
+  /** Missing on rows saved before per-character levels existed. */
+  characterVolumes?: Record<string, number>;
   deliveryTags: (string | null)[] | null;
   /** DIRECTOR_VERSION (src/lib/director.ts) the deliveryTags came from;
    * missing on rows saved before versioning, which readers treat as stale. */
@@ -50,6 +52,7 @@ function toSavedScript(record: ScriptRecord): SavedScript {
     steps: record.steps,
     content_hash: record.contentHash,
     character_voices: record.characterVoices,
+    character_volumes: record.characterVolumes ?? null,
     delivery_tags: record.deliveryTags,
     director_version: record.directorVersion ?? null,
     roles_read: record.rolesRead ?? [],
@@ -97,6 +100,7 @@ export async function updateScript(
     Pick<
       ScriptRecord,
       | "characterVoices"
+      | "characterVolumes"
       | "deliveryTags"
       | "directorVersion"
       | "rolesRead"

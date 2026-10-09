@@ -28,10 +28,12 @@ const RECORDING_SETTLE_MS = 500;
 // paths that skip VoiceCasting, which otherwise does this wait itself.
 const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
+  /** Speaker → level set on the voice setup screen (missing = unity). */
+  characterVolumes: Record<string, number>;
   deliveryTags: (string | null)[];
   onBack: () => void;
   languageCode: string;
@@ -87,6 +89,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   const readerCue = useCallback(
     (index: number): ReaderCue | null => buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current),
     [steps, characterVoices],
+  );
+  // Fixed for the take: set on the voice setup screen, never mid-scene.
+  const volumeFor = useCallback(
+    (index: number) => characterVolumes[normalizeSpeaker(steps[index]?.speaker ?? "")],
+    [steps, characterVolumes],
   );
   const ttsLine = useCallback((index: number): TtsLine | null => readerCue(index)?.line ?? null, [readerCue]);
 
@@ -254,6 +261,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       setPlaybackState("playing");
       play(line, {
         intensity,
+        volume: volumeFor(currentStepIndex),
         signal: controller.signal,
         onPlaying,
         onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
@@ -278,7 +286,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       holdTimer = setTimeout(startPlayback, holdMs);
     } else startPlayback();
     return () => { if (holdTimer) clearTimeout(holdTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, play, prefetch, stop, willRecord]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, volumeFor, play, prefetch, stop, willRecord]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -348,10 +356,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("playing");
     play(line, {
       intensity,
+      volume: volumeFor(cueIndex),
       onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
-  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
+  }, [cueIndex, ttsLine, volumeFor, intensity, isMyLine, play, stop]);
 
   const togglePause = useCallback(() => {
     setPaused((value) => {

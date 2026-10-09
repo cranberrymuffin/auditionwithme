@@ -2920,6 +2920,25 @@ header .flow-back:hover {
 .selected-voice > select:focus {
   border-color: #ef9a78;
 }
+.voice-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.875rem;
+}
+.voice-volume input {
+  flex: 1;
+  min-width: 0;
+  accent-color: #ef9a78;
+}
+.voice-volume output {
+  min-width: 4.5ch;
+  text-align: right;
+  color: #f8f1e6;
+  font-variant-numeric: tabular-nums;
+}
 .voice-preview-button {
   display: inline-flex;
   min-height: 44px;

@@ -123,6 +123,7 @@ export default function MyAccount() {
     languageCode: script.language_code,
     languageName: script.language_name,
     characterVoices: script.character_voices,
+    characterVolumes: script.character_volumes,
     deliveryTags: script.delivery_tags,
     directorVersion: script.director_version,
     rolesRead: script.roles_read,

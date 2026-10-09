@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
 import { cacheKey, type TtsIntensity, type TtsLine } from "../lib/ttsCacheKey";
 import { loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
+import { clampCharacterVolume } from "../lib/characterVolume";
 
 export { cacheKey } from "../lib/ttsCacheKey";
 export type { TtsIntensity, TtsLine } from "../lib/ttsCacheKey";
@@ -11,6 +12,8 @@ export type TtsPlayOptions = {
   intensity?: TtsIntensity;
   /** Playback rate applied client-side (pitch-preserving). */
   speed?: number;
+  /** This speaker's level (lib/characterVolume.ts); default unity. */
+  volume?: number;
   signal?: AbortSignal;
   onEnded?: () => void;
   /** Fired on the audio element's 'playing' event — when the line actually
@@ -350,6 +353,8 @@ function speakWithBrowserVoice(
     const timer = setTimeout(settle, FETCH_TIMEOUT_MS);
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = opts?.speed ?? 1;
+    // Speech synthesis can't go above full volume, only below it.
+    utterance.volume = Math.min(clampCharacterVolume(opts?.volume), 1);
     utterance.onstart = () => {
       clearTimeout(timer);
       resolve();
@@ -396,12 +401,13 @@ export function useTtsPlayer(options?: {
   // this is created lazily on first use and then kept for the session —
   // matching the one persistent audioRef element it's built from.
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
-  // Every line passes through the compressor before reaching both the
-  // speakers and the self-tape tap, at a fixed unity level: the reader's
-  // volume in a finished tape is set afterwards, on the review screen, from
-  // the separately recorded reader stem (see useSelfTapeRecorder). Built
+  // Every line passes through compressor -> gain before reaching both the
+  // speakers and the self-tape tap, so the recorded mix carries exactly the
+  // level the actor heard. The gain is set per line to its speaker's level,
+  // after the compressor so the compressor doesn't even it back out. Built
   // alongside the context in ensureTap.
   const compressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
   const ensureAudioElement = useCallback(() => {
     if (!audioRef.current) audioRef.current = new Audio();
@@ -437,9 +443,12 @@ export function useTtsPlayer(options?: {
       compressor.threshold.value = -24;
       compressor.ratio.value = 4;
       compressor.knee.value = 10;
-      compressor.connect(context.destination);
-      compressor.connect(tapDestinationRef.current);
+      const gain = context.createGain();
+      compressor.connect(gain);
+      gain.connect(context.destination);
+      gain.connect(tapDestinationRef.current);
       compressorRef.current = compressor;
+      gainNodeRef.current = gain;
     }
     return {
       context: audioContextRef.current,
@@ -573,6 +582,7 @@ export function useTtsPlayer(options?: {
           source.connect(compressorRef.current!);
           sourceNodeRef.current = source;
         }
+        gainNodeRef.current!.gain.value = clampCharacterVolume(opts?.volume);
 
         await audio.play();
         logAudioEvent(
@@ -597,6 +607,12 @@ export function useTtsPlayer(options?: {
     if (audioRef.current) audioRef.current.playbackRate = speed;
   }, []);
 
+  /** Changes the level of whatever is currently playing (a voice preview
+   * following its slider); the next line sets its own. */
+  const setVolume = useCallback((volume: number) => {
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = clampCharacterVolume(volume);
+  }, []);
+
   useEffect(() => stop, [stop]);
 
   // Without this, the shared AudioContext outlives the component: leaving a
@@ -610,6 +626,7 @@ export function useTtsPlayer(options?: {
       void audioContextRef.current?.close();
       audioContextRef.current = null;
       compressorRef.current = null;
+      gainNodeRef.current = null;
     };
   }, []);
 
@@ -618,6 +635,7 @@ export function useTtsPlayer(options?: {
     prefetch,
     stop,
     setPlaybackRate,
+    setVolume,
     getTapStream,
     unlock,
     getAudioContext,

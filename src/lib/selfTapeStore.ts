@@ -157,7 +157,7 @@ export async function submitFeedback(
   if (error) throw error;
 
   // Re-read rather than reuse `existing`: the supabase round trip above may
-  // have taken a while, and another writer (setTapeReaderVolume, a delete)
+  // have taken a while, and another writer (a delete)
   // could have landed on this record in the meantime. withStoreReadModifyWrite
   // reads and writes in one transaction, so this only ever touches the
   // current record instead of stomping it with a stale snapshot.

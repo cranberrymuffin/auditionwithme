@@ -34,6 +34,8 @@ type ReplayScript = {
   languageName: string;
   /** Casting confirmed in a past rehearsal, speaker → voice id. */
   characterVoices?: Record<string, string> | null;
+  /** Scene partner levels from a past rehearsal, speaker → gain. */
+  characterVolumes?: Record<string, number> | null;
   /** AI-director delivery tags from a past parse, aligned with steps. */
   deliveryTags?: (string | null)[] | null;
   /** DIRECTOR_VERSION those tags were generated under (null/absent = stale). */
@@ -97,6 +99,9 @@ export default function Practice() {
   const [roleDraft, setRoleDraft] = useState<string | null>(null);
   const [characterVoices, setCharacterVoices] = useState<
     Record<string, string>
+  >({});
+  const [characterVolumes, setCharacterVolumes] = useState<
+    Record<string, number>
   >({});
   // Saved scripts row backing this session, when the user is signed in —
   // casting and delivery tags are written back to it as they settle.
@@ -224,6 +229,9 @@ export default function Practice() {
     });
     if (replayScript.characterVoices && Object.keys(replayScript.characterVoices).length) {
       setCharacterVoices(replayScript.characterVoices);
+    }
+    if (replayScript.characterVolumes) {
+      setCharacterVolumes(replayScript.characterVolumes);
     }
     // Tags from an older director prompt are dropped rather than seeded, so
     // the director effect below re-runs with the current prompt (and the
@@ -532,6 +540,7 @@ export default function Practice() {
     if (user && scriptId) {
       void updateScript(scriptId, {
         characterVoices: next,
+        characterVolumes,
         rolesRead: nextRolesRead,
       }).catch((err) => console.error("Failed to save voice casting:", err));
     }
@@ -768,6 +777,10 @@ export default function Practice() {
         onPick={(speaker, voiceId) =>
           setCharacterVoices((prev) => ({ ...prev, [speaker]: voiceId }))
         }
+        characterVolumes={characterVolumes}
+        onVolumeChange={(speaker, volume) =>
+          setCharacterVolumes((prev) => ({ ...prev, [speaker]: volume }))
+        }
         preparing={preparing}
         pregen={pregen}
         onStart={beginPreparing}
@@ -788,6 +801,7 @@ export default function Practice() {
       steps={steps}
       selectedRole={selectedRole ?? ""}
       characterVoices={characterVoices}
+      characterVolumes={characterVolumes}
       deliveryTags={deliveryTags ?? []}
       onBack={() => {
         if (voiceableSpeakers.length > 0) {

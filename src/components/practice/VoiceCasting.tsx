@@ -9,6 +9,7 @@ import {
   type Voice,
 } from "../../lib/script";
 import { useTtsPlayer } from "../../hooks/useTtsPlayer";
+import { clampCharacterVolume, MAX_CHARACTER_VOLUME } from "../../lib/characterVolume";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import { Wordmark } from "../SiteNav";
 import { useToast } from "../../lib/toast";
@@ -27,6 +28,8 @@ export default function VoiceCasting({
   steps,
   voices,
   characterVoices,
+  characterVolumes,
+  onVolumeChange,
   languageCode,
   languageName,
   onPick,
@@ -43,6 +46,9 @@ export default function VoiceCasting({
   languageCode: string;
   languageName: string;
   onPick: (speaker: string, voiceId: string) => void;
+  /** Speaker → level (missing = unity), fixed once the take starts. */
+  characterVolumes: Record<string, number>;
+  onVolumeChange: (speaker: string, volume: number) => void;
   /** Start was clicked and the scene partner's lines are being prepared;
    * Practice moves on to Rehearsal once the opening ones are ready. */
   preparing: boolean;
@@ -55,7 +61,7 @@ export default function VoiceCasting({
 }) {
   const navigate = useNavigate();
   const toast = useToast();
-  const { play, stop } = useTtsPlayer();
+  const { play, stop, setVolume } = useTtsPlayer();
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
   const [previewing, setPreviewing] = useState(false);
   const [filters, setFilters] = useState<Record<FilterKey, string>>({ accent: "", gender: "", age: "", tone: "" });
@@ -123,6 +129,11 @@ export default function VoiceCasting({
   const dialogue = steps.filter((step) => normalizeSpeaker(step.speaker) === activeSpeaker && step.verbalLine.trim());
   const previewLine = dialogue[0]?.verbalLine ?? `Hello, I'm ${activeSpeaker}.`;
   const currentVoice = voices.find((voice) => voice.id === characterVoices[activeSpeaker]) ?? languageVoices[0];
+  const volume = clampCharacterVolume(characterVolumes[activeSpeaker]);
+  const changeVolume = (next: number) => {
+    onVolumeChange(activeSpeaker, next);
+    if (previewing) setVolume(next);
+  };
   const visibleVoices = currentVoice && !filteredVoices.some((voice) => voice.id === currentVoice.id)
     ? [currentVoice, ...filteredVoices]
     : filteredVoices;
@@ -136,7 +147,7 @@ export default function VoiceCasting({
     if (!currentVoice) return;
     setPreviewing(true);
     try {
-      await play({ text: previewLine, voiceId: currentVoice.id }, { onEnded: () => setPreviewing(false) });
+      await play({ text: previewLine, voiceId: currentVoice.id }, { volume, onEnded: () => setPreviewing(false) });
     } catch {
       setPreviewing(false);
       toast("That voice preview couldn't be played. Try again.");
@@ -273,6 +284,20 @@ export default function VoiceCasting({
                 >
                   {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
                 </select>
+                <label className="voice-volume">
+                  <span>Volume</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max={MAX_CHARACTER_VOLUME}
+                    step="0.05"
+                    value={volume}
+                    onChange={(event) => changeVolume(Number(event.target.value))}
+                    aria-label={`Volume for ${displayCharacter(activeSpeaker)}`}
+                    aria-valuetext={`${Math.round(volume * 100)}%`}
+                  />
+                  <output>{Math.round(volume * 100)}%</output>
+                </label>
                 <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
                   <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
                   {previewing ? "Pause preview" : "Preview voice"}
