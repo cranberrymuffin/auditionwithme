@@ -11,8 +11,6 @@ export type TtsPlayOptions = {
   intensity?: TtsIntensity;
   /** Playback rate applied client-side (pitch-preserving). */
   speed?: number;
-  /** Skip the cache and generate a new take. */
-  fresh?: boolean;
   signal?: AbortSignal;
   onEnded?: () => void;
   /** Fired on the audio element's 'playing' event — when the line actually
@@ -150,7 +148,6 @@ async function fetchTtsBlob(
         nextText: line.nextText,
         deliveryTag: line.deliveryTag,
         performance: line.performance,
-        leadingPause: line.leadingPause,
         intensity,
       }),
       signal: controller.signal,
@@ -273,11 +270,9 @@ type LookupContext = {
 function getBlob(
   line: TtsLine,
   intensity: TtsIntensity,
-  fresh = false,
   ctx: LookupContext = {},
 ): Promise<Blob> {
   const key = cacheKey(line, intensity);
-  if (fresh) blobCache.delete(key);
   const cached = blobCache.get(key);
   if (cached && pregenInFlight.has(cached)) {
     // Pre-generation hasn't finished this line: playback waiting on it is a
@@ -286,15 +281,13 @@ function getBlob(
     // the time the retry below runs; it isn't counted again.
     if (ctx.waiting) ctx.onLiveFetch?.();
     return cached.catch(() =>
-      getBlob(line, intensity, false, { ...ctx, onLiveFetch: ctx.waiting ? undefined : ctx.onLiveFetch }),
+      getBlob(line, intensity, { ...ctx, onLiveFetch: ctx.waiting ? undefined : ctx.onLiveFetch }),
     );
   }
   if (cached) return cached;
   const promise = (async () => {
-    if (!fresh) {
-      const stored = await loadStoredAudio(key);
-      if (stored) return stored;
-    }
+    const stored = await loadStoredAudio(key);
+    if (stored) return stored;
     ctx.onLiveFetch?.();
     const blob = await fetchTtsBlobWithRetry(line, intensity);
     if (ctx.scriptId) {
@@ -510,7 +503,7 @@ export function useTtsPlayer(options?: {
 
   const prefetch = useCallback(
     (line: TtsLine, intensity: TtsIntensity = "natural") => {
-      void getBlob(line, intensity, false, { ...optionsRef.current, waiting: false });
+      void getBlob(line, intensity, { ...optionsRef.current, waiting: false });
     },
     [],
   );
@@ -527,7 +520,7 @@ export function useTtsPlayer(options?: {
       logAudioEvent("play", `start "${line.text.slice(0, 24)}"`);
       let blob: Blob;
       try {
-        blob = await getBlob(line, opts?.intensity ?? "natural", opts?.fresh, {
+        blob = await getBlob(line, opts?.intensity ?? "natural", {
           ...optionsRef.current,
           waiting: true,
         });

@@ -117,6 +117,15 @@ check("prosody context skips unspoken steps", () => {
   assert.equal(buildReaderLine(steps, 3, voices, []), null);
 });
 
+check("reader lines carry no leading [pause], and the key keeps its old shape", () => {
+  const line = buildReaderLine(steps, 1, voices, [])!;
+  assert.equal("leadingPause" in line, false);
+  const parts = JSON.parse(cacheKey(line, "natural")) as unknown[];
+  assert.equal(parts.length, 8);
+  assert.equal(parts[6], false); // the old leading-pause slot
+  assert.equal(parts[7], "natural");
+});
+
 check("concurrency headers parse, and junk/missing ones read as unknown", () => {
   assert.deepEqual(parseConcurrency("1", "3"), { current: 1, max: 3 });
   assert.equal(parseConcurrency(null, "3"), null);

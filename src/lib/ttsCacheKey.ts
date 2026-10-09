@@ -15,9 +15,6 @@ export type TtsLine = {
   deliveryTag?: string;
   /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
   performance?: string;
-  /** Adds a beat of silence before the line starts — scene-partner lines
-   * only, so the read doesn't cut in over an actor's trailing words. */
-  leadingPause?: boolean;
 };
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
@@ -33,7 +30,11 @@ export const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     line.performance ?? "",
     line.previousText ?? "",
     line.nextText ?? "",
-    line.leadingPause ?? false,
+    // Was the leading-pause flag. Lines no longer get a [pause] (the cut-off
+    // guard in useScribeTracking.ts protects the actor's trailing words now),
+    // but the slot stays so the key keeps the shape existing audio was
+    // stored under.
+    false,
     // Always "natural" now (Rehearsal pins it), but kept in the key: dropping
     // it would change every key's shape and orphan already-cached audio.
     intensity,

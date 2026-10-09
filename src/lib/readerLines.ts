@@ -46,9 +46,5 @@ export function buildReaderLine(
     nextText: after?.verbalLine,
     deliveryTag: parenthetical ?? (performance ? undefined : directed ?? undefined),
     performance,
-    // Every line built here is read by the AI scene partner, never the
-    // actor's own voice — a beat of silence up front keeps the read from
-    // cutting in over trailing words as the actor finishes their line.
-    leadingPause: true,
   };
 }

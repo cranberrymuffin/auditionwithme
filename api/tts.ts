@@ -78,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { text, voiceId, previousText, nextText, deliveryTag, performance, leadingPause } =
+  const { text, voiceId, previousText, nextText, deliveryTag, performance } =
     (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
@@ -87,7 +87,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       deliveryTag?: string;
       /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
       performance?: string;
-      leadingPause?: boolean;
     };
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
@@ -112,7 +111,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // enforces that, so treat a request carrying both as tag-only.
   const markup = tag ? null : sanitizePerformance(performance, text);
   const expressiveText = markup ?? (tag ? `[${tag}] ${text}` : text);
-  const pausedText = leadingPause === true ? `[pause] ${expressiveText}` : expressiveText;
   const context = {
     ...(typeof previousText === "string" && previousText.trim()
       ? { previous_text: previousText.slice(-CONTEXT_CHAR_LIMIT) }
@@ -134,7 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         body: JSON.stringify(
           modelId === EXPRESSIVE_MODEL
             ? {
-                text: pausedText,
+                text: expressiveText,
                 model_id: modelId,
                 // `tag` is the explicit deliveryTag (script parenthetical) only —
                 // director markup never makes a line "big".

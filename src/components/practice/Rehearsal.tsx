@@ -33,7 +33,7 @@ const RECORDING_SETTLE_MS = 500;
 // live during the take instead of keeping the actor waiting here.
 const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, forceFreshAudio = false }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -45,9 +45,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice so
    * it starts as soon as casting is confirmed. Gates Start. */
   pregen: ReaderAudioPregen;
-  /** Skip the TTS cache for every line — a Recast session, where even
-   * re-picking the same voice should read as a new take. */
-  forceFreshAudio?: boolean;
 }) {
   const navigate = useNavigate();
   const {
@@ -256,7 +253,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       play(line, {
         intensity,
         signal: controller.signal,
-        fresh: forceFreshAudio,
         onPlaying,
         onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
         onEnded: () => {
@@ -272,12 +268,15 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     if (settleDelay > 0) settleTimer = setTimeout(startPlayback, settleDelay);
     else startPlayback();
     return () => { if (settleTimer) clearTimeout(settleTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord, forceFreshAudio]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
     if (!lineDetected) return;
-    const timer = setTimeout(() => goNextRef.current(), 800);
+    // Just long enough to ride out Scribe rewriting a partial transcript;
+    // anything more is dead air before the reader answers. Only reached on a
+    // full word match (or the guarded semantic fallback), so it can be short.
+    const timer = setTimeout(() => goNextRef.current(), 300);
     return () => clearTimeout(timer);
   }, [lineDetected]);
 
@@ -336,11 +335,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("playing");
     play(line, {
       intensity,
-      fresh: forceFreshAudio,
       onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
-  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop, forceFreshAudio]);
+  }, [cueIndex, ttsLine, intensity, isMyLine, play, stop]);
 
   const togglePause = useCallback(() => {
     setPaused((value) => {

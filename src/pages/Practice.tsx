@@ -691,11 +691,6 @@ export default function Practice() {
       selectedRole={selectedRole ?? ""}
       characterVoices={characterVoices}
       deliveryTags={deliveryTags ?? []}
-      // A replay session that didn't jump straight in via a "Practice as X"
-      // preset went through RolePicker/VoiceCasting again — i.e. Recast —
-      // so every line should be freshly generated rather than served from
-      // this tab's TTS cache, even if the same voice gets picked again.
-      forceFreshAudio={Boolean(replayScript) && !hasPresetRole}
       onBack={() => {
         if (voiceableSpeakers.length > 0) {
           setVoicesConfirmed(false);
