@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { checkSemanticLineMatch } from "../lib/script";
 import {
   countMatchedWords,
@@ -7,6 +7,7 @@ import {
 } from "../lib/lineMatch";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import type { LineCompletion } from "../lib/takeMetrics";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
@@ -61,13 +62,20 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
  * and a second concurrent mic session is exactly the kind of thing that can
  * knock iOS's shared audio session into an interrupted state — surfacing as
  * cues that mysteriously fail to play right around a line boundary.
+ *
+ * `lineCompletionRef` holds when (client time of the Scribe message, or of
+ * the semantic match resolving) and how the current line was first credited
+ * as fully matched — the start of the reader-latency sample in
+ * lib/takeMetrics.ts. Null until then; reset whenever the line changes.
  */
 export function useScribeTracking(active: boolean, line: string, languageCode = "en", micStream: MediaStream | null) {
   const [matchedWordCount, setMatchedWordCount] = useState(0);
   const [listening, setListening] = useState(false);
+  const lineCompletionRef = useRef<LineCompletion | null>(null);
 
   useEffect(() => {
     setMatchedWordCount(0);
+    lineCompletionRef.current = null;
     if (!active || !line.trim() || !micStream) return;
     logAudioEvent("scribe", `activating for "${line.slice(0, 24)}"`);
 
@@ -122,6 +130,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           const count = countMatchedWords(scriptWords, state.committed + partial);
           // Only advance — never walk the count backwards on partial rewrites
           setMatchedWordCount((prev) => Math.max(prev, count));
+          if (count >= scriptWords.length && !lineCompletionRef.current) {
+            lineCompletionRef.current = { kind: "auto", at: Date.now() };
+          }
 
           // VAD just closed out a segment (the actor paused) but exact/fuzzy
           // matching still hasn't credited the whole line — ask the semantic
@@ -147,6 +158,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
                 return;
               }
               logAudioEvent("scribe", "semantic fallback matched line");
+              if (!lineCompletionRef.current) {
+                lineCompletionRef.current = { kind: "semantic", at: Date.now() };
+              }
               setMatchedWordCount(scriptWords.length);
             });
           }
@@ -207,5 +221,5 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     return cleanup;
   }, [active, line, languageCode, micStream]);
 
-  return { matchedWordCount, listening };
+  return { matchedWordCount, listening, lineCompletionRef };
 }

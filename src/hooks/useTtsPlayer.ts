@@ -29,6 +29,10 @@ export type TtsPlayOptions = {
   fresh?: boolean;
   signal?: AbortSignal;
   onEnded?: () => void;
+  /** Fired on the audio element's 'playing' event — when the line actually
+   * starts producing sound, not when play() was called. Not fired if the
+   * line falls back to the browser's own voice. */
+  onPlaying?: () => void;
   /** Fired with a human-readable reason if the AI voice couldn't be
    * reached/played and playback fell back to the browser's own voice, so
    * callers can surface *why* (e.g. in the "Cue playback failed" status)
@@ -398,6 +402,7 @@ export function useTtsPlayer() {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.onended = null;
+      audioRef.current.onplaying = null;
     }
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
     // sourceNodeRef is intentionally left connected: it's created once for
@@ -450,6 +455,7 @@ export function useTtsPlayer() {
       audio.currentTime = 0;
       audio.playbackRate = opts?.speed ?? 1;
       audio.onended = opts?.onEnded ?? null;
+      audio.onplaying = opts?.onPlaying ?? null;
 
       try {
         // Route through the shared tap so a self-tape recording (if any)

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSelfTapeRecorder } from "./useSelfTapeRecorder";
 import { saveTape } from "../lib/selfTapeStore";
+import { deviceClass, type TakeMetrics } from "../lib/takeMetrics";
 import { notifyAuditionClosed } from "../lib/feedbackGate";
 import { useToast } from "../lib/toast";
 
@@ -24,11 +25,15 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
    * with its id once that write lands — no upload, no network round trip.
    * Resolves null if there was nothing to save, or if the save itself
    * failed. Never throws: every step here is guarded so a stop always
-   * resolves and the caller can always move on. */
-  const finish = useCallback(async (): Promise<string | null> => {
+   * resolves and the caller can always move on. `metrics` (the take's
+   * rehearsal telemetry) is saved with the take and sent along with its
+   * feedback later. */
+  const finish = useCallback(async (metrics?: TakeMetrics): Promise<string | null> => {
     const hadTake = statusRef.current === "recording" || statusRef.current === "paused";
     setSaving(true);
     try {
+      // Read before stop(), which ends the camera track.
+      const video = stream?.getVideoTracks()[0]?.getSettings();
       const blob = await stop();
       if (!hadTake) return null;
       if (!blob || blob.size === 0) {
@@ -39,7 +44,12 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
 
       const id = crypto.randomUUID();
       try {
-        await saveTape({ id, userId: user.id, scriptId, role, mimeType: blob.type }, blob);
+        const metricsRow = metrics?.toRow({
+          deviceClass: deviceClass(),
+          videoWidth: video?.width ?? null,
+          videoHeight: video?.height ?? null,
+        });
+        await saveTape({ id, userId: user.id, scriptId, role, mimeType: blob.type }, blob, metricsRow);
       } catch (saveError) {
         console.error("Failed to save self-tape locally:", saveError);
         toast("Your self-tape couldn't be saved. Please try again.");
@@ -57,7 +67,7 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
     } finally {
       setSaving(false);
     }
-  }, [stop, user, scriptId, role, toast]);
+  }, [stop, stream, user, scriptId, role, toast]);
 
   return { user, status, stream, error, saving, requestCamera, startRecording, pause, resume, finish };
 }

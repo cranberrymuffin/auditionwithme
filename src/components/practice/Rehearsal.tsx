@@ -13,6 +13,7 @@ import {
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
+import { TakeMetrics } from "../../lib/takeMetrics";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
@@ -110,13 +111,18 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // than a short opening line, so if it only spun up at "active" the actor
   // could start speaking before the mic was actually being transcribed.
   const scribeWarm = startPhase === "countdown" || startPhase === "active";
-  const { matchedWordCount, listening } = useScribeTracking(isMyLine && !paused && scribeWarm, currentStep?.verbalLine ?? "", languageCode, cameraStream);
+  const { matchedWordCount, listening, lineCompletionRef } = useScribeTracking(isMyLine && !paused && scribeWarm, currentStep?.verbalLine ?? "", languageCode, cameraStream);
 
   // Nothing to record if the user isn't reading a role — just listening to
   // the scene doesn't need a camera or a self-tape.
   const willRecord = Boolean(selectedRole);
 
+  // This take's telemetry (lib/takeMetrics.ts), saved with the recording and
+  // sent along with its feedback. Fresh per Start.
+  const takeMetricsRef = useRef(new TakeMetrics());
+
   const beginRehearsal = useCallback(() => {
+    takeMetricsRef.current = new TakeMetrics();
     // Must run synchronously inside this click handler — the first cue plays
     // seconds later, after the countdown, well outside the user gesture that
     // autoplay policies require.
@@ -169,12 +175,32 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setPlaybackState("waiting");
     setCurrentStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
   }, [stop, steps.length]);
-  const goNext = useCallback(() => goTo(currentStepIndex + 1), [goTo, currentStepIndex]);
+  // Counts how each of the actor's lines moved on — detected (with the
+  // moment it was, opening a reader-latency sample) or by hand — once per
+  // visit to the line.
+  const lineAdvanceRecordedRef = useRef(false);
+  useEffect(() => {
+    lineAdvanceRecordedRef.current = false;
+  }, [currentStepIndex]);
+  const recordMyLineAdvance = useCallback(() => {
+    if (!isMyLine || startPhase !== "active" || lineAdvanceRecordedRef.current) return;
+    lineAdvanceRecordedRef.current = true;
+    const completion = lineCompletionRef.current;
+    if (completion) takeMetricsRef.current.recordLineCompleted(completion.kind, completion.at);
+    else takeMetricsRef.current.recordManualNext();
+  }, [isMyLine, startPhase, lineCompletionRef]);
+  const goNext = useCallback(() => {
+    recordMyLineAdvance();
+    goTo(currentStepIndex + 1);
+  }, [recordMyLineAdvance, goTo, currentStepIndex]);
   const goPrev = useCallback(() => goTo(currentStepIndex - 1), [goTo, currentStepIndex]);
   const goNextRef = useRef(goNext);
   goNextRef.current = goNext;
 
   useEffect(() => {
+    // Taken (and cleared) on every run, so a latency sample only pairs the
+    // actor's line with the step right after it, and never spans a pause.
+    const lineCompletedAt = takeMetricsRef.current.takePendingAdvance();
     if (paused || startPhase !== "active") return;
     const step = steps[currentStepIndex];
     if (!step) return;
@@ -203,6 +229,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     const line = ttsLine(currentStepIndex);
     if (!line) return;
     const controller = new AbortController();
+    let latencyRecorded = false;
+    const onPlaying = lineCompletedAt === null ? undefined : () => {
+      // 'playing' fires again after a mid-line stall; only the first counts.
+      if (latencyRecorded) return;
+      latencyRecorded = true;
+      takeMetricsRef.current.recordReaderLatency(Date.now() - lineCompletedAt);
+    };
     const startPlayback = () => {
       if (controller.signal.aborted) return;
       setFailureReason(null);
@@ -211,6 +244,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
         intensity,
         signal: controller.signal,
         fresh: forceFreshAudio,
+        onPlaying,
         onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
         onEnded: () => {
           setPlaybackState("ready");
@@ -242,7 +276,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     // still can't be allowed to skip the navigate below — an unhandled
     // rejection here used to leave the rehearsal stuck on-screen with no
     // feedback prompt and no way back to My Auditions.
-    const tapeId = await finishRecording().catch((err) => {
+    const tapeId = await finishRecording(takeMetricsRef.current).catch((err) => {
       console.error("endRehearsal: finishRecording failed unexpectedly", err);
       return null;
     });
@@ -262,10 +296,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   useEffect(() => {
     if (!willRecord || !lastLineFinished || paused || startPhase !== "active" || finishedRef.current) return;
     finishedRef.current = true;
+    recordMyLineAdvance();
     setComplete(true);
     setPaused(true);
     void endRehearsal();
-  }, [willRecord, lastLineFinished, paused, startPhase, endRehearsal]);
+  }, [willRecord, lastLineFinished, paused, startPhase, endRehearsal, recordMyLineAdvance]);
 
   const cueIndex = isMyLine
     ? [...steps.slice(0, currentStepIndex).keys()].reverse().find((index) => steps[index].verbalLine.trim())

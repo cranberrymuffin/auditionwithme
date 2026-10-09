@@ -8,6 +8,7 @@
 // "still owe feedback" flag stays local, for gating FeedbackGate.tsx.
 import { SELF_TAPES_STORE, withStore } from "./localDb";
 import { supabase } from "./supabase";
+import type { TakeMetricsRow } from "./takeMetrics";
 import type { SelfTape } from "../types";
 
 type TapeRecord = {
@@ -22,6 +23,11 @@ type TapeRecord = {
   createdAt: string;
   feedbackRequired: boolean;
   feedbackSubmittedAt: string | null;
+  /** Rehearsal telemetry for this take (lib/takeMetrics.ts), held here until
+   * the feedback row it's sent with is inserted — the take is saved, then
+   * the app navigates to My Account, and only then does FeedbackGate ask for
+   * a rating. Missing on rows saved before this field existed. */
+  metrics?: TakeMetricsRow;
 };
 
 export type NewSelfTape = {
@@ -50,10 +56,15 @@ function toSelfTape(record: TapeRecord): SelfTape {
   };
 }
 
-export async function saveTape(meta: NewSelfTape, blob: Blob): Promise<void> {
+export async function saveTape(
+  meta: NewSelfTape,
+  blob: Blob,
+  metrics?: TakeMetricsRow,
+): Promise<void> {
   const record: TapeRecord = {
     ...meta,
     blob,
+    metrics,
     createdAt: new Date().toISOString(),
     feedbackRequired: true,
     feedbackSubmittedAt: null,
@@ -115,14 +126,25 @@ export async function submitFeedback(
   );
   if (!existing) return;
 
-  const { error } = await supabase.from("self_tape_feedback").insert({
+  const feedback = {
     user_id: existing.userId,
     tape_id: existing.id,
     script_id: existing.scriptId,
     rating,
     comment,
     recorded_at: existing.createdAt,
-  });
+  };
+  let { error } = await supabase
+    .from("self_tape_feedback")
+    .insert({ ...feedback, ...existing.metrics });
+  // The metrics columns arrive in their own migration
+  // (20261008120000_self_tape_feedback_metrics.sql); if a database hasn't had
+  // it applied yet, losing the metrics beats losing the feedback, which the
+  // beta depends on — so retry with the rating/comment alone.
+  if (error && existing.metrics && isMissingColumnError(error)) {
+    console.warn("self_tape_feedback metrics columns missing; saving feedback without them:", error);
+    ({ error } = await supabase.from("self_tape_feedback").insert(feedback));
+  }
   if (error) throw error;
 
   const updated: TapeRecord = {
@@ -130,4 +152,10 @@ export async function submitFeedback(
     feedbackSubmittedAt: new Date().toISOString(),
   };
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(updated));
+}
+
+/** PostgREST's "column not in the schema cache" (PGRST204) or Postgres's own
+ * undefined_column (42703). */
+function isMissingColumnError(error: { code?: string }): boolean {
+  return error.code === "PGRST204" || error.code === "42703";
 }
