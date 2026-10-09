@@ -79,73 +79,102 @@ function expandWords(words: string[]): { token: string; from: number }[] {
 
 const tokensOf = (text: string) => expandWords(text.split(/\s+/)).map((t) => t.token);
 
-// VAD often clips the very end of a line (the last word trails off below its
-// threshold, or Scribe drops it from the commit), leaving an otherwise
-// complete line one or two words short forever. Once the actor has paused
-// with nearly the whole line heard, credit those last words.
-const LAST_WORDS_TOLERANCE = 2;
-const LAST_WORDS_MIN_MATCHED_FRACTION = 0.85;
+// How many script tokens in a row the matcher may step over when a later one
+// has already been heard. Counted after expansion, so a contraction like
+// "I'm" ("i am") uses up both. The lookahead above only gives up on a
+// word once 6+ spoken words have gone past it, which a short line never
+// reaches: "Get out of here" with its first word lost (the Scribe socket was
+// still opening when the actor came in) or misheard would otherwise sit at
+// 0 matched forever, out of reach of every fallback.
+const MAX_SCRIPT_SKIP = 2;
 
-/**
- * How many of `scriptWords` (counted in the caller's own words, so it can be
- * compared with `scriptWords.length`) the transcript has said, in order.
- *
- * `atPause`: the transcript is a VAD commit with nothing after it — the actor
- * has stopped. Only then may the last 1-2 words be credited unheard (see
- * LAST_WORDS_TOLERANCE); mid-speech, a transcript one word short of the end
- * just means the actor hasn't said that word yet.
- */
-export function countMatchedWords(
-  scriptWords: string[],
-  transcript: string,
-  { atPause = false }: { atPause?: boolean } = {},
-): number {
+/** Where the transcript has got to in the line. */
+export type LineProgress = {
+  /** Script words said, in order — counted in the caller's own words, so it
+   * can be compared with `scriptWords.length`. */
+  matched: number;
+  /** Whether the line's ending has been heard: either the whole line
+   * matched, or its last word shows up in what the actor said after
+   * everything matched so far. "After" is what keeps an earlier "you" in
+   * the line from passing for the "you" it ends on. */
+  endingHeard: boolean;
+};
+
+const matchesAny = (words: string[], target: string) => words.some((w) => wordsMatch(w, target));
+
+export function assessLine(scriptWords: string[], transcript: string): LineProgress {
   const spoken = tokensOf(transcript);
   const script = expandWords(scriptWords);
+  if (!script.length) return { matched: scriptWords.length, endingHeard: true };
 
   let si = 0;
   let pi = 0;
   while (si < script.length && pi < spoken.length) {
     const windowEnd = Math.min(pi + SKIP_LOOKAHEAD, spoken.length);
-    const found = spoken.slice(pi, windowEnd).findIndex((w) => wordsMatch(w, script[si].token));
+    const window = spoken.slice(pi, windowEnd);
+    const found = window.findIndex((w) => wordsMatch(w, script[si].token));
     if (found !== -1) {
       si++;
       pi += found + 1;
-    } else if (windowEnd < spoken.length) {
+      continue;
+    }
+    if (windowEnd < spoken.length) {
       // We already have more than a full lookahead window of trailing
       // transcript and the target never showed up in it — it was likely
       // misheard or skipped. Credit it and move on without consuming any
       // spoken words, so it can't also swallow the match for the next one.
       si++;
-    } else {
-      // Not enough trailing transcript yet to know whether the target will
-      // still show up (the actor may still be mid-word) — wait rather than
-      // guess; a later call with more transcript will resolve it.
-      break;
+      continue;
     }
+    // The actor may already be past this word: if one of the next couple of
+    // script words is in what's been heard, credit the ones before it and
+    // match from there (see MAX_SCRIPT_SKIP).
+    let skip = 0;
+    for (let k = 1; k <= MAX_SCRIPT_SKIP && si + k < script.length; k++) {
+      if (matchesAny(window, script[si + k].token)) {
+        skip = k;
+        break;
+      }
+    }
+    if (skip) {
+      si += skip;
+      continue;
+    }
+    // Not enough trailing transcript yet to know whether the target will
+    // still show up (the actor may still be mid-word) — wait rather than
+    // guess; a later call with more transcript will resolve it.
+    break;
   }
+  if (si >= script.length) return { matched: scriptWords.length, endingHeard: true };
+
   // Every token of the words before the first unmatched token was matched.
-  const matched = si >= script.length ? scriptWords.length : script[si].from;
-  const missing = scriptWords.length - matched;
-  if (
-    atPause &&
-    missing > 0 &&
-    missing <= LAST_WORDS_TOLERANCE &&
-    matched / scriptWords.length >= LAST_WORDS_MIN_MATCHED_FRACTION
-  ) {
-    return scriptWords.length;
+  const matched = script[si].from;
+  const tail = spoken.slice(pi);
+  const last = script[script.length - 1].token;
+  let endingHeard = matchesAny(tail, last);
+  // A one- or two-letter last word ("me", "go") only ever matches exactly and
+  // turns up all over speech, so it has to come right after the word before it.
+  if (endingHeard && last.length < 3 && script.length > 1) {
+    const before = script[script.length - 2].token;
+    endingHeard = tail.some((w, i) => i > 0 && w === last && wordsMatch(tail[i - 1], before));
   }
-  return matched;
+  return { matched, endingHeard };
+}
+
+/** Script words said so far, in order (see LineProgress.matched). */
+export function countMatchedWords(scriptWords: string[], transcript: string): number {
+  return assessLine(scriptWords, transcript).matched;
 }
 
 // Semantic fallback guard. The fallback asks a model whether a stalled
-// transcript "conveys" the line, and a model will happily say yes to the
-// first half of a monologue — so a mid-speech breath (which VAD commits like
-// any other pause) used to advance the scene and cut the actor off. It's now
-// only consulted once word matching has already credited most of the line
-// AND the transcript itself is long enough to plausibly be the whole thing.
+// transcript "conveys" the line (a paraphrase, say), and a model will happily
+// say yes to the first half of a monologue — so a mid-speech breath used to
+// advance the scene and cut the actor off. It's only consulted once the actor
+// has been quiet for the full patient hold (see quietAdvance), word matching
+// has already credited most of the line, AND the transcript itself is long
+// enough to plausibly be the whole thing.
 const SEMANTIC_MIN_MATCHED_FRACTION = 0.7;
-const SEMANTIC_MIN_COMMITTED_FRACTION = 0.6;
+const SEMANTIC_MIN_HEARD_FRACTION = 0.6;
 // Past this many words, a "yes" from the semantic check alone isn't enough:
 // the last few script words must also have been heard, i.e. the actor has
 // actually reached the end rather than paused partway through.
@@ -153,20 +182,20 @@ const LONG_LINE_WORDS = 40;
 const TRAILING_WORDS = 3;
 
 /**
- * Whether a VAD-committed transcript that left the line short of a full word
- * match is worth sending to the semantic fallback at all.
+ * Whether a transcript that left the line short of a full word match is
+ * worth sending to the semantic fallback at all.
  */
 export function shouldTrySemanticFallback(
   scriptWords: string[],
   matchedCount: number,
-  committed: string,
+  transcript: string,
 ): boolean {
   if (!scriptWords.length || matchedCount >= scriptWords.length) return false;
-  const committedWords = committed.split(/\s+/).filter(Boolean);
+  const heardWords = transcript.split(/\s+/).filter(Boolean);
   return (
-    committedWords.length >= 2 &&
+    heardWords.length >= 2 &&
     matchedCount / scriptWords.length >= SEMANTIC_MIN_MATCHED_FRACTION &&
-    committedWords.length / scriptWords.length >= SEMANTIC_MIN_COMMITTED_FRACTION
+    heardWords.length / scriptWords.length >= SEMANTIC_MIN_HEARD_FRACTION
   );
 }
 
@@ -178,52 +207,75 @@ export function shouldTrySemanticFallback(
  * "don't" matches "dont" or "do not" and "a" doesn't match inside any word
  * containing an "a").
  */
-export function semanticMatchMayAdvance(scriptWords: string[], committed: string): boolean {
+export function semanticMatchMayAdvance(scriptWords: string[], transcript: string): boolean {
   if (scriptWords.length <= LONG_LINE_WORDS) return true;
   const trailing = expandWords(scriptWords).map((t) => t.token).slice(-TRAILING_WORDS);
-  const heard = tokensOf(committed);
+  const heard = tokensOf(transcript);
   return trailing.every((word) => heard.some((spoken) => wordsMatch(spoken, word)));
 }
 
-// Silence-based advance. Scribe's realtime API never says "the actor went
-// quiet", and a line whose last word or two never transcribe can sit
-// unmatched forever. So silence is inferred from two independent signals:
-// Scribe has stopped producing new text, and the mic itself is quiet (the
-// first alone would also be true while the actor is still speaking but
-// Scribe is lagging behind). Only then, with most of the line already heard,
-// is the line credited.
-export const SILENCE_ADVANCE_MS = 1200;
+// Quiet-based advance, for lines the word matcher hasn't fully credited.
+// Scribe's realtime API never says "the actor went quiet", so quiet is
+// inferred from two independent signals: Scribe has stopped producing new
+// text, and the mic itself is quiet (the first alone would also be true while
+// the actor is still speaking but Scribe is lagging behind).
+//
+// How long a quiet counts as "done" turns on whether the line's ending was
+// heard (LineProgress.endingHeard) — the one thing that tells a finished line
+// whose middle Scribe garbled apart from an actor holding a pause partway
+// through. A pause length alone can't: any wait short enough to feel
+// responsive also cuts in on a dramatic pause. So:
+//  - ending heard: the actor has reached the end; a short quiet is enough.
+//  - ending not heard: maybe a clipped last word, maybe a pause for effect.
+//    Wait much longer before guessing, and only when the line is a few
+//    words short at most.
+export const ENDING_HEARD_QUIET_MS = 600;
+export const PATIENT_HOLD_MS = 2500;
 // RMS of the 3x-boosted mic signal useScribeTracking taps (about -40 dBFS).
 export const SILENCE_RMS = 0.01;
-const SILENCE_MIN_MATCHED_FRACTION = 0.8;
+const ENDING_HEARD_MIN_MATCHED_FRACTION = 0.7;
+const PATIENT_MIN_MATCHED_FRACTION = 0.8;
+// Missing words beyond this aren't a clipped ending, they're the rest of the
+// line — on a monologue, 80% heard can still leave a dozen words to go.
+const PATIENT_MAX_MISSING_WORDS = 4;
 
-export type SilenceInputs = {
+export type QuietInputs = {
   scriptWords: string[];
-  matchedCount: number;
-  /** Everything Scribe has transcribed for this line (commits + partial). */
-  transcript: string;
+  progress: LineProgress;
   /** Since the last Scribe message that changed transcript text; null if
    * none has arrived yet. */
   msSinceTextChange: number | null;
   /** Since the mic level was last at or above SILENCE_RMS; null if the mic
    * level isn't being measured. */
   msSinceMicActive: number | null;
+  /** How long a quiet must last when the ending wasn't heard. */
+  holdMs?: number;
 };
 
+/** How long both signals have been quiet; null if either isn't known. */
+export function quietFor({ msSinceTextChange, msSinceMicActive }: QuietInputs): number | null {
+  if (msSinceTextChange === null || msSinceMicActive === null) return null;
+  return Math.min(msSinceTextChange, msSinceMicActive);
+}
+
 /** Whether the actor has gone quiet with enough of the line heard that it
- * should be credited as finished. */
-export function shouldSilenceAdvance({
-  scriptWords,
-  matchedCount,
-  transcript,
-  msSinceTextChange,
-  msSinceMicActive,
-}: SilenceInputs): boolean {
-  if (!scriptWords.length || matchedCount >= scriptWords.length) return false;
-  if (msSinceTextChange === null || msSinceTextChange < SILENCE_ADVANCE_MS) return false;
-  if (msSinceMicActive === null || msSinceMicActive < SILENCE_ADVANCE_MS) return false;
-  if (matchedCount / scriptWords.length < SILENCE_MIN_MATCHED_FRACTION) return false;
-  // Same rule as the semantic fallback: on a long line, a pause isn't the end
-  // until the line's last few words have been heard.
-  return semanticMatchMayAdvance(scriptWords, transcript);
+ * should be credited as finished, and on which rule: "ending" (ending heard,
+ * short quiet) or "patient" (ending not heard, long hold). */
+export function quietAdvance(inputs: QuietInputs): "ending" | "patient" | null {
+  const { scriptWords, progress, holdMs = PATIENT_HOLD_MS } = inputs;
+  if (!scriptWords.length || progress.matched >= scriptWords.length) return null;
+  const quiet = quietFor(inputs);
+  if (quiet === null) return null;
+  const fraction = progress.matched / scriptWords.length;
+  if (progress.endingHeard && fraction >= ENDING_HEARD_MIN_MATCHED_FRACTION && quiet >= ENDING_HEARD_QUIET_MS) {
+    return "ending";
+  }
+  if (
+    fraction >= PATIENT_MIN_MATCHED_FRACTION &&
+    scriptWords.length - progress.matched <= PATIENT_MAX_MISSING_WORDS &&
+    quiet >= holdMs
+  ) {
+    return "patient";
+  }
+  return null;
 }

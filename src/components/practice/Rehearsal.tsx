@@ -199,7 +199,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     recordMyLineAdvance();
     goTo(currentStepIndex + 1);
   }, [recordMyLineAdvance, goTo, currentStepIndex]);
-  const goPrev = useCallback(() => goTo(currentStepIndex - 1), [goTo, currentStepIndex]);
+  const goPrev = useCallback(() => {
+    if (startPhase === "active") takeMetricsRef.current.recordPrevious(Date.now());
+    goTo(currentStepIndex - 1);
+  }, [startPhase, goTo, currentStepIndex]);
   const goNextRef = useRef(goNext);
   goNextRef.current = goNext;
 
@@ -281,8 +284,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   useEffect(() => {
     if (!lineDetected) return;
     // Just long enough to ride out Scribe rewriting a partial transcript;
-    // anything more is dead air before the reader answers. Only reached on a
-    // full word match (or the guarded semantic fallback), so it can be short.
+    // anything more is dead air before the reader answers. Only reached once
+    // the line's ending has been heard (or after the long patient hold, see
+    // lib/lineMatch.ts), so it can be short.
     const timer = setTimeout(() => goNextRef.current(), 300);
     return () => clearTimeout(timer);
   }, [lineDetected]);

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { checkSemanticLineMatch } from "../lib/script";
 import {
-  countMatchedWords,
+  assessLine,
+  PATIENT_HOLD_MS,
+  quietAdvance,
+  quietFor,
   semanticMatchMayAdvance,
-  shouldSilenceAdvance,
   shouldTrySemanticFallback,
   SILENCE_RMS,
+  type QuietInputs,
 } from "../lib/lineMatch";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
@@ -55,8 +58,8 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
  * Live word tracking via ElevenLabs Scribe v2 Realtime.
  *
  * While `active`, streams mic audio over a token-authenticated WebSocket and
- * matches incremental transcripts against `line` with the monotonic
- * `countMatchedWords` matcher (the count never regresses). Returns the matched
+ * matches incremental transcripts against `line` with `assessLine` (the
+ * matched count never regresses). Returns the matched
  * word count plus whether tracking is actually live (mic + socket up), so the
  * caller can fall back to manual advance when it isn't.
  *
@@ -68,11 +71,13 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
  * cues that mysteriously fail to play right around a line boundary.
  *
  * Also credits the line when the actor goes quiet with most of it heard
- * (`shouldSilenceAdvance` in lib/lineMatch.ts): no new Scribe text AND a
- * quiet mic, measured by an AnalyserNode on the boosted mic signal.
+ * (`quietAdvance` in lib/lineMatch.ts): no new Scribe text AND a quiet mic,
+ * measured by an AnalyserNode on the boosted mic signal. A short quiet is
+ * enough once the line's ending has been heard; otherwise it waits out the
+ * much longer patient hold, and only then tries the semantic fallback.
  *
  * `lineCompletionRef` holds when (client time of the Scribe message, of the
- * semantic match resolving, or of the silence rule firing) and how the
+ * semantic match resolving, or of a quiet rule firing) and how the
  * current line was first credited as fully matched — the start of the
  * reader-latency sample in lib/takeMetrics.ts. Null until then; reset whenever the line changes.
  */
@@ -94,9 +99,11 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       closed: false,
       semanticChecked: "",
       matchedCount: 0,
+      endingHeard: false,
       lastTextChangeAt: null as number | null,
       lastMicActiveAt: null as number | null,
-      silenceAdvanced: false,
+      // Scribe's VAD committed the segment and no new speech has come since.
+      scribeHeardPause: false,
     };
     let ws: WebSocket | null = null;
     let audioContext: AudioContext | null = null;
@@ -147,52 +154,20 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
             if (text.trim() && text !== state.partial) state.lastTextChangeAt = Date.now();
             state.committed += text + " ";
             state.partial = "";
+            state.scribeHeardPause = true;
           } else if (msg.message_type === "partial_transcript" && text !== state.partial) {
             state.partial = text;
             state.lastTextChangeAt = Date.now();
+            state.scribeHeardPause = false;
           }
-          const partial = state.partial;
-          // A commit means VAD heard the actor stop, which is the only time a
-          // line that's just its last word or two short may be credited.
-          const count = countMatchedWords(scriptWords, state.committed + partial, {
-            atPause: msg.message_type === "committed_transcript",
-          });
+          const progress = assessLine(scriptWords, state.committed + state.partial);
           // Only advance — never walk the count backwards on partial rewrites
-          state.matchedCount = Math.max(state.matchedCount, count);
-          setMatchedWordCount((prev) => Math.max(prev, count));
-          if (count >= scriptWords.length && !lineCompletionRef.current) {
+          state.matchedCount = Math.max(state.matchedCount, progress.matched);
+          // Not sticky: a rewritten partial that drops the last word un-hears it.
+          state.endingHeard = progress.endingHeard;
+          setMatchedWordCount((prev) => Math.max(prev, progress.matched));
+          if (progress.matched >= scriptWords.length && !lineCompletionRef.current) {
             lineCompletionRef.current = { kind: "auto", at: Date.now() };
-          }
-
-          // VAD just closed out a segment (the actor paused) but exact/fuzzy
-          // matching still hasn't credited the whole line — ask the semantic
-          // fallback whether what Scribe DID transcribe still conveys the
-          // line, rather than leave the actor stuck on manual advance. Only
-          // fires once per distinct committed transcript, and only once word
-          // matching has already credited most of the line — otherwise a
-          // breath partway through a monologue reads as "done" and the
-          // scene partner cuts the actor off (see lib/lineMatch.ts).
-          const committed = state.committed.trim();
-          if (
-            msg.message_type === "committed_transcript" &&
-            shouldTrySemanticFallback(scriptWords, count, committed) &&
-            committed !== state.semanticChecked
-          ) {
-            state.semanticChecked = committed;
-            logAudioEvent("scribe", "word match stalled, trying semantic fallback");
-            void checkSemanticLineMatch(line, committed).then((match) => {
-              if (state.closed || !match) return;
-              if (!semanticMatchMayAdvance(scriptWords, committed)) {
-                // A later commit with the line's ending in it re-runs this.
-                logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
-                return;
-              }
-              logAudioEvent("scribe", "semantic fallback matched line");
-              if (!lineCompletionRef.current) {
-                lineCompletionRef.current = { kind: "semantic", at: Date.now() };
-              }
-              setMatchedWordCount(scriptWords.length);
-            });
           }
         };
 
@@ -257,19 +232,63 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
             for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
             const now = Date.now();
             if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = now;
-            if (state.silenceAdvanced || lineCompletionRef.current) return;
-            const quiet = shouldSilenceAdvance({
+            if (lineCompletionRef.current) return;
+            const inputs: QuietInputs = {
               scriptWords,
-              matchedCount: state.matchedCount,
-              transcript: state.committed + state.partial,
+              progress: { matched: state.matchedCount, endingHeard: state.endingHeard },
               msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
-              msSinceMicActive: state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
+              // Our mic level reads the raw signal, so in a noisy room (HVAC,
+              // traffic) it may never drop under SILENCE_RMS. Scribe's VAD runs
+              // on background-filtered audio; once it has committed the
+              // segment, take its word that the actor stopped.
+              msSinceMicActive: state.scribeHeardPause
+                ? now - (state.lastTextChangeAt ?? now)
+                : state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
+            };
+            const rule = quietAdvance(inputs);
+            if (rule) {
+              logAudioEvent(
+                "scribe",
+                rule === "ending"
+                  ? "line's ending heard and actor went quiet, advancing"
+                  : "actor held a long pause with nearly all of the line heard, advancing",
+              );
+              // An ending-heard advance is word detection, just with a word
+              // or two in the middle misheard, so it's counted with full matches.
+              lineCompletionRef.current = { kind: rule === "ending" ? "auto" : "silence", at: now };
+              setMatchedWordCount(scriptWords.length);
+              return;
+            }
+
+            // Still not credited after the whole patient hold — maybe the
+            // actor paraphrased. Ask the semantic fallback whether what Scribe
+            // did transcribe still conveys the line, rather than leave them
+            // stuck on manual advance. Once per distinct transcript, and only
+            // once word matching has already credited most of the line —
+            // otherwise a pause partway through a monologue reads as "done"
+            // and the scene partner cuts the actor off (see lib/lineMatch.ts).
+            const quiet = quietFor(inputs);
+            const heard = (state.committed + state.partial).trim();
+            if (
+              quiet === null ||
+              quiet < PATIENT_HOLD_MS ||
+              heard === state.semanticChecked ||
+              !shouldTrySemanticFallback(scriptWords, state.matchedCount, heard)
+            ) {
+              return;
+            }
+            state.semanticChecked = heard;
+            logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
+            void checkSemanticLineMatch(line, heard).then((match) => {
+              if (state.closed || !match || lineCompletionRef.current) return;
+              if (!semanticMatchMayAdvance(scriptWords, heard)) {
+                logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
+                return;
+              }
+              logAudioEvent("scribe", "semantic fallback matched line");
+              lineCompletionRef.current = { kind: "semantic", at: Date.now() };
+              setMatchedWordCount(scriptWords.length);
             });
-            if (!quiet) return;
-            state.silenceAdvanced = true;
-            logAudioEvent("scribe", "actor went quiet with most of the line heard, advancing");
-            lineCompletionRef.current = { kind: "silence", at: now };
-            setMatchedWordCount(scriptWords.length);
           }, MIC_LEVEL_POLL_MS);
         };
       } catch (err) {

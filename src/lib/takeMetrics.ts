@@ -19,6 +19,7 @@ export type TakeMetricsRow = {
   lines_manual_next: number;
   lines_semantic_advanced: number;
   lines_silence_advanced: number;
+  lines_backtracked_after_auto: number;
   pregen_ms: number | null;
   pregen_failed_lines: number | null;
   live_fetches_during_take: number | null;
@@ -38,6 +39,7 @@ export const TAKE_METRICS_COLUMNS = [
   "lines_manual_next",
   "lines_semantic_advanced",
   "lines_silence_advanced",
+  "lines_backtracked_after_auto",
   "pregen_ms",
   "pregen_failed_lines",
   "live_fetches_during_take",
@@ -68,6 +70,12 @@ export function computeMax(latencies: number[]): number | null {
   return Math.round(Math.max(...latencies));
 }
 
+// Previous pressed this soon after a line was credited automatically reads
+// as the actor having been cut off: the scene partner jumped in, so they went
+// back to finish. Long enough to cover reacting partway into the reader's
+// line, short enough not to sweep in deliberate re-runs of the scene.
+export const BACKTRACK_WINDOW_MS = 5000;
+
 export function deviceClass(): DeviceClass | null {
   if (typeof navigator === "undefined" || typeof screen === "undefined") return null;
   if (navigator.maxTouchPoints > 0) {
@@ -90,6 +98,10 @@ export class TakeMetrics {
   linesManualNext = 0;
   linesSemanticAdvanced = 0;
   linesSilenceAdvanced = 0;
+  /** Detected advances undone with Previous within BACKTRACK_WINDOW_MS — the
+   * closest thing to a count of cut-offs, which otherwise look exactly like
+   * successful detections. */
+  linesBacktrackedAfterAuto = 0;
   // Copied from reader-audio pre-generation (useReaderAudioPregen) when the
   // take ends. null = unmeasured, never a stand-in 0.
   pregenMs: number | null = null;
@@ -98,6 +110,7 @@ export class TakeMetrics {
   // hadn't reached the line yet. null until a take starts counting (0).
   liveFetchesDuringTake: number | null = null;
   private pendingAdvanceAt: number | null = null;
+  private lastDetectedAdvanceAt: number | null = null;
 
   /** The actor's line was credited as finished at `at`; the next reader
    * line's 'playing' event closes the latency sample opened here. */
@@ -106,6 +119,7 @@ export class TakeMetrics {
     else if (kind === "semantic") this.linesSemanticAdvanced += 1;
     else this.linesSilenceAdvanced += 1;
     this.pendingAdvanceAt = at;
+    this.lastDetectedAdvanceAt = at;
   }
 
   recordLiveFetch() {
@@ -115,6 +129,16 @@ export class TakeMetrics {
   recordManualNext() {
     this.linesManualNext += 1;
     this.pendingAdvanceAt = null;
+    this.lastDetectedAdvanceAt = null;
+  }
+
+  /** Previous was pressed at `at`. Counts once per detected advance. */
+  recordPrevious(at: number) {
+    const since = this.lastDetectedAdvanceAt;
+    this.lastDetectedAdvanceAt = null;
+    if (since !== null && at >= since && at - since <= BACKTRACK_WINDOW_MS) {
+      this.linesBacktrackedAfterAuto += 1;
+    }
   }
 
   /** Hands back (and clears) the open latency start, if any. Called as each
@@ -144,6 +168,7 @@ export class TakeMetrics {
       lines_manual_next: this.linesManualNext,
       lines_semantic_advanced: this.linesSemanticAdvanced,
       lines_silence_advanced: this.linesSilenceAdvanced,
+      lines_backtracked_after_auto: this.linesBacktrackedAfterAuto,
       pregen_ms: this.pregenMs,
       pregen_failed_lines: this.pregenFailedLines,
       live_fetches_during_take: this.liveFetchesDuringTake,

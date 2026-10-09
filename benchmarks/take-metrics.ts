@@ -8,7 +8,7 @@
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { computeMax, computeP50, TakeMetrics } from "../src/lib/takeMetrics";
+import { BACKTRACK_WINDOW_MS, computeMax, computeP50, TakeMetrics } from "../src/lib/takeMetrics";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -93,6 +93,7 @@ check("a whole take aggregates into the feedback row", () => {
     lines_manual_next: 1,
     lines_semantic_advanced: 1,
     lines_silence_advanced: 0,
+    lines_backtracked_after_auto: 0,
     pregen_ms: null,
     pregen_failed_lines: null,
     live_fetches_during_take: null,
@@ -108,6 +109,31 @@ check("silence advances are counted apart from semantic ones", () => {
   const row = m.toRow(noDevice);
   assert.equal(row.lines_silence_advanced, 1);
   assert.equal(row.lines_semantic_advanced, 0);
+});
+
+check("Previous right after a detected advance counts as a backtrack, once", () => {
+  const m = new TakeMetrics();
+  m.recordLineCompleted("silence", 10_000);
+  m.recordPrevious(10_000 + BACKTRACK_WINDOW_MS);
+  m.recordPrevious(10_000 + BACKTRACK_WINDOW_MS); // same advance, pressed again
+  assert.equal(m.toRow(noDevice).lines_backtracked_after_auto, 1);
+});
+
+check("Previous long after a detected advance, or after a manual Next, isn't a backtrack", () => {
+  const late = new TakeMetrics();
+  late.recordLineCompleted("auto", 10_000);
+  late.recordPrevious(10_000 + BACKTRACK_WINDOW_MS + 1);
+  assert.equal(late.linesBacktrackedAfterAuto, 0);
+
+  const manual = new TakeMetrics();
+  manual.recordLineCompleted("auto", 10_000);
+  manual.recordManualNext(); // a later line, advanced by hand
+  manual.recordPrevious(10_500);
+  assert.equal(manual.linesBacktrackedAfterAuto, 0);
+
+  const none = new TakeMetrics();
+  none.recordPrevious(1_000);
+  assert.equal(none.linesBacktrackedAfterAuto, 0);
 });
 
 check("live fetches stay null until counted, then count up from 0", () => {

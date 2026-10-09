@@ -1,0 +1,21 @@
+-- Run this in the Supabase SQL editor (or via `supabase db push`) for the
+-- project referenced by VITE_SUPABASE_URL.
+--
+-- How many of a take's automatically detected line advances the actor undid
+-- with Previous within a few seconds (BACKTRACK_WINDOW_MS in
+-- src/lib/takeMetrics.ts). A cut-off — the scene partner jumping in while
+-- the actor was still mid-line — otherwise counts as a successful detection
+-- in lines_auto_detected / lines_silence_advanced / lines_semantic_advanced,
+-- so this is the only signal for it.
+--
+-- Shipped alongside a change to what lines_silence_advanced counts: it used
+-- to be any line credited after 1.2s of quiet with 80% heard; it's now only
+-- lines whose ending was never heard, credited after a much longer hold
+-- (PATIENT_HOLD_MS in src/lib/lineMatch.ts). Lines whose ending was heard
+-- but whose middle was misheard now count in lines_auto_detected. Compare
+-- takes on either side of this migration with that in mind.
+--
+-- Nullable like the other metrics columns: rows from before this shipped
+-- insert as null, not as a false 0.
+alter table public.self_tape_feedback
+  add column if not exists lines_backtracked_after_auto integer check (lines_backtracked_after_auto >= 0);

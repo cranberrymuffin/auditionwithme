@@ -1,8 +1,9 @@
 // Regression checks for the monologue cut-off guard (beta feedback: the
 // scene partner jumped in while actors paused partway through a long
-// speech). Exercises the real matcher and semantic-fallback guard from
-// src/lib/lineMatch.ts — the same functions useScribeTracking.ts calls on
-// every Scribe commit — with no network or model calls. The semantic model's
+// speech). Exercises the real matcher, quiet-advance rules and semantic-
+// fallback guard from src/lib/lineMatch.ts — the same functions
+// useScribeTracking.ts calls on every Scribe message and mic-level poll —
+// with no network or model calls. The semantic model's
 // answer is taken as "yes, it matches" throughout, since that's the worst
 // case: the guard has to hold even when the model is wrong.
 //
@@ -12,7 +13,10 @@
 
 import assert from "node:assert/strict";
 import {
+  assessLine,
   countMatchedWords,
+  PATIENT_HOLD_MS,
+  quietAdvance,
   semanticMatchMayAdvance,
   shouldTrySemanticFallback,
 } from "../src/lib/lineMatch";
@@ -33,15 +37,19 @@ function check(name: string, fn: () => void) {
   console.log(`ok - ${name}`);
 }
 
-/** What useScribeTracking does on a commit, assuming the semantic check says
- * yes: true when the line would be force-advanced to fully matched. Counted
- * `atPause` like a real commit, so the last-word tolerance is in play too. */
-function wouldAdvance(transcript: string): boolean {
-  const count = countMatchedWords(scriptWords, transcript, { atPause: true });
-  if (count >= scriptWords.length) return true; // plain word match
+/** What useScribeTracking does once the actor has said `transcript` and then
+ * gone quiet (mic and Scribe both) for `pauseMs`, assuming the semantic check
+ * says yes: true when the line would be credited as finished. */
+function wouldAdvance(transcript: string, pauseMs = 10_000, line = scriptWords): boolean {
+  const progress = assessLine(line, transcript);
+  if (progress.matched >= line.length) return true; // plain word match
+  if (quietAdvance({ scriptWords: line, progress, msSinceTextChange: pauseMs, msSinceMicActive: pauseMs })) {
+    return true;
+  }
   return (
-    shouldTrySemanticFallback(scriptWords, count, transcript) &&
-    semanticMatchMayAdvance(scriptWords, transcript)
+    pauseMs >= PATIENT_HOLD_MS &&
+    shouldTrySemanticFallback(line, progress.matched, transcript) &&
+    semanticMatchMayAdvance(line, transcript)
   );
 }
 
@@ -72,17 +80,26 @@ check("pause at 75%: fallback consulted, but long line's ending not heard -> no 
   assert.equal(wouldAdvance(transcript), false);
 });
 
-check("garbled middle but ending heard (>= 70% matched) -> advances", () => {
+check("garbled middle but ending heard (>= 70% matched) -> advances after a short quiet", () => {
   // Middle stretch misheard as filler, then the last three words land: the
-  // matcher stalls waiting for the misheard words, which is exactly the case
-  // the semantic fallback exists for.
+  // matcher stalls waiting for the misheard words, but the ending was heard.
   const cut = Math.ceil(scriptWords.length * 0.75);
   const transcript = `${words(0, cut)} mumble mumble ${words(-3)}`;
-  const count = countMatchedWords(scriptWords, transcript);
-  assert.ok(count < scriptWords.length, "word match alone should not finish the line");
-  assert.equal(shouldTrySemanticFallback(scriptWords, count, transcript), true);
-  assert.equal(semanticMatchMayAdvance(scriptWords, transcript), true);
-  assert.equal(wouldAdvance(transcript), true);
+  const progress = assessLine(scriptWords, transcript);
+  assert.ok(progress.matched < scriptWords.length, "word match alone should not finish the line");
+  assert.equal(progress.endingHeard, true);
+  assert.equal(wouldAdvance(transcript, 600), true);
+});
+
+check("pause at 75% of a monologue, however long -> never advances on its own", () => {
+  const transcript = words(0, Math.ceil(scriptWords.length * 0.75));
+  assert.equal(wouldAdvance(transcript, 60_000), false);
+});
+
+check("pause 2 words from the end of a monologue: waits out the patient hold", () => {
+  const transcript = words(0, -2);
+  assert.equal(wouldAdvance(transcript, 1_500), false); // Scribe's VAD commit used to credit this
+  assert.equal(wouldAdvance(transcript, PATIENT_HOLD_MS), true);
 });
 
 check("transcript too short for the line (< 60% of its length) -> not consulted", () => {
@@ -118,15 +135,31 @@ check("trailing check compares whole normalized words, not substrings", () => {
   assert.equal(semanticMatchMayAdvance(long, `${words(0, 50)} and dont grand`), false);
 });
 
-check("pause at 50%: last-word tolerance doesn't apply at a pause mid-line", () => {
-  const transcript = words(0, half);
-  assert.ok(countMatchedWords(scriptWords, transcript, { atPause: true }) < scriptWords.length);
+// Beta feedback, medium-length lines: a beat before the last few words. The
+// old rules credited both of these (last-two-words tolerance at Scribe's VAD
+// commit; 1.2s silence rule / semantic fallback with no ending check, since
+// the line is under 40 words).
+const BEAT_LINE = "I never wanted any of it, not the money, not the house, and not you"
+  .split(/\s+/)
+  .filter(Boolean);
+const beat = (to: number) => BEAT_LINE.slice(0, to).join(" ");
+
+check("beat before 'and not you' (13 of 15 heard): no advance within 2s", () => {
+  assert.equal(wouldAdvance(beat(13), 2_000, BEAT_LINE), false);
 });
 
-check("pause 3 words from the end: tolerance (max 2 words) doesn't apply", () => {
-  const transcript = words(0, -3);
-  assert.equal(countMatchedWords(scriptWords, transcript, { atPause: true }), scriptWords.length - 3);
-  assert.equal(wouldAdvance(transcript), false);
+check("beat before 'and not you' (12 of 15 heard): no advance within 2s", () => {
+  assert.equal(wouldAdvance(beat(12), 2_000, BEAT_LINE), false);
+});
+
+check("the ending lands after the beat -> advances", () => {
+  assert.equal(wouldAdvance(BEAT_LINE.join(" "), 0, BEAT_LINE), true);
+});
+
+check("a beat longer than the patient hold still reads as done (known limit)", () => {
+  // No quiet-based rule can tell this apart from a clipped last word; the
+  // hold length is the actor's lever (and Previous their escape hatch).
+  assert.equal(wouldAdvance(beat(13), PATIENT_HOLD_MS, BEAT_LINE), true);
 });
 
 console.log(`\n${passed} checks passed`);
