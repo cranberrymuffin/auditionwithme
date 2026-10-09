@@ -17,6 +17,7 @@ import { saveScript, updateScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { DIRECTOR_VERSION } from "../lib/director";
 import { useSeo } from "../components/Seo";
+import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
 // Account — re-launches practice from a script that's already been parsed,
@@ -525,6 +526,29 @@ export default function Practice() {
     }
   };
 
+  // Pre-generate the scene partner's lines from the moment casting is
+  // confirmed (the Rehearsal screen is up), so Start rarely has to wait and
+  // the take itself makes no ElevenLabs round trips. Stops if the user backs
+  // out to casting; restarts with only the changed lines if they recast.
+  const rehearsalShowing =
+    !loading &&
+    !pendingParse &&
+    !error &&
+    !languageChoice &&
+    steps.length > 0 &&
+    selectedRole !== null &&
+    (voicesConfirmed || voiceableSpeakers.length === 0);
+  const pregen = useReaderAudioPregen({
+    enabled: rehearsalShowing,
+    steps,
+    selectedRole: selectedRole ?? "",
+    characterVoices,
+    deliveryTags,
+    // Pinned, as in Rehearsal — part of the cache key.
+    intensity: "natural",
+    scriptId,
+  });
+
   if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
   if (pendingParse) {
     return (
@@ -682,6 +706,7 @@ export default function Practice() {
       languageCode={scriptLanguage.code}
       fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
       scriptId={scriptId}
+      pregen={pregen}
     />
   );
 }

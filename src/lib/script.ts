@@ -29,15 +29,7 @@ export function displayCharacterName(name: string): string {
   return name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 }
 
-export function normalizeSpeaker(name: string): string {
-  return name
-    .replace(/\s*\(cont['']?d\.?\)/gi, "")
-    .replace(/\s*\(v\.?o\.?\)/gi, "")
-    .replace(/\s*\(o\.?s\.?\)/gi, "")
-    .replace(/\s*\(o\.?c\.?\)/gi, "")
-    .replace(/\s*\(pre-lap\)/gi, "")
-    .trim();
-}
+export { normalizeSpeaker } from "./speaker";
 
 /**
  * Fallback for a line that stalled short of a full countMatchedWords match

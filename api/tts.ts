@@ -39,6 +39,29 @@ export function v3Stability(bigDelivery: boolean): number {
   return bigDelivery ? 0 : 0.5;
 }
 
+// Best-effort guard for the ElevenLabs Starter plan's 3 concurrent TTS slots,
+// which every user shares through this one server key. Pre-generation
+// requests (X-TTS-Purpose: pregen, from useReaderAudioPregen.ts) are held —
+// 429 + Retry-After without calling ElevenLabs — whenever the last reading
+// showed only one slot left, so that slot stays free for someone's live
+// playback. Live requests are never held. This is module state, so it's only
+// as good as one warm serverless instance's view: other instances may
+// disagree. ElevenLabs' own 429 + Retry-After (which the client honors) stays
+// the real backstop. Follow-up if it proves too loose: a durable counter via
+// the api_rate_limits table / check_rate_limit function.
+const lastSeenConcurrency = { current: 0, max: 3, updatedAt: 0 };
+// A reading this old says little about who's generating right now.
+const CONCURRENCY_READING_TTL_MS = 15_000;
+const PREGEN_HOLD_RETRY_AFTER_S = 2;
+
+export function shouldHoldPregen(
+  reading: { current: number; max: number; updatedAt: number },
+  now: number,
+): boolean {
+  if (now - reading.updatedAt > CONCURRENCY_READING_TTL_MS) return false;
+  return reading.current >= reading.max - 1;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -68,6 +91,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
+  }
+
+  const purpose = req.headers["x-tts-purpose"];
+  if (purpose === "pregen" && shouldHoldPregen(lastSeenConcurrency, Date.now())) {
+    res.setHeader("Retry-After", String(PREGEN_HOLD_RETRY_AFTER_S));
+    res.setHeader("X-TTS-Pregen-Hold", "true");
+    res.setHeader("X-TTS-Current-Concurrent", String(lastSeenConcurrency.current));
+    res.setHeader("X-TTS-Max-Concurrent", String(lastSeenConcurrency.max));
+    return res.status(429).json({ error: "Pre-generation paused: voice service is near its limit" });
   }
 
   const tag =
@@ -145,6 +177,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const maxConcurrent = upstream.headers.get("maximum-concurrent-requests");
     if (currentConcurrent) res.setHeader("X-TTS-Current-Concurrent", currentConcurrent);
     if (maxConcurrent) res.setHeader("X-TTS-Max-Concurrent", maxConcurrent);
+    // Every response (live or pregen, ok or not) refreshes the hold guard.
+    if (
+      currentConcurrent &&
+      maxConcurrent &&
+      Number.isFinite(Number(currentConcurrent)) &&
+      Number.isFinite(Number(maxConcurrent))
+    ) {
+      lastSeenConcurrency.current = Number(currentConcurrent);
+      lastSeenConcurrency.max = Number(maxConcurrent);
+      lastSeenConcurrency.updatedAt = Date.now();
+    }
     if (currentConcurrent && maxConcurrent && Number(currentConcurrent) >= Number(maxConcurrent) - 1) {
       console.warn(
         `ElevenLabs concurrency near limit: ${currentConcurrent}/${maxConcurrent}`,

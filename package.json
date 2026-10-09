@@ -8,6 +8,7 @@
     "benchmark:pdf": "node benchmarks/pdf-latency.mjs",
     "test:cutoff": "tsx benchmarks/cutoff-guard.ts",
     "test:metrics": "tsx benchmarks/take-metrics.ts",
+    "test:pregen": "tsx benchmarks/pregen.ts",
     "delete-user": "node scripts/delete-user.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",
     "dev": "vite",

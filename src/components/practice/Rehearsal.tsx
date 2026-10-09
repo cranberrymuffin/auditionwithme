@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
-import { deliveryTagFromContent, isPerformanceMarkup } from "../../lib/delivery";
+import { buildReaderLine } from "../../lib/readerLines";
 import {
   loadReaderVolume,
   MAX_READER_VOLUME,
@@ -14,6 +14,7 @@ import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { TakeMetrics } from "../../lib/takeMetrics";
+import type { ReaderAudioPregen } from "../../hooks/useReaderAudioPregen";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 
@@ -27,8 +28,12 @@ const COUNTDOWN_START = 3;
 // (AudioContext.state reports "running" throughout). Delaying the very
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
+// If the opening lines still aren't pre-generated after this long (a busy
+// account, a slow network), offer to start anyway — those lines then fetch
+// live during the take instead of keeping the actor waiting here.
+const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, forceFreshAudio = false }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, forceFreshAudio = false }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -37,6 +42,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   languageCode: string;
   fileName: string;
   scriptId: string | null;
+  /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice so
+   * it starts as soon as casting is confirmed. Gates Start. */
+  pregen: ReaderAudioPregen;
   /** Skip the TTS cache for every line — a Recast session, where even
    * re-picking the same voice should read as a new take. */
   forceFreshAudio?: boolean;
@@ -74,33 +82,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     setVolume(volume);
   };
 
-  // Builds the full synthesis request for a step: surrounding lines condition
-  // the prosody, and an explicit script parenthetical outranks the AI
-  // director's inferred tag.
-  const ttsLine = useCallback((index: number): TtsLine | null => {
-    const step = steps[index];
-    if (!step?.verbalLine.trim()) return null;
-    const before = [...steps.slice(0, index)].reverse().find((item) => item.verbalLine.trim());
-    const after = steps.slice(index + 1).find((item) => item.verbalLine.trim());
-    // Explicit script parenthetical outranks the AI director. Director entries
-    // are performance markup of the whole line on newly directed scripts, or a
-    // legacy single-word tag on scripts saved before the markup upgrade.
-    const parenthetical = deliveryTagFromContent(step.content);
-    const directed = parenthetical ? null : deliveryTagsRef.current[index];
-    const performance = directed && isPerformanceMarkup(directed, step.verbalLine) ? directed : undefined;
-    return {
-      text: step.verbalLine,
-      voiceId: characterVoices[normalizeSpeaker(step.speaker)],
-      previousText: before?.verbalLine,
-      nextText: after?.verbalLine,
-      deliveryTag: parenthetical ?? (performance ? undefined : directed ?? undefined),
-      performance,
-      // Every line built here is read by the AI scene partner, never the
-      // actor's own voice — a beat of silence up front keeps the read from
-      // cutting in over trailing words as the actor finishes their line.
-      leadingPause: true,
-    };
-  }, [steps, characterVoices]);
+  // Same builder pre-generation uses (lib/readerLines.ts), so the request —
+  // and its cache key — match what was generated before Start.
+  const ttsLine = useCallback(
+    (index: number): TtsLine | null => buildReaderLine(steps, index, characterVoices, deliveryTagsRef.current),
+    [steps, characterVoices],
+  );
 
   const currentStep = steps[currentStepIndex];
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
@@ -120,6 +107,22 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   // This take's telemetry (lib/takeMetrics.ts), saved with the recording and
   // sent along with its feedback. Fresh per Start.
   const takeMetricsRef = useRef(new TakeMetrics());
+
+  // Tells pre-generation where the actor is, so it works on upcoming lines
+  // first and drops to one worker once the take is under way.
+  const { setPlayhead } = pregen;
+  useEffect(() => {
+    setPlayhead(currentStepIndex, startPhase !== "idle");
+  }, [setPlayhead, currentStepIndex, startPhase]);
+  const pregenRef = useRef(pregen);
+  pregenRef.current = pregen;
+  const [startAnywayOffered, setStartAnywayOffered] = useState(false);
+  useEffect(() => {
+    if (pregen.canStart || startAnywayOffered) return;
+    const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [pregen.canStart, startAnywayOffered]);
+  const canStart = pregen.canStart || startAnywayOffered || pregen.failed > 0;
 
   const beginRehearsal = useCallback(() => {
     takeMetricsRef.current = new TakeMetrics();
@@ -276,7 +279,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     // still can't be allowed to skip the navigate below — an unhandled
     // rejection here used to leave the rehearsal stuck on-screen with no
     // feedback prompt and no way back to My Auditions.
-    const tapeId = await finishRecording(takeMetricsRef.current).catch((err) => {
+    // Pre-generation's duration (to its finish, or to now if it's still
+    // going) and how many lines it gave up on.
+    const { startedAt, finishedAt, failed } = pregenRef.current;
+    const metrics = takeMetricsRef.current;
+    metrics.pregenMs = startedAt === null ? null : (finishedAt ?? Date.now()) - startedAt;
+    metrics.pregenFailedLines = startedAt === null ? null : failed;
+    const tapeId = await finishRecording(metrics).catch((err) => {
       console.error("endRehearsal: finishRecording failed unexpectedly", err);
       return null;
     });
@@ -466,15 +475,30 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
                     ? "We'll record a self-tape while you run the scene."
                     : "Sit back and listen to the full scene."}
                 </p>
+                {(pregen.waitingForDirection || (!pregen.done && pregen.total > 0)) && (
+                  <div className="rehearsal-pregen" role="status">
+                    <span>
+                      {pregen.waitingForDirection
+                        ? "Directing your scene partner…"
+                        : `Preparing your scene partner’s lines · ${pregen.ready} of ${pregen.total}`}
+                    </span>
+                    <i aria-hidden="true">
+                      <b style={{ width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%` }} />
+                    </i>
+                  </div>
+                )}
                 <div>
                   <button
                     type="button"
                     onClick={beginRehearsal}
-                    disabled={willRecord && (!scriptId || !user)}
+                    disabled={(willRecord && (!scriptId || !user)) || !canStart}
                   >
-                    Start
+                    {pregen.canStart || !canStart ? "Start" : "Start anyway"}
                   </button>
                 </div>
+                {pregen.failed > 0 && (
+                  <span>Some lines couldn’t be pre-loaded; they’ll load as you go.</span>
+                )}
                 {willRecord && !user && <span>Sign in to rehearse.</span>}
               </div>
             )}

@@ -1,25 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import { cacheKey, type TtsIntensity, type TtsLine } from "../lib/ttsCacheKey";
 
-/** One line of dialogue plus the context the TTS model uses for prosody. */
-export type TtsLine = {
-  text: string;
-  voiceId?: string;
-  /** The line spoken before this one — conditions the read as a reply. */
-  previousText?: string;
-  /** The line spoken after this one. */
-  nextText?: string;
-  /** Eleven v3 audio tag, e.g. "angry" or "whispers". */
-  deliveryTag?: string;
-  /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
-  performance?: string;
-  /** Adds a beat of silence before the line starts — scene-partner lines
-   * only, so the read doesn't cut in over an actor's trailing words. */
-  leadingPause?: boolean;
-};
-
-export type TtsIntensity = "subtle" | "natural" | "dramatic";
+export { cacheKey } from "../lib/ttsCacheKey";
+export type { TtsIntensity, TtsLine } from "../lib/ttsCacheKey";
 
 export type TtsPlayOptions = {
   intensity?: TtsIntensity;
@@ -83,19 +68,47 @@ function describeError(err: unknown, fallback: string): string {
 // replay — important now that v3 varies noticeably between takes.
 const blobCache = new Map<string, Promise<Blob>>();
 
-const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
-  JSON.stringify([
-    line.voiceId ?? "",
-    line.text,
-    line.deliveryTag ?? "",
-    line.performance ?? "",
-    line.previousText ?? "",
-    line.nextText ?? "",
-    line.leadingPause ?? false,
-    // Always "natural" now (Rehearsal pins it), but kept in the key: dropping
-    // it would change every key's shape and orphan already-cached audio.
-    intensity,
-  ]);
+// Pre-generation requests (useReaderAudioPregen.ts) still in flight. A line
+// played while its pre-generation is pending waits on that request rather
+// than paying for a second one — but if it fails (a 429 hold, say), playback
+// fetches the line itself instead of falling back to the browser voice.
+const pregenInFlight = new WeakSet<Promise<Blob>>();
+
+function rememberBlob(key: string, promise: Promise<Blob>) {
+  blobCache.set(key, promise);
+  if (blobCache.size > MAX_CACHE_ENTRIES) {
+    const oldest = blobCache.keys().next().value;
+    if (oldest !== undefined) blobCache.delete(oldest);
+  }
+}
+
+/** Warms the in-memory cache with audio already generated (pre-generation,
+ * or a hit in the on-device store), so playback finds it instantly. */
+export function seedTtsCache(key: string, blob: Blob): void {
+  if (!blobCache.has(key)) rememberBlob(key, Promise.resolve(blob));
+}
+
+/** Whatever the in-memory cache holds for `key` — settled or still pending. */
+export function peekTtsCache(key: string): Promise<Blob> | undefined {
+  return blobCache.get(key);
+}
+
+/** Registers a pre-generation request for `key` so playback reuses it
+ * instead of fetching the same line twice. False (and nothing registered)
+ * if something else already holds the key. */
+export function trackPregenFetch(key: string, promise: Promise<Blob>): boolean {
+  if (blobCache.has(key)) return false;
+  pregenInFlight.add(promise);
+  rememberBlob(key, promise);
+  promise.then(
+    () => pregenInFlight.delete(promise),
+    () => {
+      pregenInFlight.delete(promise);
+      if (blobCache.get(key) === promise) blobCache.delete(key);
+    },
+  );
+  return true;
+}
 
 // Mobile networks (cellular handoffs, backgrounding, spotty wifi) can leave a
 // fetch neither resolving nor rejecting for minutes. Without a timeout that
@@ -105,9 +118,22 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
 // that silent hang into an ordinary failure the retry/fallback logic already handles.
 const FETCH_TIMEOUT_MS = 15_000;
 
+/** Extra request options for callers other than playback — today only
+ * pre-generation, which tags its requests and watches account concurrency. */
+export type TtsFetchOptions = {
+  /** Added to the /api/tts request, e.g. X-TTS-Purpose: pregen. */
+  headers?: Record<string, string>;
+  /** Called with every response (including errors) before it's consumed. */
+  onResponse?: (res: Response) => void;
+  /** Retry 429s here (default). False rethrows the TtsRateLimitError at
+   * once, for callers that schedule their own wait. */
+  retryRateLimit?: boolean;
+};
+
 async function fetchTtsBlob(
   line: TtsLine,
   intensity: TtsIntensity,
+  opts?: TtsFetchOptions,
 ): Promise<Blob> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -115,7 +141,7 @@ async function fetchTtsBlob(
   try {
     res = await apiFetch("/api/tts", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...opts?.headers },
       body: JSON.stringify({
         text: line.text,
         voiceId: line.voiceId,
@@ -134,6 +160,7 @@ async function fetchTtsBlob(
   } finally {
     clearTimeout(timer);
   }
+  opts?.onResponse?.(res);
   if (!res.ok) {
     const body = await res.text();
     let message = "Voice playback failed";
@@ -159,7 +186,7 @@ async function fetchTtsBlob(
 /** A 429 from api/tts.ts, carrying ElevenLabs' own Retry-After guidance (in
  * ms) when it sent one, so the retry below can wait exactly as long as it's
  * told instead of guessing. */
-class TtsRateLimitError extends Error {
+export class TtsRateLimitError extends Error {
   retryAfterMs: number | null;
   constructor(message: string, retryAfterMs: number | null) {
     super(message);
@@ -190,15 +217,17 @@ function backoffDelayMs(attempt: number): number {
   return Math.round(exp * (0.7 + Math.random() * 0.6)); // ±30% jitter
 }
 
-async function fetchTtsBlobWithRetry(
+export async function fetchTtsBlobWithRetry(
   line: TtsLine,
   intensity: TtsIntensity,
+  opts?: TtsFetchOptions,
 ): Promise<Blob> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await fetchTtsBlob(line, intensity);
+      return await fetchTtsBlob(line, intensity, opts);
     } catch (err) {
       if (attempt >= MAX_RETRIES) throw err;
+      if (err instanceof TtsRateLimitError && opts?.retryRateLimit === false) throw err;
       const delay =
         err instanceof TtsRateLimitError && err.retryAfterMs !== null
           ? Math.min(err.retryAfterMs, RETRY_AFTER_CAP_MS)
@@ -216,17 +245,18 @@ function getBlob(
   const key = cacheKey(line, intensity);
   if (fresh) blobCache.delete(key);
   const cached = blobCache.get(key);
+  if (cached && pregenInFlight.has(cached)) {
+    // trackPregenFetch's own rejection handler (registered first) has
+    // already cleared the slot by the time this retry runs.
+    return cached.catch(() => getBlob(line, intensity));
+  }
   if (cached) return cached;
   const promise = fetchTtsBlobWithRetry(line, intensity);
   promise.catch(() => {
     // Failed fetch: clear the slot so the next attempt refetches fresh
     if (blobCache.get(key) === promise) blobCache.delete(key);
   });
-  blobCache.set(key, promise);
-  if (blobCache.size > MAX_CACHE_ENTRIES) {
-    const oldest = blobCache.keys().next().value;
-    if (oldest !== undefined) blobCache.delete(oldest);
-  }
+  rememberBlob(key, promise);
   return promise;
 }
 
