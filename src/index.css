@@ -3054,6 +3054,53 @@ header .flow-back:hover {
   box-shadow: none;
   color: rgba(248, 241, 230, 0.4);
 }
+.start-rehearsal.is-preparing {
+  position: relative;
+  overflow: hidden;
+  cursor: progress;
+  padding: 0 14px;
+  border-color: rgba(255, 205, 183, 0.24);
+  color: rgba(248, 241, 230, 0.82);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+.start-rehearsal.is-preparing:hover {
+  filter: none;
+  transform: none;
+}
+.start-rehearsal.is-preparing i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(135deg, rgba(244, 165, 131, 0.32), rgba(233, 132, 100, 0.32));
+  transition: width 0.3s ease;
+}
+.start-rehearsal.is-preparing span {
+  position: relative;
+}
+.start-rehearsal-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-top: 10px;
+  color: rgba(248, 241, 230, 0.5);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.start-rehearsal-note button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 205, 183, 0.58);
+  border-radius: 7px;
+  color: #f4a583;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.start-rehearsal-note button:hover {
+  background: rgba(244, 165, 131, 0.1);
+}
 
 @media (max-width: 850px) {
   .voice-setup-layout {

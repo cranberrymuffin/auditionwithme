@@ -103,6 +103,13 @@ export default function Practice() {
   );
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
+  // "Start rehearsal" was clicked on VoiceCasting: the scene partner's lines
+  // are being pre-generated there, and Rehearsal opens once enough are ready.
+  const [preparing, setPreparing] = useState(false);
+  // Rehearsal was reached through that preparation, so its Start needn't
+  // wait on pre-generation. False for paths that skip casting (monologues,
+  // "Practice as X"), where Rehearsal's start overlay gates Start instead.
+  const [preparedOnCasting, setPreparedOnCasting] = useState(false);
   // Characters the user has confirmed a full cast for and rehearsed as, this
   // script's saved row plus anything newly confirmed this session.
   const [rolesRead, setRolesRead] = useState<string[]>([]);
@@ -454,11 +461,25 @@ export default function Practice() {
     };
   }, [toast, navigate]);
 
-  const startReading = () => {
+  const withDefaultVoices = () => {
     const next = { ...characterVoices };
     voiceableSpeakers.forEach((speaker) => {
       if (!next[speaker] && voices[0]) next[speaker] = voices[0].id;
     });
+    return next;
+  };
+
+  // VoiceCasting's "Start rehearsal": fill any uncast speaker so the voices
+  // pre-generated are exactly the ones Rehearsal will play, then prepare.
+  const beginPreparing = () => {
+    setCharacterVoices(withDefaultVoices());
+    setPreparing(true);
+  };
+
+  const startReading = () => {
+    const next = withDefaultVoices();
+    setPreparing(false);
+    setPreparedOnCasting(true);
     setCharacterVoices(next);
     setVoicesConfirmed(true);
     const nextRolesRead =
@@ -526,10 +547,11 @@ export default function Practice() {
     }
   };
 
-  // Pre-generate the scene partner's lines from the moment casting is
-  // confirmed (the Rehearsal screen is up), so Start rarely has to wait and
-  // the take itself makes no ElevenLabs round trips. Stops if the user backs
-  // out to casting; restarts with only the changed lines if they recast.
+  // Pre-generate the scene partner's lines from the moment "Start rehearsal"
+  // is clicked on VoiceCasting (never while just browsing voices — every line
+  // costs credits), and keep going through Rehearsal so the take itself makes
+  // no ElevenLabs round trips. Stops if the user changes a voice or backs out
+  // to casting; restarts with only the changed lines on the next click.
   const rehearsalShowing =
     !loading &&
     !pendingParse &&
@@ -539,7 +561,7 @@ export default function Practice() {
     selectedRole !== null &&
     (voicesConfirmed || voiceableSpeakers.length === 0);
   const pregen = useReaderAudioPregen({
-    enabled: rehearsalShowing,
+    enabled: preparing || rehearsalShowing,
     steps,
     selectedRole: selectedRole ?? "",
     characterVoices,
@@ -548,6 +570,14 @@ export default function Practice() {
     intensity: "natural",
     scriptId,
   });
+
+  // Opening lines ready: move on to Rehearsal by themselves. The hook stays
+  // enabled across the switch with the same lines, so generation carries on.
+  const startReadingRef = useRef(startReading);
+  startReadingRef.current = startReading;
+  useEffect(() => {
+    if (preparing && pregen.canStart) startReadingRef.current();
+  }, [preparing, pregen.canStart]);
 
   if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
   if (pendingParse) {
@@ -652,6 +682,7 @@ export default function Practice() {
           setRoleDraft(role || null);
           setSelectedRole(role);
           setVoicesConfirmed(false);
+          setPreparedOnCasting(false);
           if (role && characters.filter((s) => s !== role).length === 0) {
             recordRoleReadWithNoCasting(role);
           }
@@ -671,13 +702,20 @@ export default function Practice() {
         steps={steps}
         voices={voices}
         characterVoices={characterVoices}
-        onPick={(speaker, voiceId) =>
-          setCharacterVoices((prev) => ({ ...prev, [speaker]: voiceId }))
-        }
-        onStart={startReading}
+        onPick={(speaker, voiceId) => {
+          // A recast mid-preparation cancels it; the next click restarts
+          // with the new voice, reusing every line already generated.
+          setPreparing(false);
+          setCharacterVoices((prev) => ({ ...prev, [speaker]: voiceId }));
+        }}
+        preparing={preparing}
+        pregen={pregen}
+        onStart={beginPreparing}
+        onStartAnyway={startReading}
         languageCode={scriptLanguage.code}
         languageName={scriptLanguage.name}
         onBack={() => {
+          setPreparing(false);
           setSelectedRole(null);
           setVoicesConfirmed(false);
         }}
@@ -702,6 +740,7 @@ export default function Practice() {
       fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
       scriptId={scriptId}
       pregen={pregen}
+      awaitPregen={!preparedOnCasting}
     />
   );
 }

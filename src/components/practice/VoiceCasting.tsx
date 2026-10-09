@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import {
@@ -9,10 +9,15 @@ import {
   type Voice,
 } from "../../lib/script";
 import { useTtsPlayer } from "../../hooks/useTtsPlayer";
+import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import { Wordmark } from "../SiteNav";
 import { useToast } from "../../lib/toast";
 
 type FilterKey = "accent" | "gender" | "age" | "tone";
+// If the opening lines still aren't pre-generated after this long (a busy
+// account, a slow network), offer to start anyway — those lines then fetch
+// live during the take instead of keeping the actor waiting here.
+const START_ANYWAY_AFTER_MS = 20_000;
 
 const displayCharacter = (name: string) =>
   name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
@@ -25,7 +30,10 @@ export default function VoiceCasting({
   languageCode,
   languageName,
   onPick,
+  preparing,
+  pregen,
   onStart,
+  onStartAnyway,
   onBack,
 }: {
   speakers: string[];
@@ -35,7 +43,14 @@ export default function VoiceCasting({
   languageCode: string;
   languageName: string;
   onPick: (speaker: string, voiceId: string) => void;
+  /** Start was clicked and the scene partner's lines are being prepared;
+   * Practice moves on to Rehearsal once the opening ones are ready. */
+  preparing: boolean;
+  pregen: ReaderAudioPregenState;
+  /** Begin preparing with the current voices. */
   onStart: () => void;
+  /** Skip the rest of the wait and go straight to Rehearsal. */
+  onStartAnyway: () => void;
   onBack: () => void;
 }) {
   const navigate = useNavigate();
@@ -44,6 +59,16 @@ export default function VoiceCasting({
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
   const [previewing, setPreviewing] = useState(false);
   const [filters, setFilters] = useState<Record<FilterKey, string>>({ accent: "", gender: "", age: "", tone: "" });
+  const [startAnywayOffered, setStartAnywayOffered] = useState(false);
+
+  useEffect(() => {
+    if (!preparing) {
+      setStartAnywayOffered(false);
+      return;
+    }
+    const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [preparing]);
 
   const languageVoices = useMemo(() => {
     const matches = voices.filter((voice) => voice.language === languageCode);
@@ -207,9 +232,30 @@ export default function VoiceCasting({
             <q>{previewLine}</q>
           </div>
 
-          <button className="start-rehearsal" disabled={!currentVoice} onClick={() => { stop(); onStart(); }}>
-            Start rehearsal <span>→</span>
-          </button>
+          {preparing ? (
+            <>
+              <button className="start-rehearsal is-preparing" disabled aria-describedby="start-rehearsal-status">
+                <i aria-hidden="true" style={{ width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%` }} />
+                <span id="start-rehearsal-status" role="status">
+                  {pregen.waitingForDirection || pregen.total === 0
+                    ? "Directing the scene…"
+                    : `Preparing your scene partner’s lines · ${pregen.ready} of ${pregen.total}`}
+                </span>
+              </button>
+              <div className="start-rehearsal-note">
+                {pregen.failed > 0
+                  ? <span>Some lines couldn’t be pre-loaded; they’ll load as you go.</span>
+                  : <span>Rehearsal opens as soon as the first lines are ready.</span>}
+                {(startAnywayOffered || pregen.failed > 0) && (
+                  <button type="button" onClick={onStartAnyway}>Start anyway</button>
+                )}
+              </div>
+            </>
+          ) : (
+            <button className="start-rehearsal" disabled={!currentVoice} onClick={() => { stop(); setPreviewing(false); onStart(); }}>
+              Start rehearsal <span>→</span>
+            </button>
+          )}
         </div>
       </section>
     </main>

@@ -30,10 +30,11 @@ const COUNTDOWN_START = 3;
 const RECORDING_SETTLE_MS = 500;
 // If the opening lines still aren't pre-generated after this long (a busy
 // account, a slow network), offer to start anyway — those lines then fetch
-// live during the take instead of keeping the actor waiting here.
+// live during the take instead of keeping the actor waiting here. Only for
+// paths that skip VoiceCasting, which otherwise does this wait itself.
 const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -42,9 +43,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   languageCode: string;
   fileName: string;
   scriptId: string | null;
-  /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice so
-   * it starts as soon as casting is confirmed. Gates Start. */
+  /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice
+   * from VoiceCasting's "Start rehearsal" on, and through the take. */
   pregen: ReaderAudioPregen;
+  /** Gate Start on pre-generation here — only when VoiceCasting was skipped
+   * (monologues, "Practice as X"); otherwise it already waited there. */
+  awaitPregen: boolean;
 }) {
   const navigate = useNavigate();
   const {
@@ -124,11 +128,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   pregenRef.current = pregen;
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
   useEffect(() => {
-    if (pregen.canStart || startAnywayOffered) return;
+    if (!awaitPregen || pregen.canStart || startAnywayOffered) return;
     const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [pregen.canStart, startAnywayOffered]);
-  const canStart = pregen.canStart || startAnywayOffered || pregen.failed > 0;
+  }, [awaitPregen, pregen.canStart, startAnywayOffered]);
+  const pregenReady = !awaitPregen || pregen.canStart;
+  const canStart = pregenReady || startAnywayOffered || pregen.failed > 0;
 
   const beginRehearsal = useCallback(() => {
     takeMetricsRef.current = new TakeMetrics();
@@ -483,7 +488,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
                     ? "We'll record a self-tape while you run the scene."
                     : "Sit back and listen to the full scene."}
                 </p>
-                {(pregen.waitingForDirection || (!pregen.done && pregen.total > 0)) && (
+                {awaitPregen && (pregen.waitingForDirection || (!pregen.done && pregen.total > 0)) && (
                   <div className="rehearsal-pregen" role="status">
                     <span>
                       {pregen.waitingForDirection
@@ -501,10 +506,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
                     onClick={beginRehearsal}
                     disabled={(willRecord && (!scriptId || !user)) || !canStart}
                   >
-                    {pregen.canStart || !canStart ? "Start" : "Start anyway"}
+                    {pregenReady || !canStart ? "Start" : "Start anyway"}
                   </button>
                 </div>
-                {pregen.failed > 0 && (
+                {awaitPregen && pregen.failed > 0 && (
                   <span>Some lines couldn’t be pre-loaded; they’ll load as you go.</span>
                 )}
                 {willRecord && !user && <span>Sign in to rehearse.</span>}
