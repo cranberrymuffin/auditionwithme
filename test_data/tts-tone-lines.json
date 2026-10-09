@@ -1,0 +1,86 @@
+{
+  "description": "A/B listening fixture for benchmarks/tts-tone.ts. Six scene-partner lines covering each tagging path: untagged conversational, single-tag (director), multi-sentence with a mid-line shift (director), and a BIG_DELIVERY script parenthetical. `context` is the dialogue just before the line, sent to the director so it judges from the scene as in production. `deliveryTag` is a script parenthetical already mapped to a v3 tag (src/lib/delivery.ts) — those lines skip the director, as in production.",
+  "voices": {
+    "MAYA": "pFZP5JQG7iQjIQuC4Bku",
+    "DANIEL": "pNInz6obpgDQGcFmaJgB"
+  },
+  "lines": [
+    {
+      "id": "01-untagged",
+      "variant": "untagged",
+      "speaker": "MAYA",
+      "text": "Did you remember to pick up the groceries on your way home?",
+      "context": [
+        {
+          "speaker": "SAM",
+          "text": "Hey. Sorry I'm late, traffic was a nightmare."
+        }
+      ]
+    },
+    {
+      "id": "02-single-tag-sad",
+      "variant": "single-tag",
+      "speaker": "DANIEL",
+      "text": "I kept his letters. Every single one.",
+      "context": [
+        {
+          "speaker": "RUTH",
+          "text": "You never talk about your brother anymore."
+        },
+        {
+          "speaker": "RUTH",
+          "text": "Not since the funeral."
+        }
+      ]
+    },
+    {
+      "id": "03-single-tag-annoyed",
+      "variant": "single-tag",
+      "speaker": "MAYA",
+      "text": "That's the third time this week you've said that to me.",
+      "context": [
+        {
+          "speaker": "SAM",
+          "text": "I'll fix the sink tomorrow, I promise."
+        }
+      ]
+    },
+    {
+      "id": "04-multi-sentence-shift",
+      "variant": "multi-sentence-tag",
+      "speaker": "DANIEL",
+      "text": "I waited by the phone all night. You said you'd call. It doesn't matter now, I suppose.",
+      "context": [
+        {
+          "speaker": "RUTH",
+          "text": "I know I said I'd call. Something came up."
+        }
+      ]
+    },
+    {
+      "id": "05-multi-sentence-nervous",
+      "variant": "multi-sentence-tag",
+      "speaker": "MAYA",
+      "text": "Okay, so here's the thing. I may have told your mother we'd host Thanksgiving. All of it.",
+      "context": [
+        {
+          "speaker": "SAM",
+          "text": "Why are you looking at me like that?"
+        }
+      ]
+    },
+    {
+      "id": "06-big-delivery-shouts",
+      "variant": "big-delivery",
+      "speaker": "DANIEL",
+      "text": "Get out of the car right now, it's going to roll!",
+      "deliveryTag": "shouts",
+      "context": [
+        {
+          "speaker": "RUTH",
+          "text": "The brake isn't holding, Danny!"
+        }
+      ]
+    }
+  ]
+}

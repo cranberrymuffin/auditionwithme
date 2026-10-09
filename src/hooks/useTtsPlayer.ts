@@ -38,6 +38,25 @@ export type TtsPlayOptions = {
 
 const MAX_CACHE_ENTRIES = 60;
 
+// Reader volume is a playback-graph gain, never baked into generated audio,
+// so changing it costs no regeneration. 1 = unity; up to 2 lets a quiet
+// voice be lifted above the actor's own level.
+const READER_VOLUME_KEY = "reader-volume";
+export const MAX_READER_VOLUME = 2;
+
+/** The reader volume saved from a past session (default 1). Storage access
+ * can throw (private mode, blocked site data), so failures read as default. */
+export function loadReaderVolume(): number {
+  try {
+    const raw = localStorage.getItem(READER_VOLUME_KEY);
+    const stored = raw === null ? NaN : Number(raw);
+    if (Number.isFinite(stored)) return Math.min(Math.max(stored, 0), MAX_READER_VOLUME);
+  } catch {
+    // fall through to default
+  }
+  return 1;
+}
+
 // One silent sample — just enough for a real HTMLMediaElement to actually
 // play. WebKit's autoplay gate isn't only about the AudioContext: it also
 // tracks, page-wide, whether *some* media element has ever audibly played as
@@ -69,6 +88,8 @@ const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     line.previousText ?? "",
     line.nextText ?? "",
     line.leadingPause ?? false,
+    // Always "natural" now (Rehearsal pins it), but kept in the key: dropping
+    // it would change every key's shape and orphan already-cached audio.
     intensity,
   ]);
 
@@ -273,6 +294,12 @@ export function useTtsPlayer() {
   // this is created lazily on first use and then kept for the session —
   // matching the one persistent audioRef element it's built from.
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  // Every line passes through compressor -> gain before reaching both the
+  // speakers and the self-tape tap, so the recorded mix carries exactly the
+  // level the actor heard. Built alongside the context in ensureTap.
+  const gainNodeRef = useRef<GainNode | null>(null);
+  const compressorRef = useRef<DynamicsCompressorNode | null>(null);
+  const volumeRef = useRef(loadReaderVolume());
 
   const ensureAudioElement = useCallback(() => {
     if (!audioRef.current) audioRef.current = new Audio();
@@ -300,6 +327,21 @@ export function useTtsPlayer() {
       };
       audioContextRef.current = context;
       tapDestinationRef.current = context.createMediaStreamDestination();
+      // v3 renders vary a lot in loudness line to line (a [whispers] line
+      // next to an [angry] one), which beta testers heard as the reader
+      // randomly getting louder and quieter. A gentle compressor evens that
+      // out at playback time, with no per-line measurement or regeneration.
+      const compressor = context.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.ratio.value = 4;
+      compressor.knee.value = 10;
+      const gain = context.createGain();
+      gain.gain.value = volumeRef.current;
+      compressor.connect(gain);
+      gain.connect(context.destination);
+      gain.connect(tapDestinationRef.current);
+      compressorRef.current = compressor;
+      gainNodeRef.current = gain;
     }
     return {
       context: audioContextRef.current,
@@ -414,17 +456,18 @@ export function useTtsPlayer() {
         // picks this line up directly, not acoustically off the mic. Still
         // connected to the context's own destination so normal speaker
         // playback is unchanged.
-        const { context, destination } = ensureTap();
+        const { context } = ensureTap();
         // Unconditional: also clears Safari's "interrupted" state (distinct
         // from "suspended"), which resume() handles even though the state
         // name doesn't match the naive equality check.
         await context.resume();
         // createMediaElementSource can only be called once per element —
         // now that the element is reused, so is this node, created lazily.
+        // It feeds the compressor -> gain chain, which in turn reaches both
+        // the speakers and the tap (see ensureTap).
         if (!sourceNodeRef.current) {
           const source = context.createMediaElementSource(audio);
-          source.connect(context.destination);
-          source.connect(destination);
+          source.connect(compressorRef.current!);
           sourceNodeRef.current = source;
         }
 
@@ -451,6 +494,19 @@ export function useTtsPlayer() {
     if (audioRef.current) audioRef.current.playbackRate = speed;
   }, []);
 
+  /** Sets the reader's playback gain (0-2) and remembers it across sessions.
+   * Applies to the line currently playing too. */
+  const setVolume = useCallback((volume: number) => {
+    const clamped = Math.min(Math.max(volume, 0), MAX_READER_VOLUME);
+    volumeRef.current = clamped;
+    if (gainNodeRef.current) gainNodeRef.current.gain.value = clamped;
+    try {
+      localStorage.setItem(READER_VOLUME_KEY, String(clamped));
+    } catch {
+      // Not persisted this time; the in-session level still applies.
+    }
+  }, []);
+
   useEffect(() => stop, [stop]);
 
   // Without this, the shared AudioContext outlives the component: leaving a
@@ -463,6 +519,8 @@ export function useTtsPlayer() {
     return () => {
       void audioContextRef.current?.close();
       audioContextRef.current = null;
+      gainNodeRef.current = null;
+      compressorRef.current = null;
     };
   }, []);
 
@@ -471,6 +529,7 @@ export function useTtsPlayer() {
     prefetch,
     stop,
     setPlaybackRate,
+    setVolume,
     getTapStream,
     unlock,
     getAudioContext,

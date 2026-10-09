@@ -124,6 +124,7 @@ export default function MyAccount() {
     languageName: script.language_name,
     characterVoices: script.character_voices,
     deliveryTags: script.delivery_tags,
+    directorVersion: script.director_version,
     rolesRead: script.roles_read,
   });
 

@@ -100,6 +100,7 @@ export default function Home() {
               languageName: existing.language_name,
               characterVoices: existing.character_voices,
               deliveryTags: existing.delivery_tags,
+              directorVersion: existing.director_version,
               rolesRead: existing.roles_read,
             },
           },

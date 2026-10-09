@@ -15,6 +15,7 @@ import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
 import { saveScript, updateScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
+import { DIRECTOR_VERSION } from "../lib/director";
 import { useSeo } from "../components/Seo";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
@@ -32,6 +33,8 @@ type ReplayScript = {
   characterVoices?: Record<string, string> | null;
   /** AI-director delivery tags from a past parse, aligned with steps. */
   deliveryTags?: (string | null)[] | null;
+  /** DIRECTOR_VERSION those tags were generated under (null/absent = stale). */
+  directorVersion?: number | null;
   /** Characters previously rehearsed as, from the saved script row. */
   rolesRead?: string[] | null;
 };
@@ -178,7 +181,13 @@ export default function Practice() {
     if (replayScript.characterVoices && Object.keys(replayScript.characterVoices).length) {
       setCharacterVoices(replayScript.characterVoices);
     }
-    if (replayScript.deliveryTags) setDeliveryTags(replayScript.deliveryTags);
+    // Tags from an older director prompt are dropped rather than seeded, so
+    // the director effect below re-runs with the current prompt (and the
+    // persist effect overwrites the row). The scene reads unadorned until
+    // the new tags land, exactly as on a fresh parse.
+    if (replayScript.deliveryTags && replayScript.directorVersion === DIRECTOR_VERSION) {
+      setDeliveryTags(replayScript.deliveryTags);
+    }
     if (replayScript.rolesRead) setRolesRead(replayScript.rolesRead);
     // A role read before already has a complete cast saved on this row (see
     // startReading below) — skip straight to Rehearsal instead of re-running
@@ -400,13 +409,16 @@ export default function Practice() {
   }, [steps, deliveryTags]);
 
   // Write freshly generated delivery tags back to the saved row so replays
-  // skip the director call. Guarded so it fires once per session.
+  // skip the director call. Guarded so it fires once per session. Stamped
+  // with DIRECTOR_VERSION so a later prompt change knows to re-direct them.
   const persistedTagsRef = useRef(false);
   useEffect(() => {
     if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
     persistedTagsRef.current = true;
-    if (replayScript?.deliveryTags) return; // already stored on the row
-    void updateScript(scriptId, { deliveryTags }).catch((err) =>
+    if (replayScript?.deliveryTags && replayScript.directorVersion === DIRECTOR_VERSION) {
+      return; // current tags already stored on the row
+    }
+    void updateScript(scriptId, { deliveryTags, directorVersion: DIRECTOR_VERSION }).catch((err) =>
       console.error("Failed to save delivery tags:", err),
     );
   }, [user, scriptId, deliveryTags, replayScript]);

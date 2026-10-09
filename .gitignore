@@ -25,3 +25,6 @@ dist-ssr
 .vercel
 
 test_data/*
+# Synthetic (not private sides), so it's tracked for benchmarks/tts-tone.ts.
+!test_data/tts-tone-lines.json
+benchmarks/out/

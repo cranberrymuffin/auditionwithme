@@ -13,26 +13,30 @@ const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no char
 const EXPRESSIVE_MODEL = "eleven_v3";
 const FALLBACK_MODEL = "eleven_multilingual_v2";
 
-type Intensity = "subtle" | "natural" | "dramatic";
-
-const V2_SETTINGS: Record<Intensity, { stability: number; style: number }> = {
-  subtle: { stability: 0.65, style: 0.15 },
-  natural: { stability: 0.45, style: 0.35 },
-  dramatic: { stability: 0.3, style: 0.55 },
-};
+// Fixed at the old "natural" preset. The client still sends an `intensity`
+// field (pinned to "natural" and kept in its cache key), but it's ignored
+// here: a global intensity knob made every line louder at once, which beta
+// testers heard as over-acting. Emotion now comes from per-line audio tags.
+const V2_SETTINGS = { stability: 0.45, style: 0.35 };
 
 // Cap on how much surrounding dialogue is sent as prosody context — roughly
 // the last/next five or six lines, enough to carry the scene's emotional arc.
 const CONTEXT_CHAR_LIMIT = 1800;
 
+// Script parentheticals that genuinely call for a big, uncontained read.
+// The AI director can't produce these (they're kept out of its vocabulary in
+// api/casting.ts) — only an explicit "(shouting)"-style direction in the
+// script itself, mapped by src/lib/delivery.ts, can.
+export const BIG_DELIVERY_TAGS = new Set(["shouts", "screams", "crying", "terrified", "panicked"]);
+
 // v3 stability only accepts the discrete values 1 (Robust), 0.5 (Natural),
-// and 0 (Creative). Robust barely reacts to audio tags and Creative responds
-// to them the most, so directed lines drop to Creative at normal intensity —
-// range where the director asked for it, consistency everywhere else.
-function v3Stability(level: Intensity, directed: boolean): number {
-  if (level === "subtle") return 1;
-  if (level === "dramatic") return 0;
-  return directed ? 0 : 0.5;
+// and 0 (Creative). Natural still follows audio tags — per ElevenLabs' v3
+// guidance, emotion should come from scene-aware tags, not from loosening
+// stability — while Creative exaggerated every tagged line into something
+// beta testers called "over the top" for an audition reader. Creative is
+// kept only for the script's own big-delivery parentheticals.
+export function v3Stability(bigDelivery: boolean): number {
+  return bigDelivery ? 0 : 0.5;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -51,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { text, voiceId, previousText, nextText, deliveryTag, performance, leadingPause, intensity } =
+  const { text, voiceId, previousText, nextText, deliveryTag, performance, leadingPause } =
     (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
@@ -61,14 +65,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
       performance?: string;
       leadingPause?: boolean;
-      intensity?: string;
     };
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
   }
 
-  const level: Intensity =
-    intensity === "subtle" || intensity === "dramatic" ? intensity : "natural";
   const tag =
     typeof deliveryTag === "string" && /^[a-z][a-z ]{0,23}$/i.test(deliveryTag.trim())
       ? deliveryTag.trim().toLowerCase()
@@ -79,9 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // enforces that, so treat a request carrying both as tag-only.
   const markup = tag ? null : sanitizePerformance(performance, text);
   const expressiveText = markup ?? (tag ? `[${tag}] ${text}` : text);
-  // Stability/expressiveness only react to a *directorial* tag — a leading
-  // pause alone shouldn't push the read into the more "Creative" range.
-  const directed = Boolean(tag) || /\[[a-z ]+\]/.test(expressiveText);
   const pausedText = leadingPause === true ? `[pause] ${expressiveText}` : expressiveText;
   const context = {
     ...(typeof previousText === "string" && previousText.trim()
@@ -106,13 +104,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ? {
                 text: pausedText,
                 model_id: modelId,
-                voice_settings: { stability: v3Stability(level, directed) },
+                // `tag` is the explicit deliveryTag (script parenthetical) only —
+                // director markup never makes a line "big".
+                voice_settings: { stability: v3Stability(tag != null && BIG_DELIVERY_TAGS.has(tag)) },
               }
             : {
                 text,
                 model_id: modelId,
                 voice_settings: {
-                  ...V2_SETTINGS[level],
+                  ...V2_SETTINGS,
                   similarity_boost: 0.75,
                   use_speaker_boost: true,
                 },

@@ -15,6 +15,9 @@ type ScriptRecord = {
   contentHash: string | null;
   characterVoices: Record<string, string> | null;
   deliveryTags: (string | null)[] | null;
+  /** DIRECTOR_VERSION (src/lib/director.ts) the deliveryTags came from;
+   * missing on rows saved before versioning, which readers treat as stale. */
+  directorVersion?: number;
   /** Characters the user has rehearsed as; missing on rows saved before this
    * field existed, so readers fall back to an empty list. */
   rolesRead?: string[];
@@ -42,6 +45,7 @@ function toSavedScript(record: ScriptRecord): SavedScript {
     content_hash: record.contentHash,
     character_voices: record.characterVoices,
     delivery_tags: record.deliveryTags,
+    director_version: record.directorVersion ?? null,
     roles_read: record.rolesRead ?? [],
     created_at: record.createdAt,
   };
@@ -82,7 +86,7 @@ export async function findScriptByContentHash(
 
 export async function updateScript(
   id: string,
-  patch: Partial<Pick<ScriptRecord, "characterVoices" | "deliveryTags" | "rolesRead">>,
+  patch: Partial<Pick<ScriptRecord, "characterVoices" | "deliveryTags" | "directorVersion" | "rolesRead">>,
 ): Promise<void> {
   const existing = await withStore<ScriptRecord | undefined>(
     SCRIPTS_STORE,

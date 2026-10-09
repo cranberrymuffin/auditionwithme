@@ -247,29 +247,43 @@ const MAX_LINES = 400;
 // Emotional tags Eleven v3 handles well, offered to the director as the core
 // palette (validation no longer requires them — sanitizePerformance keeps any
 // simple bracketed tag and guarantees the spoken words are unchanged).
+// Weighted toward grounded, conversational colors (per ElevenLabs' v3
+// audio-tag guidance) because the reader supports an actor's audition rather
+// than performing it. High-intensity tags (terrified, shouts, crying,
+// desperate, threatening, screams) are deliberately absent: they only reach
+// the TTS from an explicit script parenthetical (src/lib/delivery.ts), where
+// api/tts.ts's BIG_DELIVERY_TAGS lets them read big on purpose.
+// Multi-word tags use spaces, never hyphens — the tag validators only accept
+// letters and spaces, so "[matter-of-fact]" would be silently dropped.
+//
+// Bump DIRECTOR_VERSION (src/lib/director.ts) whenever this list or
+// DIRECTOR_PROMPT changes, so saved scripts get re-directed.
 const TAG_VOCABULARY = [
-  "angry", "annoyed", "cold", "sad", "somber", "crying", "cheerful", "warm",
+  "calm", "quietly", "flatly", "matter of fact", "thoughtful", "hesitates",
+  "stammers", "gulps", "resigned tone", "sorrowful", "frustrated",
+  "angry", "annoyed", "cold", "sad", "somber", "cheerful", "warm",
   "excited", "playful", "teasing", "flirtatious", "nervous", "hesitant",
-  "scared", "terrified", "surprised", "shocked", "confused", "curious",
-  "sarcastic", "deadpan", "mocking", "threatening", "pleading", "desperate",
-  "tired", "resigned", "whispers", "shouts", "laughs", "sighs",
+  "scared", "surprised", "shocked", "confused", "curious",
+  "sarcastic", "deadpan", "mocking", "pleading",
+  "tired", "resigned", "whispers", "laughs", "sighs",
 ];
 
-const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v3) to read lines opposite a human actor. For each numbered dialogue line, decide how a skilled actor would deliver it given the surrounding scene, and return a performance markup of that exact line.
+export const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v3) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
 
 Your markup toolkit (Eleven v3):
 - Audio tags in square brackets, placed at the start of the line or between sentences — emotional tags (${TAG_VOCABULARY.join(", ")}) and non-verbal sounds ([laughs], [chuckles], [sighs], [gasps], [pause], [clears throat]).
 - Pacing punctuation: ellipses (…) for weighted pauses and trailing thoughts, em-dashes for interruptions and pivots.
-- Emphasis: CAPITALIZE a single stressed word where a real actor would punch it.
+- Emphasis: CAPITALIZE a single stressed word where the reader would genuinely lean on it — at most one capitalized word per scene beat, not one per line.
 
 Rules:
 - NEVER add, remove, reorder, or respell words. Only bracketed tags, punctuation, and letter casing may differ from the input line. Entries that change the words are discarded.
-- At most 2 audio tags per line. Don't front-load every line with an emotion tag — most conversational lines need only pacing punctuation, or nothing. Save emotional tags for lines where the scene clearly calls for them, and vary them; a scene where every line is tagged reads as melodrama.
+- Tags per line: at most 1 on a single-sentence line. A multi-sentence line may take a second tag at a sentence boundary when the feeling genuinely shifts mid-line (e.g. "[tired] I waited all night. [resigned tone] It doesn't matter now."). Never more than 2 per line.
+- Don't front-load every line with an emotion tag — most conversational lines need only pacing punctuation, or nothing. Save emotional tags for lines where the scene clearly calls for them, prefer the quieter tags, and vary them; a scene where every line is tagged reads as melodrama, and a reader who out-acts the actor ruins the audition.
 - Judge from context, not just the line itself — a line's delivery depends on what was said before and where the scene is going.
 - Return null for lines that are fine exactly as written.
 - Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
 
-Example output: [null, "[nervous] You're supposed to say what you're… thankful for.", null, "I KNOW what I said — [sighs] just forget it."]`;
+Example output: [null, "[hesitates] You're supposed to say what you're… thankful for.", null, "I know what I said. [sighs] Just forget it."]`;
 
 function extractJsonArray(raw: string): string | null {
   const start = raw.indexOf("[");
