@@ -6,9 +6,9 @@
 // is the one exception: it's written to the public.self_tape_feedback table
 // in Supabase (see submitFeedback below) so the team can read it — only the
 // "still owe feedback" flag stays local, for gating FeedbackGate.tsx.
-import { SELF_TAPES_STORE, withStore } from "./localDb";
+import { SELF_TAPES_STORE, withStore, withStoreReadModifyWrite } from "./localDb";
 import { supabase } from "./supabase";
-import type { TakeMetricsRow } from "./takeMetrics";
+import { TAKE_METRICS_COLUMNS, type TakeMetricsRow } from "./takeMetrics";
 import { clampReaderVolume, type TapeStems } from "./tapeRemix";
 import type { SelfTape } from "../types";
 
@@ -116,14 +116,10 @@ export async function getTapeMix(id: string): Promise<TapeMix | null> {
 
 /** Remembers the reader level chosen for a take on review. */
 export async function setTapeReaderVolume(id: string, volume: number): Promise<void> {
-  const existing = await withStore<TapeRecord | undefined>(
-    SELF_TAPES_STORE,
-    "readonly",
-    (store) => store.get(id),
-  );
-  if (!existing) return;
-  const updated: TapeRecord = { ...existing, readerVolume: clampReaderVolume(volume) };
-  await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(updated));
+  await withStoreReadModifyWrite<TapeRecord>(SELF_TAPES_STORE, id, (existing) => ({
+    ...existing,
+    readerVolume: clampReaderVolume(volume),
+  }));
 }
 
 export async function deleteTape(id: string): Promise<void> {
@@ -149,6 +145,16 @@ export async function getPendingFeedbackTape(userId: string): Promise<SelfTape |
   return pending.length > 0 ? pending[pending.length - 1] : null;
 }
 
+/** Picks exactly the known self_tape_feedback metric columns off a stored
+ * take (see TAKE_METRICS_COLUMNS), so the insert below can't carry some
+ * other field that happened to be sitting on `metrics` along with them. */
+function pickKnownMetrics(metrics: TakeMetricsRow | undefined): Partial<TakeMetricsRow> | undefined {
+  if (!metrics) return undefined;
+  return Object.fromEntries(
+    TAKE_METRICS_COLUMNS.map((column) => [column, metrics[column]]),
+  ) as Partial<TakeMetricsRow>;
+}
+
 export async function submitFeedback(
   id: string,
   rating: number,
@@ -169,24 +175,27 @@ export async function submitFeedback(
     comment,
     recorded_at: existing.createdAt,
   };
-  let { error } = await supabase
-    .from("self_tape_feedback")
-    .insert({ ...feedback, ...existing.metrics });
+  const metrics = pickKnownMetrics(existing.metrics);
+  let { error } = await supabase.from("self_tape_feedback").insert({ ...feedback, ...metrics });
   // The metrics columns arrive in their own migration
   // (20261008120000_self_tape_feedback_metrics.sql); if a database hasn't had
   // it applied yet, losing the metrics beats losing the feedback, which the
   // beta depends on — so retry with the rating/comment alone.
-  if (error && existing.metrics && isMissingColumnError(error)) {
+  if (error && metrics && isMissingColumnError(error)) {
     console.warn("self_tape_feedback metrics columns missing; saving feedback without them:", error);
     ({ error } = await supabase.from("self_tape_feedback").insert(feedback));
   }
   if (error) throw error;
 
-  const updated: TapeRecord = {
-    ...existing,
+  // Re-read rather than reuse `existing`: the supabase round trip above may
+  // have taken a while, and another writer (setTapeReaderVolume, a delete)
+  // could have landed on this record in the meantime. withStoreReadModifyWrite
+  // reads and writes in one transaction, so this only ever touches the
+  // current record instead of stomping it with a stale snapshot.
+  await withStoreReadModifyWrite<TapeRecord>(SELF_TAPES_STORE, id, (current) => ({
+    ...current,
     feedbackSubmittedAt: new Date().toISOString(),
-  };
-  await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(updated));
+  }));
 }
 
 /** PostgREST's "column not in the schema cache" (PGRST204) or Postgres's own

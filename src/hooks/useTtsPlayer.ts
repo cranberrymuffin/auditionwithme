@@ -108,6 +108,13 @@ export type TtsFetchOptions = {
   /** Retry 429s here (default). False rethrows the TtsRateLimitError at
    * once, for callers that schedule their own wait. */
   retryRateLimit?: boolean;
+  /** Checked only between attempts (useReaderAudioPregen.ts, on cleanup): an
+   * aborted signal stops the backoff wait early and skips the next retry,
+   * so a line can stop waiting on a hold/backoff promptly once pre-generation
+   * is torn down. It's never passed into the request itself — a fetch already
+   * sent to the server keeps running, since ElevenLabs has already started
+   * (and billed) the generation by the time a response comes back. */
+  signal?: AbortSignal;
 };
 
 async function fetchTtsBlob(
@@ -196,6 +203,27 @@ function backoffDelayMs(attempt: number): number {
   return Math.round(exp * (0.7 + Math.random() * 0.6)); // ±30% jitter
 }
 
+/** Resolves after `ms`, or as soon as `signal` aborts — whichever comes
+ * first. Used only to cut short the WAIT between attempts below; the fetch
+ * already under way when a signal aborts is untouched. */
+function sleepUnlessAborted(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
 export async function fetchTtsBlobWithRetry(
   line: TtsLine,
   intensity: TtsIntensity,
@@ -207,11 +235,15 @@ export async function fetchTtsBlobWithRetry(
     } catch (err) {
       if (attempt >= MAX_RETRIES) throw err;
       if (err instanceof TtsRateLimitError && opts?.retryRateLimit === false) throw err;
+      // Already torn down: don't sit through a full backoff just to make an
+      // attempt nobody's waiting on any more.
+      if (opts?.signal?.aborted) throw err;
       const delay =
         err instanceof TtsRateLimitError && err.retryAfterMs !== null
           ? Math.min(err.retryAfterMs, RETRY_AFTER_CAP_MS)
           : backoffDelayMs(attempt);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleepUnlessAborted(delay, opts?.signal);
+      if (opts?.signal?.aborted) throw err;
     }
   }
 }

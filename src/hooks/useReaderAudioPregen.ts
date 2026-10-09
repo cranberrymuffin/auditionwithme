@@ -140,6 +140,13 @@ export function useReaderAudioPregen({
     }
     const items = linesRef.current ?? [];
     let cancelled = false;
+    // Only gates the WAIT between retry/backoff attempts (threaded into
+    // fetchTtsBlobWithRetry below) and the rate-limit hold wait in the loop
+    // further down — never a request already sent to ElevenLabs. Once a line
+    // is generating server-side the credits are spent either way, so letting
+    // it finish and still save the blob (on-device store + in-memory cache)
+    // is strictly better than throwing the result away on cleanup.
+    const abortController = new AbortController();
     const startedAt = Date.now();
     const readerIndices = items.map((item) => item.index);
     const byIndex = new Map(items.map((item) => [item.index, item]));
@@ -185,6 +192,7 @@ export function useReaderAudioPregen({
       const request = fetchTtsBlobWithRetry(line, intensity, {
         headers: PREGEN_HEADERS,
         retryRateLimit: false,
+        signal: abortController.signal,
         onResponse: (res) => {
           const reading = parseConcurrency(
             res.headers.get("X-TTS-Current-Concurrent"),
@@ -287,6 +295,7 @@ export function useReaderAudioPregen({
     void run();
     return () => {
       cancelled = true;
+      abortController.abort();
       wakeRef.current();
       wakeRef.current = () => {};
     };

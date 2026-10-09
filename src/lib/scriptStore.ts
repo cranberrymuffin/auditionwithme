@@ -1,7 +1,7 @@
 // Permanent local store for parsed scripts — replaces the "scripts" Supabase
 // table. Nothing here leaves the device: parsing still calls the AI endpoint
 // (api/parse-script.ts), but the result is only ever persisted in IndexedDB.
-import { SCRIPTS_STORE, withStore } from "./localDb";
+import { SCRIPTS_STORE, withStore, withStoreReadModifyWrite } from "./localDb";
 import { deleteReaderAudioForScript } from "./readerAudioStore";
 import type { SavedScript, Step } from "../types";
 
@@ -108,15 +108,10 @@ export async function updateScript(
     >
   >,
 ): Promise<void> {
-  const existing = await withStore<ScriptRecord | undefined>(
-    SCRIPTS_STORE,
-    "readonly",
-    (store) => store.get(id),
-  );
-  if (!existing) return;
-  await withStore(SCRIPTS_STORE, "readwrite", (store) =>
-    store.put({ ...existing, ...patch }),
-  );
+  await withStoreReadModifyWrite<ScriptRecord>(SCRIPTS_STORE, id, (existing) => ({
+    ...existing,
+    ...patch,
+  }));
 }
 
 export async function deleteScript(id: string): Promise<void> {

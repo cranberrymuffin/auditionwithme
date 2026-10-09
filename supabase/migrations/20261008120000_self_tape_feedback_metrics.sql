@@ -11,7 +11,9 @@
 -- transcripts, script text, or audio ever land here.
 --
 -- Every column is nullable: existing rows, takes recorded before this
--- shipped, and metrics not measured yet all insert as null.
+-- shipped, and metrics not measured yet all insert as null. The check
+-- constraints below only rule out negative counters/ms/dimensions and an
+-- unrecognized device_class; null still passes every one of them.
 -- reader_latency_ms_* run from the client time of the Scribe message (or
 -- advance trigger) that completed the actor's line to the 'playing' event of
 -- the next reader line, so they exclude Scribe's own transcription lag and
@@ -21,15 +23,15 @@
 -- silence-based advance ships, and the pregen_* / live_fetches_during_take
 -- columns stay null until reader-audio pre-generation ships.
 alter table public.self_tape_feedback
-  add column if not exists reader_latency_ms_p50 integer,
-  add column if not exists reader_latency_ms_max integer,
-  add column if not exists lines_auto_detected integer,
-  add column if not exists lines_manual_next integer,
-  add column if not exists lines_semantic_advanced integer,
-  add column if not exists lines_silence_advanced integer,
-  add column if not exists pregen_ms integer,
-  add column if not exists pregen_failed_lines integer,
-  add column if not exists live_fetches_during_take integer,
-  add column if not exists device_class text,
-  add column if not exists video_width integer,
-  add column if not exists video_height integer;
+  add column if not exists reader_latency_ms_p50 integer check (reader_latency_ms_p50 >= 0),
+  add column if not exists reader_latency_ms_max integer check (reader_latency_ms_max >= 0),
+  add column if not exists lines_auto_detected integer check (lines_auto_detected >= 0),
+  add column if not exists lines_manual_next integer check (lines_manual_next >= 0),
+  add column if not exists lines_semantic_advanced integer check (lines_semantic_advanced >= 0),
+  add column if not exists lines_silence_advanced integer check (lines_silence_advanced >= 0),
+  add column if not exists pregen_ms integer check (pregen_ms >= 0),
+  add column if not exists pregen_failed_lines integer check (pregen_failed_lines >= 0),
+  add column if not exists live_fetches_during_take integer check (live_fetches_during_take >= 0),
+  add column if not exists device_class text check (device_class in ('phone', 'tablet', 'desktop')),
+  add column if not exists video_width integer check (video_width >= 0),
+  add column if not exists video_height integer check (video_height >= 0);

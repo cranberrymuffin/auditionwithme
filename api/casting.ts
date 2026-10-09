@@ -333,9 +333,18 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
   const capped = lines.slice(0, MAX_LINES);
   const numbered = capped
     .map((line, index) => {
+      // {}/[]/<> stripped defense-in-depth: sanitizePerformance already
+      // guarantees the spoken words can't carry markup out of the model, but
+      // direction comes straight from the uploaded script and rides into the
+      // prompt wrapped in our own {stage: ...} markup below, so it shouldn't
+      // be able to inject tags of its own.
       const direction =
         typeof line.direction === "string"
-          ? line.direction.replace(/\s+/g, " ").trim().slice(0, MAX_DIRECTION_CHARS)
+          ? line.direction
+              .replace(/[{}[\]<>]/g, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, MAX_DIRECTION_CHARS)
           : "";
       return `${index}| ${direction ? `{stage: ${direction}} ` : ""}${typeof line.speaker === "string" && line.speaker ? line.speaker : "—"}: ${typeof line.text === "string" ? line.text : ""}`;
     })

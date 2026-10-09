@@ -27,6 +27,33 @@ export type TakeMetricsRow = {
   video_height: number | null;
 };
 
+/** Every TakeMetricsRow key, as the self_tape_feedback column it maps to.
+ * Shared with selfTapeStore.ts submitFeedback, which picks exactly these
+ * keys off a stored take before inserting, so the insert can't send (or
+ * silently drop) a column the two lists have drifted apart on. */
+export const TAKE_METRICS_COLUMNS = [
+  "reader_latency_ms_p50",
+  "reader_latency_ms_max",
+  "lines_auto_detected",
+  "lines_manual_next",
+  "lines_semantic_advanced",
+  "lines_silence_advanced",
+  "pregen_ms",
+  "pregen_failed_lines",
+  "live_fetches_during_take",
+  "device_class",
+  "video_width",
+  "video_height",
+] as const satisfies readonly (keyof TakeMetricsRow)[];
+
+// Compile-time check that the list above is missing no TakeMetricsRow key
+// (satisfies above already rules out an extra one): if a column is added to
+// one but not the other, this line fails to typecheck instead of the gap
+// surfacing as a silently dropped insert.
+type _MissingColumns = Exclude<keyof TakeMetricsRow, (typeof TAKE_METRICS_COLUMNS)[number]>;
+const _assertNoMissingColumns: _MissingColumns extends never ? true : _MissingColumns = true;
+void _assertNoMissingColumns;
+
 /** Median, rounded to whole ms; null when there are no samples. */
 export function computeP50(latencies: number[]): number | null {
   if (latencies.length === 0) return null;

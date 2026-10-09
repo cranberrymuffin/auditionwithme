@@ -90,3 +90,33 @@ export async function withStore<T>(
     request.onerror = () => reject(request.error);
   });
 }
+
+/**
+ * Reads `key`'s record and, if it exists, writes back `mutate`'s result —
+ * both requests on the SAME transaction, so there's no gap between the read
+ * and the write for a concurrent call to land in (two separate `withStore`
+ * calls, one readonly then one readwrite, would reopen a transaction in
+ * between and let that happen). Does nothing if the key isn't found.
+ */
+export async function withStoreReadModifyWrite<T>(
+  storeName: string,
+  key: IDBValidKey,
+  mutate: (existing: T) => T,
+): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+    const getRequest = store.get(key);
+    getRequest.onerror = () => reject(getRequest.error);
+    getRequest.onsuccess = () => {
+      const existing = getRequest.result as T | undefined;
+      if (existing === undefined) return; // nothing to update; tx completes empty
+      const putRequest = store.put(mutate(existing));
+      putRequest.onerror = () => reject(putRequest.error);
+    };
+  });
+}

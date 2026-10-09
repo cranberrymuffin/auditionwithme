@@ -282,7 +282,10 @@ export async function renderRemix(options: RenderRemixOptions): Promise<Blob> {
     report();
 
     const finished = new Promise<Blob>((resolve, reject) => {
-      if (signal.aborted) reject(new DOMException("Export cancelled", "AbortError"));
+      if (signal.aborted) {
+        reject(new DOMException("Export cancelled", "AbortError"));
+        return;
+      }
       recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || source.type }));
       video.addEventListener("ended", () => recorder.stop(), { once: true });
       video.addEventListener("error", () => reject(new Error("The tape couldn't be played")), { once: true });
