@@ -17,6 +17,7 @@ import { saveScript, updateScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { createParseCache, type CachedParseFields } from "../lib/parseCache";
 import { DIRECTOR_VERSION } from "../lib/director";
+import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 
@@ -435,6 +436,7 @@ export default function Practice() {
             lines: steps.map((step) => ({
               speaker: normalizeSpeaker(step.speaker),
               text: step.verbalLine,
+              direction: leadingDirections(step.content) || undefined,
             })),
           }),
         });

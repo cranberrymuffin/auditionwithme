@@ -6,4 +6,6 @@
 // have no version and count as stale. Bump this with every prompt change.
 //   1 — original "skilled actor" prompt (implicit, never stored)
 //   2 — reader-first prompt with grounded tags (beta tone feedback, Oct 2026)
-export const DIRECTOR_VERSION = 2;
+//   3 — sees each line's stage directions; may lead a line with a
+//       [short pause]/[long pause] beat marker (beta "no pauses" feedback)
+export const DIRECTOR_VERSION = 3;

@@ -81,10 +81,33 @@ const PARENTHETICAL_TAGS: Record<string, string> = {
   shocked: "shocked",
   confused: "confused",
   curious: "curious",
-  beat: "pause",
-  pause: "pause",
-  pauses: "pause",
 };
+
+// Explicit beats in the script — "(beat)", "(a long pause)", or an action
+// line that's just "Beat." / "Silence." — are timing, not tone: they become a
+// client-side delay before the reader speaks (src/lib/readerLines.ts), never a
+// "[pause]" tag baked into the audio. Long ones get the longer delay.
+const SHORT_BEAT_DIRECTION = /^(a )?(beat|pause|pauses|short pause|brief pause|moment|small beat|short beat)$/;
+const LONG_BEAT_DIRECTION = /^(a )?(long|longer|extended|very long) (beat|pause|moment|silence)$|^(a )?(silence|beat of silence|pregnant pause)$/;
+
+export type ReaderBeat = "short" | "long";
+
+function normalizeDirection(direction: string): string {
+  return direction
+    .trim()
+    .replace(/^\(|\)$/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!…]+$/, "")
+    .trim();
+}
+
+function beatFromDirection(direction: string): ReaderBeat | undefined {
+  const normalized = normalizeDirection(direction);
+  if (LONG_BEAT_DIRECTION.test(normalized)) return "long";
+  if (SHORT_BEAT_DIRECTION.test(normalized)) return "short";
+  return undefined;
+}
 
 // Parentheticals that are staging, not delivery: "(to JOHN)", "(off her look)",
 // "(into phone)", "(re: the letter)", continuity markers.
@@ -96,6 +119,7 @@ function tagFromDirection(direction: string): string | undefined {
     .trim()
     .toLowerCase();
   if (!normalized || NON_DELIVERY_PREFIX.test(normalized)) return undefined;
+  if (beatFromDirection(direction)) return undefined;
   const mapped = PARENTHETICAL_TAGS[normalized];
   if (mapped) return mapped;
   // Unknown single-word directions ("(wistful)") pass through — v3 handles
@@ -132,4 +156,50 @@ export function deliveryTagFromContent(content: ContentLine[]): string | undefin
     if (tag) return tag;
   }
   return undefined;
+}
+
+/** An explicit beat written before a step's first spoken words — a
+ * parenthetical or a "Beat."-style action line. Mid-speech beats are
+ * ignored: delaying the start of the line would put the beat in the wrong
+ * place, and the words around it can't be split without changing the
+ * request. */
+export function beatFromContent(content: ContentLine[]): ReaderBeat | undefined {
+  let beat: ReaderBeat | undefined;
+  for (const line of content) {
+    if (line.kind === "verbal") break;
+    const found = beatFromDirection(line.text);
+    if (found === "long") return "long";
+    beat = beat ?? found;
+  }
+  return beat;
+}
+
+// A leading "[short pause]" / "[long pause]" the AI director puts on a line's
+// markup when the scene calls for a beat before the reader answers
+// (DIRECTOR_PROMPT in api/casting.ts). Only at the very start; the same tags
+// mid-line stay in the text as ordinary v3 pacing.
+const LEADING_BEAT_MARKER = /^\s*\[(short|long) pause\]\s*/i;
+
+/** Splits a director's leading beat marker off its markup. */
+export function splitLeadingBeat(markup: string): { beat: ReaderBeat | undefined; rest: string } {
+  const match = LEADING_BEAT_MARKER.exec(markup);
+  if (!match) return { beat: undefined, rest: markup };
+  return { beat: match[1].toLowerCase() as ReaderBeat, rest: markup.slice(match[0].length) };
+}
+
+// Per-line cap on the stage directions sent to the AI director; api/casting.ts
+// clips again server-side.
+const MAX_DIRECTION_CHARS = 200;
+
+/** The stage directions and parentheticals before a step's first spoken
+ * words, joined and clipped — sent to the AI director (Practice.tsx) so it
+ * can judge whether the line wants a beat. Empty when there are none. */
+export function leadingDirections(content: ContentLine[]): string {
+  const directions: string[] = [];
+  for (const line of content) {
+    if (line.kind === "verbal") break;
+    directions.push(line.text.trim());
+  }
+  const joined = directions.filter(Boolean).join(" ").replace(/\s+/g, " ");
+  return joined.length > MAX_DIRECTION_CHARS ? `${joined.slice(0, MAX_DIRECTION_CHARS - 1)}…` : joined;
 }

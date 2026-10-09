@@ -243,6 +243,9 @@ Example output: {"assignments":[{"character":"HAMLET","voiceId":"pNInz6obpgDQGcF
 // Lines beyond this cap simply get no direction — the client aligns entries
 // by index, so truncation degrades gracefully on very long scripts.
 const MAX_LINES = 400;
+// Stage directions ride along per line for timing judgment only; long action
+// paragraphs are clipped so they can't dominate the prompt.
+const MAX_DIRECTION_CHARS = 200;
 
 // Emotional tags Eleven v3 handles well, offered to the director as the core
 // palette (validation no longer requires them — sanitizePerformance keeps any
@@ -271,7 +274,7 @@ const TAG_VOCABULARY = [
 export const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v3) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
 
 Your markup toolkit (Eleven v3):
-- Audio tags in square brackets, placed at the start of the line or between sentences — emotional tags (${TAG_VOCABULARY.join(", ")}) and non-verbal sounds ([laughs], [chuckles], [sighs], [gasps], [pause], [clears throat]).
+- Audio tags in square brackets, placed at the start of the line or between sentences — emotional tags (${TAG_VOCABULARY.join(", ")}) and non-verbal sounds ([laughs], [chuckles], [sighs], [gasps], [pause], [clears throat]). [pause] is for a hesitation inside a line; a beat before the line uses the leading marker described below.
 - Pacing punctuation: ellipses (…) for weighted pauses and trailing thoughts, em-dashes for interruptions and pivots.
 - Emphasis: CAPITALIZE a single stressed word where the reader would genuinely lean on it — at most one capitalized word per scene beat, not one per line.
 
@@ -280,10 +283,27 @@ Rules:
 - Tags per line: at most 1 on a single-sentence line. A multi-sentence line may take a second tag at a sentence boundary when the feeling genuinely shifts mid-line (e.g. "[tired] I waited all night. [resigned tone] It doesn't matter now."). Never more than 2 per line.
 - Don't front-load every line with an emotion tag — most conversational lines need only pacing punctuation, or nothing. Save emotional tags for lines where the scene clearly calls for them, prefer the quieter tags, and vary them; a scene where every line is tagged reads as melodrama, and a reader who out-acts the actor ruins the audition.
 - Judge from context, not just the line itself — a line's delivery depends on what was said before and where the scene is going.
+- Rows may carry {stage: …}: the script's own parentheticals and stage directions just before that line. They are context for delivery and timing only — never copy them into the markup. Rows with no dialogue (only {stage: …}) are action between lines — the app already holds a moment for those — so return null for them.
+
+Beats before a line:
+- The scene partner answers the instant the actor finishes, which is right for almost every line. Quick back-and-forth, banter, interruptions, and ordinary replies must stay snappy — give them no beat.
+- Only when the script's intention calls for a moment before the reader responds, start that line's markup with exactly one beat marker, as the very first thing: "[short pause]" (a breath) or "[long pause]" (a held moment). Use it for: an explicit (beat), (pause), (a long beat), or (silence) cue; a stage direction implying silence or a physical action/reaction before speaking (she stares at him, he sets down the glass); or a weighty emotional turn — answering a revelation, an accusation, or bad news. Long only for explicit long beats/silence or the heaviest turns.
+- Never put a beat marker anywhere but the very start, never more than one, and never on a line just because it is emotional. Most lines in a scene get none. A beat marker doesn't count toward the tag limit; a line needing only a beat is just the marker plus the line as written.
+
+Output:
 - Return null for lines that are fine exactly as written.
 - Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
 
-Example output: [null, "[hesitates] You're supposed to say what you're… thankful for.", null, "I know what I said. [sighs] Just forget it."]`;
+Example input:
+0| ANNA: Did you get the results?
+1| BEN: Yeah.
+2| ANNA: And?
+3| {stage: (a long beat)} BEN: It's back. The cancer's back.
+4| {stage: The kettle clicks off.} —: 
+5| {stage: She stares at him, then turns away.} ANNA: You're supposed to say what you're thankful for.
+6| BEN: I know what I said. Just forget it.
+
+Example output: [null, null, null, "[long pause] It's back. The cancer's back.", null, "[short pause] [hesitates] You're supposed to say what you're… thankful for.", "I know what I said. [sighs] Just forget it."]`;
 
 function extractJsonArray(raw: string): string | null {
   const start = raw.indexOf("[");
@@ -298,7 +318,9 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
   }
 
   const { lines } = (req.body ?? {}) as {
-    lines?: Array<{ speaker?: string; text?: string }>;
+    /** `direction`: the step's stage directions/parentheticals before its
+     * words (Practice.tsx), so the director can judge beats. */
+    lines?: Array<{ speaker?: string; text?: string; direction?: string }>;
   };
   if (
     !Array.isArray(lines) ||
@@ -310,10 +332,13 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
 
   const capped = lines.slice(0, MAX_LINES);
   const numbered = capped
-    .map(
-      (line, index) =>
-        `${index}| ${typeof line.speaker === "string" && line.speaker ? line.speaker : "—"}: ${typeof line.text === "string" ? line.text : ""}`,
-    )
+    .map((line, index) => {
+      const direction =
+        typeof line.direction === "string"
+          ? line.direction.replace(/\s+/g, " ").trim().slice(0, MAX_DIRECTION_CHARS)
+          : "";
+      return `${index}| ${direction ? `{stage: ${direction}} ` : ""}${typeof line.speaker === "string" && line.speaker ? line.speaker : "—"}: ${typeof line.text === "string" ? line.text : ""}`;
+    })
     .join("\n");
 
   try {

@@ -1,6 +1,7 @@
 // Checks for reader-audio pre-generation: the shared cache key (a
 // pre-generated line must be a hit at playback, and a recast must miss only
-// on what changed), which steps count as reader lines, the scheduling rules
+// on what changed), which steps count as reader lines, how a line's
+// intentional beat is split off its request, the scheduling rules
 // that keep pre-generation inside the ElevenLabs Starter plan's 3 shared
 // concurrent slots, the start-early gate, and api/tts.ts's pregen hold.
 // Pure logic, no browser or network.
@@ -11,7 +12,15 @@
 
 import assert from "node:assert/strict";
 import { cacheKey } from "../src/lib/ttsCacheKey";
-import { buildReaderLine, readerLineIndices } from "../src/lib/readerLines";
+import {
+  buildReaderCue,
+  buildReaderLine,
+  LONG_BEAT_MS,
+  readerLineIndices,
+  SHORT_BEAT_MS,
+} from "../src/lib/readerLines";
+import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../src/lib/delivery";
+import { sanitizePerformance } from "../api/_direction";
 import {
   canStartTake,
   MAX_PREGEN_WORKERS,
@@ -125,6 +134,91 @@ check("reader lines carry no leading [pause], and the key keeps its old shape", 
   assert.equal(parts.length, 8);
   assert.equal(parts[6], false); // the old leading-pause slot
   assert.equal(parts[7], "natural");
+});
+
+check("a director beat marker is split off: not in the text, performance, or key", () => {
+  const marked = sanitizePerformance("[long pause] [sighs] Out.", "Out.");
+  // The server keeps the marker and the spoken words are untouched.
+  assert.equal(marked, "[long pause] [sighs] Out.");
+  const cue = buildReaderCue(steps, 1, voices, [null, marked])!;
+  assert.equal(cue.beatMs, LONG_BEAT_MS);
+  assert.equal(cue.line.text, "Out.");
+  assert.equal(cue.line.performance, "[sighs] Out.");
+  assert.equal(cue.line.deliveryTag, undefined);
+  assert.ok(!cacheKey(cue.line, "natural").includes("pause"));
+});
+
+check("pregen and playback build the same request and key for a beat line", () => {
+  const tags = [null, "[short pause] [flatly] Out.", null, null, null, "[long pause] It always matters."];
+  for (const index of readerLineIndices(steps, "ANNA")) {
+    const pregenLine = buildReaderLine(steps, index, voices, tags)!;
+    const playbackLine = buildReaderCue(steps, index, voices, tags)!.line;
+    assert.deepEqual(playbackLine, pregenLine);
+    assert.equal(cacheKey(playbackLine, "natural"), cacheKey(pregenLine, "natural"));
+  }
+  assert.equal(buildReaderCue(steps, 1, voices, tags)!.beatMs, SHORT_BEAT_MS);
+});
+
+check("a beat-only direction reads (and keys) exactly like the undirected line", () => {
+  const marked = sanitizePerformance("[short pause] It always matters.", "It always matters.")!;
+  const cue = buildReaderCue(steps, 5, voices, [null, null, null, null, null, marked])!;
+  assert.equal(cue.beatMs, SHORT_BEAT_MS);
+  assert.equal(cue.line.performance, undefined);
+  assert.equal(cacheKey(cue.line, "natural"), cacheKey(buildReaderLine(steps, 5, voices, [])!, "natural"));
+});
+
+check("lines without a beat get none, and a mid-line marker stays in the text", () => {
+  assert.equal(buildReaderCue(steps, 1, voices, [])!.beatMs, 0);
+  const cue = buildReaderCue(steps, 5, voices, [null, null, null, null, null, "It always [short pause] matters."])!;
+  assert.equal(cue.beatMs, 0);
+  assert.equal(cue.line.performance, "It always [short pause] matters.");
+  assert.deepEqual(splitLeadingBeat("[sighs] Out."), { beat: undefined, rest: "[sighs] Out." });
+});
+
+check("script beats become a delay, never a [pause] tag, and outrank the director's", () => {
+  const beatSteps: Step[] = [
+    step("ANNA", "Tell me."),
+    step("BEN", "He's gone.", "(beat)"),
+    step("BEN", "I'm sorry.", "(a long beat)"),
+    step("BEN", "Okay.", "Silence."),
+    step("BEN", "Fine.", "(angrily)"),
+  ];
+  // Director markup without a marker: the script's (beat) still holds.
+  const short = buildReaderCue(beatSteps, 1, voices, [null, "[sad] He's gone."])!;
+  assert.equal(short.beatMs, SHORT_BEAT_MS);
+  assert.equal(short.line.deliveryTag, undefined);
+  assert.equal(short.line.performance, "[sad] He's gone.");
+  // The script's long beat wins over a director short one.
+  const long = buildReaderCue(beatSteps, 2, voices, [null, null, "[short pause] I'm sorry."])!;
+  assert.equal(long.beatMs, LONG_BEAT_MS);
+  assert.equal(buildReaderCue(beatSteps, 3, voices, [])!.beatMs, LONG_BEAT_MS);
+  // A delivery parenthetical still outranks markup, but the director's beat holds.
+  const angry = buildReaderCue(beatSteps, 4, voices, [null, null, null, null, "[long pause] [calm] Fine."])!;
+  assert.equal(angry.line.deliveryTag, "angry");
+  assert.equal(angry.line.performance, undefined);
+  assert.equal(angry.beatMs, LONG_BEAT_MS);
+  assert.equal(deliveryTagFromContent([{ kind: "nonverbal", text: "(pause)" }]), undefined);
+  assert.equal(deliveryTagFromContent([{ kind: "nonverbal", text: "(silence)" }]), undefined);
+});
+
+check("a beat after the first words doesn't delay the line", () => {
+  const midLine: Step = {
+    speaker: "BEN",
+    verbalLine: "I know. Go.",
+    content: [
+      { kind: "verbal", text: "I know." },
+      { kind: "nonverbal", text: "(beat)" },
+      { kind: "verbal", text: "Go." },
+    ],
+  };
+  assert.equal(buildReaderCue([midLine], 0, voices, [])!.beatMs, 0);
+});
+
+check("the director sees only the directions before a line, clipped", () => {
+  assert.equal(leadingDirections(steps[4].content), "(shouting)");
+  assert.equal(leadingDirections(steps[0].content), "");
+  const long = leadingDirections([{ kind: "nonverbal", text: "x".repeat(500) }]);
+  assert.equal(long.length, 200);
 });
 
 check("concurrency headers parse, and junk/missing ones read as unknown", () => {

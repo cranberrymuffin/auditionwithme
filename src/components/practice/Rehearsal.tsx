@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
-import { buildReaderLine } from "../../lib/readerLines";
+import { buildReaderCue, type ReaderCue } from "../../lib/readerLines";
 import {
   loadReaderVolume,
   MAX_READER_VOLUME,
@@ -93,11 +93,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
   };
 
   // Same builder pre-generation uses (lib/readerLines.ts), so the request —
-  // and its cache key — match what was generated before Start.
-  const ttsLine = useCallback(
-    (index: number): TtsLine | null => buildReaderLine(steps, index, characterVoices, deliveryTagsRef.current),
+  // and its cache key — match what was generated before Start. The cue also
+  // carries the line's intentional beat, held before it plays.
+  const readerCue = useCallback(
+    (index: number): ReaderCue | null => buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current),
     [steps, characterVoices],
   );
+  const ttsLine = useCallback((index: number): TtsLine | null => readerCue(index)?.line ?? null, [readerCue]);
 
   const currentStep = steps[currentStepIndex];
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
@@ -241,15 +243,18 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
       const timer = setTimeout(() => goNextRef.current(), 1200);
       return () => clearTimeout(timer);
     }
-    const line = ttsLine(currentStepIndex);
-    if (!line) return;
+    const cue = readerCue(currentStepIndex);
+    if (!cue) return;
+    const { line, beatMs } = cue;
     const controller = new AbortController();
     let latencyRecorded = false;
     const onPlaying = lineCompletedAt === null ? undefined : () => {
       // 'playing' fires again after a mid-line stall; only the first counts.
       if (latencyRecorded) return;
       latencyRecorded = true;
-      takeMetricsRef.current.recordReaderLatency(Date.now() - lineCompletedAt);
+      // The intentional beat is subtracted, not the sample skipped: what's
+      // left is still the app's own response time on beat lines.
+      takeMetricsRef.current.recordReaderLatency(Math.max(0, Date.now() - lineCompletedAt - beatMs));
     };
     const startPlayback = () => {
       if (controller.signal.aborted) return;
@@ -268,12 +273,20 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
         if (error?.name !== "AbortError") { setFailureReason(error?.message ?? null); setPlaybackState("error"); }
       });
     };
+    // The recording settle and the line's beat both just hold silence before
+    // the cue, so they overlap (max, not sum). Pause/jump/stop re-run this
+    // effect, whose cleanup cancels the hold.
     const settleDelay = willRecord ? Math.max(0, recordingReadyAtRef.current - Date.now()) : 0;
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    if (settleDelay > 0) settleTimer = setTimeout(startPlayback, settleDelay);
-    else startPlayback();
-    return () => { if (settleTimer) clearTimeout(settleTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, play, prefetch, stop, willRecord]);
+    const holdMs = Math.max(settleDelay, beatMs);
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    if (holdMs > 0) {
+      // Fetch during the beat (a no-op when pre-generated), so it isn't
+      // followed by a load wait.
+      prefetch(line, intensity);
+      holdTimer = setTimeout(startPlayback, holdMs);
+    } else startPlayback();
+    return () => { if (holdTimer) clearTimeout(holdTimer); controller.abort(); stop(); };
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, play, prefetch, stop, willRecord]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -330,6 +343,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, delive
     : currentStepIndex;
   const cueStep = cueIndex === undefined ? null : steps[cueIndex];
 
+  // Plays at once, with no beat: the actor asked for the cue, so a beat
+  // would only read as lag.
   const replayCue = useCallback(() => {
     if (cueIndex === undefined) return;
     const line = ttsLine(cueIndex);
