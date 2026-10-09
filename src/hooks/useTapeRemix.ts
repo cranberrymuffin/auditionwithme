@@ -200,7 +200,10 @@ export function useTapeRemix(
           readerVolume: volume,
           context,
           host: exportHost,
-          onProgress: (current, total) => setExportProgress({ current, total }),
+          // Ignore anything reported once this export has settled.
+          onProgress: (current, total) => {
+            if (exportAbortRef.current === controller) setExportProgress({ current, total });
+          },
           signal: controller.signal,
         });
       } catch (err) {

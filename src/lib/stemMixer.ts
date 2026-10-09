@@ -279,6 +279,10 @@ export async function renderRemix(options: RenderRemixOptions): Promise<Blob> {
     ]);
     const report = () => onProgress(Math.min(video.currentTime, total), total);
     video.addEventListener("timeupdate", report);
+    // Off before the video's own cleanup: its load() resets currentTime to 0
+    // and fires a last timeupdate, which would report a fresh 0:00 after the
+    // export has already finished.
+    cleanups.push(() => video.removeEventListener("timeupdate", report));
     report();
 
     const finished = new Promise<Blob>((resolve, reject) => {
