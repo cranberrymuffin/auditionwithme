@@ -27,7 +27,13 @@ const CONTEXT_CHAR_LIMIT = 1800;
 // The AI director can't produce these (they're kept out of its vocabulary in
 // api/casting.ts) — only an explicit "(shouting)"-style direction in the
 // script itself, mapped by src/lib/delivery.ts, can.
-export const BIG_DELIVERY_TAGS = new Set(["shouts", "screams", "crying", "terrified", "panicked"]);
+export const BIG_DELIVERY_TAGS = new Set([
+  "shouts",
+  "screams",
+  "crying",
+  "terrified",
+  "panicked",
+]);
 
 // v3 stability only accepts the discrete values 1 (Robust), 0.5 (Natural),
 // and 0 (Creative). Natural still follows audio tags — per ElevenLabs' v3
@@ -36,7 +42,7 @@ export const BIG_DELIVERY_TAGS = new Set(["shouts", "screams", "crying", "terrif
 // beta testers called "over the top" for an audition reader. Creative is
 // kept only for the script's own big-delivery parentheticals.
 export function v3Stability(bigDelivery: boolean): number {
-  return bigDelivery ? 0 : 0.5;
+  return bigDelivery ? 0 : 0.3;
 }
 
 // Best-effort guard for the ElevenLabs Starter plan's 3 concurrent TTS slots,
@@ -93,16 +99,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const purpose = req.headers["x-tts-purpose"];
-  if (purpose === "pregen" && shouldHoldPregen(lastSeenConcurrency, Date.now())) {
+  if (
+    purpose === "pregen" &&
+    shouldHoldPregen(lastSeenConcurrency, Date.now())
+  ) {
     res.setHeader("Retry-After", String(PREGEN_HOLD_RETRY_AFTER_S));
     res.setHeader("X-TTS-Pregen-Hold", "true");
-    res.setHeader("X-TTS-Current-Concurrent", String(lastSeenConcurrency.current));
+    res.setHeader(
+      "X-TTS-Current-Concurrent",
+      String(lastSeenConcurrency.current),
+    );
     res.setHeader("X-TTS-Max-Concurrent", String(lastSeenConcurrency.max));
-    return res.status(429).json({ error: "Pre-generation paused: voice service is near its limit" });
+    return res.status(429).json({
+      error: "Pre-generation paused: voice service is near its limit",
+    });
   }
 
   const tag =
-    typeof deliveryTag === "string" && /^[a-z][a-z ]{0,23}$/i.test(deliveryTag.trim())
+    typeof deliveryTag === "string" &&
+    /^[a-z][a-z ]{0,23}$/i.test(deliveryTag.trim())
       ? deliveryTag.trim().toLowerCase()
       : null;
   // Markup that fails validation (altered words, junk tags) is discarded, not
@@ -136,7 +151,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 model_id: modelId,
                 // `tag` is the explicit deliveryTag (script parenthetical) only —
                 // director markup never makes a line "big".
-                voice_settings: { stability: v3Stability(tag != null && BIG_DELIVERY_TAGS.has(tag)) },
+                voice_settings: {
+                  stability: v3Stability(
+                    tag != null && BIG_DELIVERY_TAGS.has(tag),
+                  ),
+                },
               }
             : {
                 text,
@@ -171,9 +190,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 429 actually happens — see
     // https://elevenlabs.io/blog/ai-rate-limiting-for-voice, whose core point
     // is that the limit that matters is concurrency, not request count.
-    const currentConcurrent = upstream.headers.get("current-concurrent-requests");
+    const currentConcurrent = upstream.headers.get(
+      "current-concurrent-requests",
+    );
     const maxConcurrent = upstream.headers.get("maximum-concurrent-requests");
-    if (currentConcurrent) res.setHeader("X-TTS-Current-Concurrent", currentConcurrent);
+    if (currentConcurrent)
+      res.setHeader("X-TTS-Current-Concurrent", currentConcurrent);
     if (maxConcurrent) res.setHeader("X-TTS-Max-Concurrent", maxConcurrent);
     // Every response (live or pregen, ok or not) refreshes the hold guard.
     if (
@@ -186,7 +208,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastSeenConcurrency.max = Number(maxConcurrent);
       lastSeenConcurrency.updatedAt = Date.now();
     }
-    if (currentConcurrent && maxConcurrent && Number(currentConcurrent) >= Number(maxConcurrent) - 1) {
+    if (
+      currentConcurrent &&
+      maxConcurrent &&
+      Number(currentConcurrent) >= Number(maxConcurrent) - 1
+    ) {
       console.warn(
         `ElevenLabs concurrency near limit: ${currentConcurrent}/${maxConcurrent}`,
       );

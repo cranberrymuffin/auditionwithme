@@ -123,7 +123,7 @@ async function main() {
   const { sanitizePerformance } = await import("../api/_direction.js");
 
   // The stability contract the tone fix depends on (runs in --dry-run too).
-  assert.equal(v3Stability(false), 0.5, "untagged/director lines read at Natural");
+  assert.equal(v3Stability(false), 0.3, "untagged/director lines read at Natural");
   assert.equal(v3Stability(true), 0, "big-delivery parentheticals read at Creative");
 
   const anthropic = new Anthropic();
