@@ -6,6 +6,7 @@
   "scripts": {
     "bench:sides": "tsx benchmarks/sides-parse.ts",
     "benchmark:pdf": "node benchmarks/pdf-latency.mjs",
+    "test:cutoff": "tsx benchmarks/cutoff-guard.ts",
     "delete-user": "node scripts/delete-user.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",
     "dev": "vite",

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { checkSemanticLineMatch, countMatchedWords } from "../lib/script";
+import { checkSemanticLineMatch } from "../lib/script";
+import {
+  countMatchedWords,
+  semanticMatchMayAdvance,
+  shouldTrySemanticFallback,
+} from "../lib/lineMatch";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
 
@@ -122,19 +127,25 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           // matching still hasn't credited the whole line — ask the semantic
           // fallback whether what Scribe DID transcribe still conveys the
           // line, rather than leave the actor stuck on manual advance. Only
-          // fires once per distinct committed transcript, and only once
-          // there's enough of it to judge.
+          // fires once per distinct committed transcript, and only once word
+          // matching has already credited most of the line — otherwise a
+          // breath partway through a monologue reads as "done" and the
+          // scene partner cuts the actor off (see lib/lineMatch.ts).
           const committed = state.committed.trim();
           if (
             msg.message_type === "committed_transcript" &&
-            count < scriptWords.length &&
-            committed.split(/\s+/).length >= 2 &&
+            shouldTrySemanticFallback(scriptWords, count, committed) &&
             committed !== state.semanticChecked
           ) {
             state.semanticChecked = committed;
             logAudioEvent("scribe", "word match stalled, trying semantic fallback");
             void checkSemanticLineMatch(line, committed).then((match) => {
               if (state.closed || !match) return;
+              if (!semanticMatchMayAdvance(scriptWords, committed)) {
+                // A later commit with the line's ending in it re-runs this.
+                logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
+                return;
+              }
               logAudioEvent("scribe", "semantic fallback matched line");
               setMatchedWordCount(scriptWords.length);
             });
