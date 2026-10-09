@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
-import { useTapeRemix } from "../hooks/useTapeRemix";
 import { forgetSelfTapeUrl, getSelfTapeUrl } from "../lib/selfTapeUrl";
 import {
   deleteTape as deleteTapeRecord,
@@ -16,7 +15,6 @@ import {
   listScripts,
 } from "../lib/scriptStore";
 import { displayCharacterName } from "../lib/script";
-import { formatClock, MAX_READER_VOLUME } from "../lib/tapeRemix";
 import { useToast } from "../lib/toast";
 import type { SavedScript, SelfTape } from "../types";
 
@@ -49,14 +47,6 @@ export default function MyAccount() {
   // earlier call resolves — a real risk here since the share sheet can take
   // a moment to animate in, inviting an impatient second tap.
   const downloadingRef = useRef(false);
-  const [reviewVideo, setReviewVideo] = useState<HTMLVideoElement | null>(null);
-  const [exportHost, setExportHost] = useState<HTMLDivElement | null>(null);
-  // A remixed tape finishes rendering long after the Download tap, and iOS
-  // only opens the share sheet from a fresh tap — so when it refuses, the
-  // finished file waits here behind a "Save video" button.
-  const [pendingSave, setPendingSave] = useState<
-    { tapeId: string; blob: Blob; filename: string } | null
-  >(null);
 
   useEffect(() => {
     if (!user) return;
@@ -263,21 +253,7 @@ export default function MyAccount() {
       const blob = await response.blob();
       const extension = extensionForMimeType(blob.type);
       const filename = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
-      // At 100% scene partner volume the saved file is the download, as is;
-      // any other level re-renders the tape with the reader at that level.
-      if (remix.downloadPath === "original") {
-        await shareOrDownloadBlob(blob, filename);
-        return;
-      }
-      const remixed = await remix.renderRemixed(blob);
-      if (!remixed) return; // cancelled
-      const remixedName = `self-tape-${tape.created_at.slice(0, 10)}.${extensionForMimeType(remixed.type)}`;
-      try {
-        await shareOrDownloadBlob(remixed, remixedName);
-      } catch (shareErr) {
-        if ((shareErr as Error).name !== "NotAllowedError") throw shareErr;
-        setPendingSave({ tapeId: tape.id, blob: remixed, filename: remixedName });
-      }
+      await shareOrDownloadBlob(blob, filename);
     } catch (err) {
       console.error("Failed to download self-tape:", err);
       toast("Couldn't download that self-tape. Please try again.");
@@ -292,20 +268,6 @@ export default function MyAccount() {
     ? (scripts.find((script) => script.id === expandedTape.script_id) ?? null)
     : null;
   const expandedRole = expandedTape ? roleForTape(expandedTape, expandedScript) : "";
-  const remix = useTapeRemix(expandedTape?.id ?? null, reviewVideo, exportHost);
-  const exporting = remix.exportProgress !== null;
-  const savePending = pendingSave && pendingSave.tapeId === expandedTape?.id ? pendingSave : null;
-
-  const savePendingRemix = async () => {
-    if (!savePending) return;
-    try {
-      await shareOrDownloadBlob(savePending.blob, savePending.filename);
-      setPendingSave(null);
-    } catch (err) {
-      console.error("Failed to save remixed self-tape:", err);
-      toast("Couldn't save that self-tape. Please try again.");
-    }
-  };
 
   // The modal can be opened directly (e.g. via location.state above) before
   // its tile has ever scrolled into view, so make sure it always has a URL.
@@ -457,7 +419,6 @@ export default function MyAccount() {
           <div
             className="tape-modal"
             onClick={(event) => event.stopPropagation()}
-            onPointerDown={remix.wakeAudio}
           >
             <button
               type="button"
@@ -481,8 +442,6 @@ export default function MyAccount() {
             </div>
             {tapeUrls[expandedTape.id] ? (
               <video
-                ref={setReviewVideo}
-                className={exporting ? "tape-modal-video--hidden" : undefined}
                 src={tapeUrls[expandedTape.id]}
                 controls
                 // A tape that still owes feedback gets its review video
@@ -495,69 +454,16 @@ export default function MyAccount() {
             ) : (
               <div className="tape-modal-loading">Loading video…</div>
             )}
-            {/* The tape being re-rendered plays here (muted) during export;
-                renderRemix appends its own <video>, so no React children. */}
-            <div className="tape-export-preview" ref={setExportHost} />
-            {remix.exportProgress && (
-              <div className="tape-export" role="status">
-                <p>
-                  Preparing your download…{" "}
-                  {remix.exportProgress.total > 0 &&
-                    `${formatClock(remix.exportProgress.current)} / ${formatClock(remix.exportProgress.total)}`}
-                </p>
-                <p className="tape-export-note">
-                  Keep this tab open and on screen until it finishes — it plays
-                  through once in real time.
-                </p>
-                <button type="button" onClick={remix.cancelExport}>
-                  Cancel
-                </button>
-              </div>
-            )}
-            {remix.hasStems !== null && !exporting && (
-              <div className="tape-reader-volume">
-                <label>
-                  <span>Scene partner volume</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max={MAX_READER_VOLUME}
-                    step="0.05"
-                    value={remix.volume}
-                    disabled={!remix.hasStems}
-                    onChange={(event) => {
-                      setPendingSave(null);
-                      remix.changeVolume(Number(event.target.value));
-                    }}
-                    aria-valuetext={`${Math.round(remix.volume * 100)}%`}
-                  />
-                  <output>{Math.round(remix.volume * 100)}%</output>
-                </label>
-                {!remix.hasStems && (
-                  <p className="tape-reader-volume-note">
-                    Available on takes recorded from now on.
-                  </p>
-                )}
-              </div>
-            )}
             <div className="tape-modal-actions">
-              {savePending ? (
-                <button type="button" onClick={() => void savePendingRemix()}>
-                  Save video
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={exporting}
-                  onClick={() => void downloadTape(expandedTape)}
-                >
-                  Download
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => void downloadTape(expandedTape)}
+              >
+                Download
+              </button>
               <button
                 type="button"
                 className="tape-modal-delete"
-                disabled={exporting}
                 onClick={() => void deleteTape(expandedTape)}
               >
                 Delete
