@@ -9,6 +9,7 @@
 import { SELF_TAPES_STORE, withStore } from "./localDb";
 import { supabase } from "./supabase";
 import type { TakeMetricsRow } from "./takeMetrics";
+import { clampReaderVolume, type TapeStems } from "./tapeRemix";
 import type { SelfTape } from "../types";
 
 type TapeRecord = {
@@ -28,7 +29,17 @@ type TapeRecord = {
    * the app navigates to My Account, and only then does FeedbackGate ask for
    * a rating. Missing on rows saved before this field existed. */
   metrics?: TakeMetricsRow;
+  /** Mic-only and reader-only audio recorded alongside the video, so the
+   * reader's level can be changed on review (lib/tapeRemix.ts). Missing on
+   * takes recorded before this existed, or whose stems failed to record.
+   * Kept on the same record as the video, so deleting the tape deletes them. */
+  stems?: TapeStems;
+  /** Reader level last chosen for this take on review (1 = as recorded). */
+  readerVolume?: number;
 };
+
+/** What the review screen needs to rebuild a take's mix. */
+export type TapeMix = { stems: TapeStems | null; readerVolume: number };
 
 export type NewSelfTape = {
   id: string;
@@ -60,11 +71,13 @@ export async function saveTape(
   meta: NewSelfTape,
   blob: Blob,
   metrics?: TakeMetricsRow,
+  stems?: TapeStems | null,
 ): Promise<void> {
   const record: TapeRecord = {
     ...meta,
     blob,
     metrics,
+    ...(stems ? { stems } : {}),
     createdAt: new Date().toISOString(),
     feedbackRequired: true,
     feedbackSubmittedAt: null,
@@ -89,6 +102,28 @@ export async function getTapeBlob(id: string): Promise<Blob | null> {
     (store) => store.get(id),
   );
   return record?.blob ?? null;
+}
+
+export async function getTapeMix(id: string): Promise<TapeMix | null> {
+  const record = await withStore<TapeRecord | undefined>(
+    SELF_TAPES_STORE,
+    "readonly",
+    (store) => store.get(id),
+  );
+  if (!record) return null;
+  return { stems: record.stems ?? null, readerVolume: clampReaderVolume(record.readerVolume) };
+}
+
+/** Remembers the reader level chosen for a take on review. */
+export async function setTapeReaderVolume(id: string, volume: number): Promise<void> {
+  const existing = await withStore<TapeRecord | undefined>(
+    SELF_TAPES_STORE,
+    "readonly",
+    (store) => store.get(id),
+  );
+  if (!existing) return;
+  const updated: TapeRecord = { ...existing, readerVolume: clampReaderVolume(volume) };
+  await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(updated));
 }
 
 export async function deleteTape(id: string): Promise<void> {

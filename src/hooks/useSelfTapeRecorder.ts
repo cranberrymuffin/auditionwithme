@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import { pickSupportedType, stemMimeCandidates, type TapeStems } from "../lib/tapeRemix";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -12,7 +13,68 @@ type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" |
 const MIME_TYPES = ["video/mp4;codecs=avc1,mp4a", "video/mp4"];
 
 function pickMimeType(): string | undefined {
-  return MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type));
+  return pickSupportedType(MIME_TYPES, (type) => MediaRecorder.isTypeSupported(type));
+}
+
+/** One audio-only stem recorder running beside the main one. */
+type StemRecorder = { recorder: MediaRecorder; chunks: Blob[]; startedAt: number | null };
+type StemRecorders = { mic: StemRecorder; reader: StemRecorder; mimeType: string };
+
+export type RecordedTake = { blob: Blob; stems: TapeStems | null };
+
+// A stem that never reports stopping must not hold up saving the take.
+const STEM_STOP_TIMEOUT_MS = 2000;
+
+function createStemRecorder(stream: MediaStream, mimeType: string | undefined): StemRecorder {
+  const stem: StemRecorder = {
+    recorder: new MediaRecorder(stream, mimeType ? { mimeType } : undefined),
+    chunks: [],
+    startedAt: null,
+  };
+  stem.recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) stem.chunks.push(event.data);
+  };
+  stem.recorder.onstart = () => {
+    stem.startedAt = performance.now();
+  };
+  return stem;
+}
+
+/** Stops a stem and resolves with its audio, or null if it never started,
+ * captured nothing, or didn't stop in time. Never rejects. */
+function stopStem(stem: StemRecorder): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), STEM_STOP_TIMEOUT_MS);
+    const finish = () => {
+      clearTimeout(timer);
+      const blob = new Blob(stem.chunks, { type: stem.recorder.mimeType });
+      resolve(stem.startedAt !== null && blob.size > 0 ? blob : null);
+    };
+    try {
+      if (stem.recorder.state === "inactive") {
+        finish();
+        return;
+      }
+      stem.recorder.onstop = finish;
+      stem.recorder.stop();
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
+}
+
+/** Runs `action` on each stem recorder, swallowing failures: a stem going
+ * wrong costs the take its adjustable reader volume, never the take. */
+function eachStem(stems: StemRecorders | null, action: (recorder: MediaRecorder) => void) {
+  if (!stems) return;
+  for (const stem of [stems.mic, stems.reader]) {
+    try {
+      action(stem.recorder);
+    } catch (err) {
+      logAudioEvent("recorder", `stem recorder call failed: ${err}`);
+    }
+  }
 }
 
 // Not in lib.dom's MediaTrackCapabilities/Constraints yet — `zoom` is part of
@@ -65,9 +127,13 @@ export function isIpad(): boolean {
  * there's a single context for the whole rehearsal to keep resumed on
  * mobile, rather than a second one liable to start (or end up) suspended
  * this deep into an async chain, silently recording with no audio.
+ * Alongside that one mixed recording, the mic and the reader are each also
+ * recorded on their own as audio-only stems, so the reader's level in the
+ * finished tape can be changed afterwards on the review screen (see
+ * useTapeRemix.ts) — best-effort, never at the main recording's expense.
  * `pause()`/`resume()` pause and resume capture without releasing the
- * camera. `stop()` resolves with the finished recording as a Blob and
- * releases the camera. Permission failures land in `error` rather than
+ * camera. `stop()` resolves with the finished recording as a Blob (plus its
+ * stems, when they recorded cleanly) and releases the camera. Permission failures land in `error` rather than
  * throwing.
  */
 export function useSelfTapeRecorder() {
@@ -79,6 +145,8 @@ export function useSelfTapeRecorder() {
   const mixNodesRef = useRef<AudioNode[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const stemsRef = useRef<StemRecorders | null>(null);
+  const mainStartedAtRef = useRef<number | null>(null);
 
   const disconnectMix = () => {
     mixNodesRef.current.forEach((node) => node.disconnect());
@@ -90,6 +158,9 @@ export function useSelfTapeRecorder() {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       }
+      eachStem(stemsRef.current, (recorder) => {
+        if (recorder.state !== "inactive") recorder.stop();
+      });
       streamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       disconnectMix();
@@ -150,6 +221,7 @@ export function useSelfTapeRecorder() {
     // speakers. Falls back to mic-only if no tap stream (or shared context)
     // was available.
     let recordingStream = media;
+    let stemStreams: { mic: MediaStream; reader: MediaStream } | null = null;
     const micTrack = media.getAudioTracks()[0];
     if (ttsStream?.getAudioTracks().length && micTrack && sharedContext) {
       logAudioEvent("recorder", `mixing into shared ctx, state=${sharedContext.state}`);
@@ -162,6 +234,20 @@ export function useSelfTapeRecorder() {
       micSource.connect(destination);
       ttsSource.connect(destination);
       mixNodesRef.current = [micSource, ttsSource, destination];
+      // The stems branch off the very same source nodes as the mix, so all
+      // three recordings share one path's latency and line up on replay.
+      try {
+        const micStem = sharedContext.createMediaStreamDestination();
+        const readerStem = sharedContext.createMediaStreamDestination();
+        micStem.channelCount = 1;
+        readerStem.channelCount = 1;
+        micSource.connect(micStem);
+        ttsSource.connect(readerStem);
+        mixNodesRef.current.push(micStem, readerStem);
+        stemStreams = { mic: micStem.stream, reader: readerStem.stream };
+      } catch (err) {
+        logAudioEvent("recorder", `stem taps unavailable: ${err}`);
+      }
       recordingStream = new MediaStream([
         media.getVideoTracks()[0],
         destination.stream.getAudioTracks()[0],
@@ -175,9 +261,39 @@ export function useSelfTapeRecorder() {
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
+    mainStartedAtRef.current = null;
+    recorder.onstart = () => {
+      mainStartedAtRef.current = performance.now();
+    };
     recorderRef.current = recorder;
     recorder.start();
     logAudioEvent("recorder", `MediaRecorder.start() called, mimeType=${mimeType ?? "(default)"}`);
+
+    // Started right after the main recorder, never before it: if the
+    // platform balks at more than one MediaRecorder, it's a stem that fails.
+    stemsRef.current = null;
+    if (stemStreams) {
+      let stems: StemRecorders | null = null;
+      try {
+        const stemMimeType = pickSupportedType(stemMimeCandidates(mimeType ?? ""), (type) =>
+          MediaRecorder.isTypeSupported(type),
+        );
+        stems = {
+          mic: createStemRecorder(stemStreams.mic, stemMimeType),
+          reader: createStemRecorder(stemStreams.reader, stemMimeType),
+          mimeType: stemMimeType ?? "",
+        };
+        stems.mic.recorder.start();
+        stems.reader.recorder.start();
+        stemsRef.current = stems;
+        logAudioEvent("recorder", `stem recorders started, mimeType=${stemMimeType ?? "(default)"}`);
+      } catch (err) {
+        logAudioEvent("recorder", `stem recorders failed, recording without stems: ${err}`);
+        eachStem(stems, (stemRecorder) => {
+          if (stemRecorder.state !== "inactive") stemRecorder.stop();
+        });
+      }
+    }
     setStatus("recording");
   };
 
@@ -186,6 +302,9 @@ export function useSelfTapeRecorder() {
   const pause = () => {
     if (recorderRef.current?.state === "recording") {
       recorderRef.current.pause();
+      eachStem(stemsRef.current, (recorder) => {
+        if (recorder.state === "recording") recorder.pause();
+      });
       setStatus("paused");
     }
   };
@@ -193,19 +312,41 @@ export function useSelfTapeRecorder() {
   const resume = () => {
     if (recorderRef.current?.state === "paused") {
       recorderRef.current.resume();
+      eachStem(stemsRef.current, (recorder) => {
+        if (recorder.state === "paused") recorder.resume();
+      });
       setStatus("recording");
     }
   };
 
-  const stop = async (): Promise<Blob | null> => {
+  const stop = async (): Promise<RecordedTake | null> => {
     const recorder = recorderRef.current;
+    const stemRecorders = stemsRef.current;
+    stemsRef.current = null;
     let blob: Blob | null = null;
+    // Stems stop alongside the main recorder, not after it, so all three end
+    // at the same moment.
+    const stemBlobs = stemRecorders
+      ? Promise.all([stopStem(stemRecorders.mic), stopStem(stemRecorders.reader)])
+      : Promise.resolve([null, null]);
     if (recorder && recorder.state !== "inactive") {
       blob = await new Promise<Blob>((resolve) => {
         recorder.onstop = () =>
           resolve(new Blob(chunksRef.current, { type: recorder.mimeType }));
         recorder.stop();
       });
+    }
+    let stems: TapeStems | null = null;
+    const [mic, reader] = await stemBlobs;
+    const mainStartedAt = mainStartedAtRef.current;
+    if (stemRecorders && mic && reader && mainStartedAt !== null) {
+      stems = {
+        mic,
+        reader,
+        micOffsetMs: (stemRecorders.mic.startedAt ?? mainStartedAt) - mainStartedAt,
+        readerOffsetMs: (stemRecorders.reader.startedAt ?? mainStartedAt) - mainStartedAt,
+        mimeType: mic.type || stemRecorders.mimeType,
+      };
     }
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -217,7 +358,7 @@ export function useSelfTapeRecorder() {
     chunksRef.current = [];
     setStream(null);
     setStatus("idle");
-    return blob;
+    return blob ? { blob, stems } : null;
   };
 
   return { status, stream, error, requestCamera, startRecording, pause, resume, stop };

@@ -34,7 +34,8 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
     try {
       // Read before stop(), which ends the camera track.
       const video = stream?.getVideoTracks()[0]?.getSettings();
-      const blob = await stop();
+      const take = await stop();
+      const blob = take?.blob;
       if (!hadTake) return null;
       if (!blob || blob.size === 0) {
         toast("That take didn't record. Please try again.");
@@ -49,7 +50,12 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
           videoWidth: video?.width ?? null,
           videoHeight: video?.height ?? null,
         });
-        await saveTape({ id, userId: user.id, scriptId, role, mimeType: blob.type }, blob, metricsRow);
+        await saveTape(
+          { id, userId: user.id, scriptId, role, mimeType: blob.type },
+          blob,
+          metricsRow,
+          take.stems,
+        );
       } catch (saveError) {
         console.error("Failed to save self-tape locally:", saveError);
         toast("Your self-tape couldn't be saved. Please try again.");
