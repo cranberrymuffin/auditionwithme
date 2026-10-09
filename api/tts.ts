@@ -35,12 +35,12 @@ export const BIG_DELIVERY_TAGS = new Set([
   "panicked",
 ]);
 
-// v3 stability only accepts the discrete values 1 (Robust), 0.5 (Natural),
-// and 0 (Creative). Natural still follows audio tags — per ElevenLabs' v3
-// guidance, emotion should come from scene-aware tags, not from loosening
-// stability — while Creative exaggerated every tagged line into something
-// beta testers called "over the top" for an audition reader. Creative is
-// kept only for the script's own big-delivery parentheticals.
+// Ordinary lines read at 0.3: looser than v3's Natural preset (0.5), which
+// sounded flat and synthetic, but well short of Creative (0), which
+// exaggerated every tagged line into something beta testers called "over
+// the top" for an audition reader. Emotion still comes mainly from the
+// director's scene-aware audio tags. Creative is kept only for the script's
+// own big-delivery parentheticals.
 export function v3Stability(bigDelivery: boolean): number {
   return bigDelivery ? 0 : 0.3;
 }
