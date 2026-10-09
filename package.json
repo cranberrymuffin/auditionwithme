@@ -9,6 +9,7 @@
     "test:cutoff": "tsx benchmarks/cutoff-guard.ts",
     "test:match": "tsx benchmarks/line-match.ts",
     "test:metrics": "tsx benchmarks/take-metrics.ts",
+    "test:parse-cache": "tsx benchmarks/parse-cache.ts",
     "test:pregen": "tsx benchmarks/pregen.ts",
     "delete-user": "node scripts/delete-user.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",

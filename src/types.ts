@@ -26,6 +26,9 @@ export type SavedScript = {
   /** Characters the user has rehearsed as (read the human part for), so My
    * Auditions can offer "Practice as X" without re-casting every time. */
   roles_read: string[];
+  /** Bilingual edition parsed but its language not yet picked — replaying it
+   * asks again instead of rehearsing the translation unasked. */
+  needs_language_choice: boolean;
   created_at: string;
 };
 

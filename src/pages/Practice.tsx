@@ -15,6 +15,7 @@ import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
 import { saveScript, updateScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
+import { createParseCache, type CachedParseFields } from "../lib/parseCache";
 import { DIRECTOR_VERSION } from "../lib/director";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
@@ -38,6 +39,8 @@ type ReplayScript = {
   directorVersion?: number | null;
   /** Characters previously rehearsed as, from the saved script row. */
   rolesRead?: string[] | null;
+  /** Bilingual edition saved before its language was picked: ask again. */
+  needsLanguageChoice?: boolean;
 };
 
 type ParseData = {
@@ -71,6 +74,8 @@ export default function Practice() {
   const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
   const replayScript: ReplayScript | null =
     location.state?.replayScript ?? null;
+  // Home.tsx already hashed this upload for its saved-script lookup.
+  const uploadContentHash: string | null = location.state?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
   // with a previously-confirmed cast, skipping RolePicker/VoiceCasting.
   // Undefined (not just falsy — "" is a valid role, "listen to the full
@@ -125,6 +130,9 @@ export default function Practice() {
   const [pendingParse, setPendingParse] = useState<ParseData | null>(null);
   const toast = useToast();
   const ranAttempt = useRef(-1);
+  // Grant taken here for an original-language read on a re-upload that was
+  // served from its saved parse (Home.tsx takes none on a hash hit).
+  const lateGrantRef = useRef<string | null>(null);
 
   const applyParseResult = (data: ParseData) => {
     const parsedSteps: Step[] = data.steps ?? [];
@@ -138,38 +146,53 @@ export default function Practice() {
     if (parsedCharacters.length === 0) setSelectedRole("");
   };
 
-  // Auto-saves every fresh AI parse to the account so it shows up on My
-  // Account. Never called on the replay path (replayScript) — that data is
-  // already saved, and re-saving it would duplicate the entry.
-  const persistScript = async (data: ParseData) => {
+  // Hashed once per upload, so re-uploading the same PDF later (Home.tsx's
+  // handleFile) finds the saved row instead of paying for another parse.
+  const contentHashRef = useRef<Promise<string | null> | null>(null);
+  const getContentHash = () =>
+    (contentHashRef.current ??= uploadContentHash
+      ? Promise.resolve(uploadContentHash)
+      : file
+        ? hashFile(file).catch(() => null)
+        : Promise.resolve(null));
+
+  // Saves the parse to the account the moment it arrives — before Continue
+  // or the language pick — so a reload or back-out can't lose it. The first
+  // write creates the row; Continue, the language pick and an original-
+  // language re-parse all update that same row (a replay's row from the
+  // start). Unconfirmed parses show on My Account like any other script.
+  const parseCacheRef = useRef<
+    ((fields: CachedParseFields) => Promise<void>) | null
+  >(null);
+  const cacheParse = (data: ParseData, needsLanguageChoice: boolean) => {
     if (!user) return;
-    const title = (file?.name ?? "Untitled script").replace(/\.pdf$/i, "");
-    const id = crypto.randomUUID();
-
-    // Fingerprints this upload so re-uploading the same PDF later (Home.tsx's
-    // handleFile) can be recognized and served from this saved row instead
-    // of triggering another parse-script call.
-    const contentHash = file ? await hashFile(file) : null;
-
-    try {
-      await saveScript(user.id, {
-        id,
-        title,
-        steps: data.steps ?? [],
-        characters: data.characters ?? [],
-        languageCode: data.languageCode ?? "en",
-        languageName: data.languageName ?? "English",
-        contentHash,
-      });
-      setScriptId(id);
-    } catch (err) {
-      console.error("Failed to save script to account:", err);
-    }
+    const userId = user.id;
+    parseCacheRef.current ??= createParseCache({
+      existingId: replayScript?.id,
+      newId: () => crypto.randomUUID(),
+      create: async (id, fields) =>
+        saveScript(userId, {
+          id,
+          title: (file?.name ?? "Untitled script").replace(/\.pdf$/i, ""),
+          ...fields,
+          contentHash: await getContentHash(),
+        }),
+      update: (id, fields) => updateScript(id, fields),
+      onCreated: setScriptId,
+      onError: (err) => console.error("Failed to save script to account:", err),
+    });
+    void parseCacheRef.current({
+      steps: data.steps ?? [],
+      characters: data.characters ?? [],
+      languageCode: data.languageCode ?? "en",
+      languageName: data.languageName ?? "English",
+      needsLanguageChoice,
+    });
   };
 
   const finalizeParse = (data: ParseData) => {
     applyParseResult(data);
-    void persistScript(data);
+    cacheParse(data, false);
   };
 
   const voiceableSpeakers = characters.filter((s) => s !== selectedRole);
@@ -179,13 +202,25 @@ export default function Practice() {
   // effects below can skip their model calls.
   useEffect(() => {
     if (!replayScript) return;
+    if (replayScript.id) setScriptId(replayScript.id);
+    // Saved before its language was picked: ask again rather than rehearse
+    // the translation the user never chose.
+    if (replayScript.needsLanguageChoice) {
+      setLanguageChoice({
+        steps: replayScript.steps,
+        characters: replayScript.characters,
+        languageCode: replayScript.languageCode,
+        languageName: replayScript.languageName,
+        unreadableOriginalLanguage: true,
+      });
+      return;
+    }
     applyParseResult({
       steps: replayScript.steps,
       characters: replayScript.characters,
       languageCode: replayScript.languageCode,
       languageName: replayScript.languageName,
     });
-    if (replayScript.id) setScriptId(replayScript.id);
     if (replayScript.characterVoices && Object.keys(replayScript.characterVoices).length) {
       setCharacterVoices(replayScript.characterVoices);
     }
@@ -300,10 +335,12 @@ export default function Practice() {
 
         if (data.unreadableOriginalLanguage && (data.steps?.length ?? 0) > 0) {
           // Bilingual edition — let the user pick a language before rehearsing.
+          cacheParse(data, true);
           setLanguageChoice(data);
         } else {
           // Hold on the parsing screen (PDF preview visible) until the user
           // clicks Continue — never auto-advance into casting.
+          cacheParse(data, false);
           setPendingParse(data);
         }
       } catch (err) {
@@ -512,22 +549,39 @@ export default function Practice() {
   };
 
   const rehearseOriginalLanguage = async () => {
-    if (!file || !rehearsalGrant) return;
+    if (!file || !languageChoice) return;
+    const translation = languageChoice;
     setLanguageChoice(null);
     setLoading(true);
     setProcessingPhase("analyzing");
     try {
       // Reuses the same grant as the initial parse — this is a re-parse of
-      // the same upload, not a new billable session.
+      // the same upload, not a new billable session. A re-upload served from
+      // its saved parse never took one, so it takes one now.
+      let grant = rehearsalGrant ?? lateGrantRef.current;
+      if (!grant) {
+        const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
+        if (res.status === 402) {
+          toast("You're out of free sessions — subscribe to keep rehearsing.");
+          navigate("/pricing");
+          return;
+        }
+        const body = (await res.json().catch(() => ({}))) as { grant?: string };
+        if (!res.ok || !body.grant) {
+          throw new Error("Couldn't start a new rehearsal. Please try again.");
+        }
+        grant = lateGrantRef.current = body.grant;
+      }
       const result = await parseScannedPdf(
         file,
-        rehearsalGrant,
+        grant,
         undefined,
         undefined,
         {
           preferOriginalLanguage: true,
         },
       );
+      cacheParse(result, false);
       // Same continue-gate as the initial parse — this path takes minutes, so
       // the user may have stepped away; don't jump into casting unprompted.
       setPendingParse(result);
@@ -541,7 +595,10 @@ export default function Practice() {
         navigate("/", { replace: true });
         return;
       }
-      setError(err instanceof Error ? err.message : "An error occurred");
+      // Back to the choice with the translation still in hand — the error
+      // screen's "Try again" would re-run the whole first parse instead.
+      toast(err instanceof Error ? err.message : "An error occurred");
+      setLanguageChoice(translation);
     } finally {
       setLoading(false);
     }
@@ -635,6 +692,7 @@ export default function Practice() {
             translation is readable as text. Rehearse the translation now, or
             have the original language read from the printed pages — that takes
             a few minutes.
+            {!file && " Re-upload the PDF to have the original language read."}
           </p>
           <div className="stage-error-actions">
             <button
@@ -647,13 +705,15 @@ export default function Practice() {
             >
               Rehearse in {languageChoice.languageName ?? "the translation"}
             </button>
-            <button
-              type="button"
-              className="stage-error-secondary"
-              onClick={rehearseOriginalLanguage}
-            >
-              Read the original language (takes a few minutes)
-            </button>
+            {file && (
+              <button
+                type="button"
+                className="stage-error-secondary"
+                onClick={rehearseOriginalLanguage}
+              >
+                Read the original language (takes a few minutes)
+              </button>
+            )}
           </div>
         </div>
       </StageShell>

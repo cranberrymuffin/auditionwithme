@@ -126,6 +126,7 @@ export default function MyAccount() {
     deliveryTags: script.delivery_tags,
     directorVersion: script.director_version,
     rolesRead: script.roles_read,
+    needsLanguageChoice: script.needs_language_choice,
   });
 
   // Jumps straight into Rehearsal as a role already read before, reusing its

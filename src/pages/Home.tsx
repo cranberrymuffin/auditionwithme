@@ -91,6 +91,9 @@ export default function Home() {
       if (existing) {
         navigate("/practice", {
           state: {
+            // Saved before its language was picked: the PDF lets the original
+            // language still be read from the printed pages.
+            ...(existing.needs_language_choice ? { file } : {}),
             replayScript: {
               id: existing.id,
               title: existing.title,
@@ -102,6 +105,7 @@ export default function Home() {
               deliveryTags: existing.delivery_tags,
               directorVersion: existing.director_version,
               rolesRead: existing.roles_read,
+              needsLanguageChoice: existing.needs_language_choice,
             },
           },
         });
@@ -128,7 +132,9 @@ export default function Home() {
         return;
       }
 
-      navigate("/practice", { state: { file, rehearsalGrant: grant } });
+      navigate("/practice", {
+        state: { file, rehearsalGrant: grant, contentHash },
+      });
     },
     [user, navigate, toast, requestAuthForUpload],
   );

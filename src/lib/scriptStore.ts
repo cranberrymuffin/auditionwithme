@@ -22,6 +22,10 @@ type ScriptRecord = {
   /** Characters the user has rehearsed as; missing on rows saved before this
    * field existed, so readers fall back to an empty list. */
   rolesRead?: string[];
+  /** Bilingual edition saved before the user picked which language to
+   * rehearse (steps hold the translation). Missing on older rows and on
+   * every normal script, which readers treat as "already chosen". */
+  needsLanguageChoice?: boolean;
   createdAt: string;
 };
 
@@ -33,6 +37,7 @@ export type NewScript = {
   characters: string[];
   steps: Step[];
   contentHash: string | null;
+  needsLanguageChoice?: boolean;
 };
 
 function toSavedScript(record: ScriptRecord): SavedScript {
@@ -48,6 +53,7 @@ function toSavedScript(record: ScriptRecord): SavedScript {
     delivery_tags: record.deliveryTags,
     director_version: record.directorVersion ?? null,
     roles_read: record.rolesRead ?? [],
+    needs_language_choice: record.needsLanguageChoice ?? false,
     created_at: record.createdAt,
   };
 }
@@ -87,7 +93,20 @@ export async function findScriptByContentHash(
 
 export async function updateScript(
   id: string,
-  patch: Partial<Pick<ScriptRecord, "characterVoices" | "deliveryTags" | "directorVersion" | "rolesRead">>,
+  patch: Partial<
+    Pick<
+      ScriptRecord,
+      | "characterVoices"
+      | "deliveryTags"
+      | "directorVersion"
+      | "rolesRead"
+      | "steps"
+      | "characters"
+      | "languageCode"
+      | "languageName"
+      | "needsLanguageChoice"
+    >
+  >,
 ): Promise<void> {
   const existing = await withStore<ScriptRecord | undefined>(
     SCRIPTS_STORE,
