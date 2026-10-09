@@ -2,6 +2,7 @@
 // table. Nothing here leaves the device: parsing still calls the AI endpoint
 // (api/parse-script.ts), but the result is only ever persisted in IndexedDB.
 import { SCRIPTS_STORE, withStore } from "./localDb";
+import { deleteReaderAudioForScript } from "./readerAudioStore";
 import type { SavedScript, Step } from "../types";
 
 type ScriptRecord = {
@@ -101,4 +102,12 @@ export async function updateScript(
 
 export async function deleteScript(id: string): Promise<void> {
   await withStore(SCRIPTS_STORE, "readwrite", (store) => store.delete(id));
+  // Its pre-generated reader audio goes with it, in a separate transaction:
+  // the script is already gone either way, so a failure here only leaves
+  // orphaned audio for the storage cap to sweep up later.
+  try {
+    await deleteReaderAudioForScript(id);
+  } catch (err) {
+    console.warn("Couldn't delete the script's stored reader audio:", err);
+  }
 }

@@ -11,7 +11,7 @@ import {
   type TtsLine,
 } from "./useTtsPlayer";
 import { buildReaderLine, readerLineIndices } from "../lib/readerLines";
-import { loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
+import { enforceReaderAudioCap, loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
 import {
   canStartTake,
   nextLineToGenerate,
@@ -275,6 +275,13 @@ export function useReaderAudioPregen({
         await Promise.race([wake, ...running.values()]);
       }
       publish(true);
+      // Generation just added to the store; trim it back under its caps,
+      // never touching the script being rehearsed except over its own cap.
+      if (!cancelled && scriptId) {
+        void enforceReaderAudioCap(scriptId).catch((err) =>
+          console.warn("Reader audio eviction failed:", err),
+        );
+      }
     };
 
     void run();

@@ -22,6 +22,7 @@ import {
   targetWorkers,
 } from "../src/lib/pregenSchedule";
 import { shouldHoldPregen as serverShouldHold } from "../api/tts";
+import { planReaderAudioEviction } from "../src/lib/readerAudioStore";
 import type { Step } from "../src/types";
 
 let passed = 0;
@@ -187,6 +188,48 @@ check("server holds pregen near the limit, but ignores stale readings", () => {
   assert.equal(serverShouldHold({ current: 3, max: 3, updatedAt: now - 60_000 }, now), false);
   // Never seen a reading (cold instance): don't hold.
   assert.equal(serverShouldHold({ current: 0, max: 3, updatedAt: 0 }, now), false);
+});
+
+const rec = (cacheKey: string, scriptId: string, size: number, createdAt: string) => ({
+  cacheKey,
+  scriptId,
+  size,
+  createdAt,
+});
+const caps = { perScript: 100, total: 250 };
+
+check("nothing is evicted under both caps", () => {
+  const records = [rec("a1", "A", 50, "2026-01-01"), rec("b1", "B", 90, "2026-01-02")];
+  assert.deepEqual(planReaderAudioEviction(records, "A", caps), []);
+});
+
+check("a script over its own cap loses its oldest lines first", () => {
+  const records = [
+    rec("a3", "A", 40, "2026-01-03"),
+    rec("a1", "A", 40, "2026-01-01"),
+    rec("a2", "A", 40, "2026-01-02"),
+  ];
+  assert.deepEqual(planReaderAudioEviction(records, "A", caps), ["a1"]);
+});
+
+check("over the total, least recently generated scripts go whole, never the kept one", () => {
+  const records = [
+    rec("a1", "A", 90, "2026-01-01"), // oldest, but being rehearsed
+    rec("b1", "B", 90, "2026-01-02"),
+    rec("b2", "B", 5, "2026-01-05"), // B's newest line is newer than C's
+    rec("c1", "C", 90, "2026-01-03"),
+  ];
+  // total 275 > 250: C (newest 01-03) goes before B (newest 01-05); A is kept.
+  assert.deepEqual(planReaderAudioEviction(records, "A", caps), ["c1"]);
+});
+
+check("eviction stops once under the total", () => {
+  const records = [
+    rec("b1", "B", 100, "2026-01-01"),
+    rec("c1", "C", 100, "2026-01-02"),
+    rec("d1", "D", 100, "2026-01-03"),
+  ];
+  assert.deepEqual(planReaderAudioEviction(records, null, caps), ["b1"]);
 });
 
 console.log(`\n${passed} checks passed`);
