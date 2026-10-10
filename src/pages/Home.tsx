@@ -8,6 +8,7 @@ import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { findScriptByContentHash } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
+import { stashUpload } from "../lib/pendingUpload";
 import { IS_BETA_TESTING } from "../lib/beta";
 
 // Scanned PDFs are rendered to page images client-side (never uploaded whole),
@@ -93,7 +94,9 @@ export default function Home() {
           state: {
             // Saved before its language was picked: the PDF lets the original
             // language still be read from the printed pages.
-            ...(existing.needs_language_choice ? { file } : {}),
+            ...(existing.needs_language_choice
+              ? { uploadId: await stashUpload(file) }
+              : {}),
             replayScript: {
               id: existing.id,
               title: existing.title,
@@ -133,8 +136,9 @@ export default function Home() {
         return;
       }
 
+      const uploadId = await stashUpload(file);
       navigate("/practice", {
-        state: { file, rehearsalGrant: grant, contentHash },
+        state: { uploadId, rehearsalGrant: grant, contentHash },
       });
     },
     [user, navigate, toast, requestAuthForUpload],

@@ -28,7 +28,7 @@ const RECORDING_SETTLE_MS = 500;
 // paths that skip VoiceCasting, which otherwise does this wait itself.
 const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -36,6 +36,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   characterVolumes: Record<string, number>;
   deliveryTags: (string | null)[];
   onBack: () => void;
+  /** Whether a take is recording or saving, for guards outside (browser
+   * Back) that confirmExit can't reach. */
+  onRecordingActiveChange?: (active: boolean) => void;
   languageCode: string;
   fileName: string;
   scriptId: string | null;
@@ -405,6 +408,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isRecordingActive]);
+
+  const onRecordingActiveChangeRef = useRef(onRecordingActiveChange);
+  onRecordingActiveChangeRef.current = onRecordingActiveChange;
+  useEffect(() => {
+    onRecordingActiveChangeRef.current?.(isRecordingActive);
+    return () => onRecordingActiveChangeRef.current?.(false);
   }, [isRecordingActive]);
 
   const confirmExit = useCallback(() => {

@@ -20,6 +20,7 @@ import { DIRECTOR_VERSION } from "../lib/director";
 import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
+import { loadUpload, peekUpload } from "../lib/pendingUpload";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
 // Account — re-launches practice from a script that's already been parsed,
@@ -60,7 +61,41 @@ const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
   ? "The local script service isn't running. Start it with `vercel dev --listen 3000`."
   : "We couldn't reach the script service. Check your connection and try again.";
 
+// Each wizard step has its own URL, so Back/Forward, reloads and the
+// address bar all agree on where the actor is (MDN, History API).
+const STEP_PATHS = ["/practice", "/practice/role", "/practice/voices", "/practice/rehearse"];
+const stepFromPath = (pathname: string) => {
+  const index = STEP_PATHS.indexOf(pathname.replace(/\/+$/, ""));
+  return index === -1 ? 0 : index;
+};
+
+/** Finds the uploaded PDF (by the id Home put in history state) before the
+ * flow mounts: this tab's copy at once, or IndexedDB's after a reload. */
 export default function Practice() {
+  const location = useLocation();
+  const [uploadId] = useState<string | null>(() => location.state?.uploadId ?? null);
+  const [upload, setUpload] = useState<{ file: File | null } | null>(() =>
+    !uploadId ? { file: null } : (() => {
+      const file = peekUpload(uploadId);
+      return file ? { file } : null;
+    })(),
+  );
+  useEffect(() => {
+    if (upload || !uploadId) return;
+    let active = true;
+    void loadUpload(uploadId).then((file) => {
+      if (active) setUpload({ file });
+    });
+    return () => {
+      active = false;
+    };
+  }, [upload, uploadId]);
+
+  if (!upload) return <div className="cinematic-page" aria-busy="true" />;
+  return <PracticeFlow file={upload.file} />;
+}
+
+function PracticeFlow({ file }: { file: File | null }) {
   useSeo({
     title: "Rehearsal",
     description: "Rehearse your script with every other character read aloud.",
@@ -74,7 +109,6 @@ export default function Practice() {
   // router hands back a fresh copy of this state on every Back — reading it
   // live would make the file and replayScript look new and re-run setup.
   const [entryState] = useState(() => location.state);
-  const file: File | null = entryState?.file ?? null;
   // Issued once by Home.tsx's start-rehearsal call; reused read-only by every
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
@@ -664,35 +698,55 @@ export default function Practice() {
           ? 2
           : 3;
 
-  // Each step gets its own history entry, so the browser's Back (and a
-  // phone's back swipe) steps back through the wizard instead of leaving
-  // /practice. The first step reached here is the base: Back from it leaves
-  // the page as before.
-  const historyStep: number | undefined = location.state?.practiceStep;
+  // Each step gets its own history entry and URL, so the browser's Back
+  // (and a phone's back swipe) steps back through the wizard instead of
+  // leaving /practice. The first step reached here is the base: Back from it
+  // leaves the page as before. A reload restarts the flow, then lands back
+  // on the first step's URL.
+  const historyStep = stepFromPath(location.pathname);
   const baseStepRef = useRef<number | null>(null);
   const wizardStepRef = useRef(wizardStep);
   wizardStepRef.current = wizardStep;
   const locationStateRef = useRef(location.state);
   locationStateRef.current = location.state;
+  // A take in progress, reported by Rehearsal. Leaving through history
+  // can't be cancelled (beforeunload doesn't fire for it), so it's
+  // confirmed by hand below.
+  const recordingActiveRef = useRef(false);
+  // Set when the leave was already confirmed (Rehearsal's own Back button).
+  const leaveConfirmedRef = useRef(false);
 
   useEffect(() => {
     if (wizardStep === 0) return;
+    const path = STEP_PATHS[wizardStep];
     const state = locationStateRef.current;
-    const withStep = { ...state, practiceStep: wizardStep };
     if (baseStepRef.current === null) {
       baseStepRef.current = wizardStep;
-      navigate(location.pathname, { replace: true, state: withStep });
+      navigate(path, { replace: true, state });
       return;
     }
-    const recorded = state?.practiceStep ?? baseStepRef.current;
-    if (wizardStep > recorded) navigate(location.pathname, { state: withStep });
-    else if (wizardStep < recorded) navigate(location.pathname, { replace: true, state: withStep });
+    const recorded = Math.max(stepFromPath(window.location.pathname), baseStepRef.current);
+    if (wizardStep > recorded) navigate(path, { state });
+    else if (wizardStep < recorded) navigate(path, { replace: true, state });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on step changes
   }, [wizardStep]);
 
   // History moved back to an earlier step: show it.
   useEffect(() => {
-    if (historyStep === undefined || historyStep >= wizardStepRef.current) return;
+    const current = wizardStepRef.current;
+    if (baseStepRef.current === null || historyStep === 0 || historyStep >= current) return;
+    const confirmed = leaveConfirmedRef.current;
+    leaveConfirmedRef.current = false;
+    if (
+      current === 3 &&
+      recordingActiveRef.current &&
+      !confirmed &&
+      !window.confirm("You have unsaved changes. Are you sure you want to leave?")
+    ) {
+      // Stay on the take: put its entry back.
+      navigate(STEP_PATHS[3], { state: locationStateRef.current });
+      return;
+    }
     if (historyStep <= 1) {
       setPreparing(false);
       setSelectedRole(null);
@@ -700,15 +754,17 @@ export default function Practice() {
     } else {
       setVoicesConfirmed(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on history moves
   }, [historyStep]);
 
   /** In-app Back: through history when there's a step entry to return to
    * (so browser Back/Forward stay in step), else straight to `fallback`. */
   const stepBack = (fallback: () => void) => {
     const base = baseStepRef.current;
-    const recorded = location.state?.practiceStep;
-    if (base !== null && recorded !== undefined && recorded > base) navigate(-1);
-    else fallback();
+    if (base !== null && historyStep > base) {
+      leaveConfirmedRef.current = true;
+      navigate(-1);
+    } else fallback();
   };
 
   if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
@@ -882,6 +938,9 @@ export default function Practice() {
       scriptId={scriptId}
       pregen={pregen}
       awaitPregen={!preparedOnCasting}
+      onRecordingActiveChange={(active) => {
+        recordingActiveRef.current = active;
+      }}
     />
   );
 }

@@ -1,13 +1,15 @@
 // Shared IndexedDB plumbing for the local stores — see scriptStore.ts,
-// selfTapeStore.ts, and readerAudioStore.ts, the three stores this database
-// holds. Everything lives on-device now; nothing here ever touches the network.
+// selfTapeStore.ts, readerAudioStore.ts, and pendingUpload.ts, the four
+// stores this database holds. Everything lives on-device now; nothing here ever touches the network.
 const DB_NAME = "auditionwithme-local";
 // v2 adds the reader-audio store (pre-generated scene-partner lines).
-const DB_VERSION = 2;
+// v3 adds the uploads store (the PDF on its way from Home to /practice).
+const DB_VERSION = 3;
 
 export const SCRIPTS_STORE = "scripts";
 export const SELF_TAPES_STORE = "self-tapes";
 export const READER_AUDIO_STORE = "reader-audio";
+export const UPLOADS_STORE = "uploads";
 
 // How long an upgrade may sit blocked behind another tab still holding the
 // old version open before callers give up on the database for now (they fall
@@ -34,6 +36,9 @@ export function openDb(): Promise<IDBDatabase> {
           const store = db.createObjectStore(READER_AUDIO_STORE, { keyPath: "cacheKey" });
           // Lets a script's audio be found (and evicted) without a full scan.
           store.createIndex("scriptId", "scriptId", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(UPLOADS_STORE)) {
+          db.createObjectStore(UPLOADS_STORE, { keyPath: "id" });
         }
       };
       // Another tab still has the old version open and isn't letting go.

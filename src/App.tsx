@@ -23,7 +23,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route
-              path="/practice"
+              path="/practice/*"
               element={
                 <RequireAuth>
                   <Practice />
