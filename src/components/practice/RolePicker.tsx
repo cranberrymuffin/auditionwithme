@@ -28,8 +28,8 @@ export default function RolePicker({
     <main className="role-page">
       <header className="setup-header">
         <Link to="/" aria-label="Audition With Me home"><Wordmark /></Link>
-        <div className="setup-progress" aria-label="Step 2 of 4: Choose role">
-          <span>Step 2 of 4</span>
+        <div className="setup-progress">
+          <span>Step 2 of 4<span className="sr-only">: Choose role</span></span>
           <div aria-hidden="true"><i /><i className="is-active" /><i /><i /></div>
         </div>
         <button onClick={() => navigate("/")} className="setup-header-action">Replace script</button>

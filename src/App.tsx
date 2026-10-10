@@ -13,11 +13,14 @@ import RequireAuth from "./components/RequireAuth";
 import ToastProvider from "./components/ToastProvider";
 import FeedbackGate from "./components/FeedbackGate";
 import { AuthProvider } from "./contexts/AuthContext";
+import NavigationFocus, { SkipLink } from "./components/NavigationFocus";
 import { IS_BETA_TESTING } from "./lib/beta";
 
 function App() {
   return (
     <BrowserRouter>
+      <SkipLink />
+      <NavigationFocus />
       <ToastProvider>
         <AuthProvider>
           <Routes>

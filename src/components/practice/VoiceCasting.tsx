@@ -160,8 +160,8 @@ export default function VoiceCasting({
     <main className="voice-setup-page">
       <header className="setup-header">
         <Link to="/" aria-label="Audition With Me home"><Wordmark /></Link>
-        <div className="setup-progress" aria-label="Step 3 of 4: Voice setup">
-          <span>Step 3 of 4</span>
+        <div className="setup-progress">
+          <span>Step 3 of 4<span className="sr-only">: Voice setup</span></span>
           <div aria-hidden="true"><i /><i /><i className="is-active" /><i /></div>
         </div>
         <button onClick={() => navigate("/")} className="setup-header-action">Replace script</button>

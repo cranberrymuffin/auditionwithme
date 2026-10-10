@@ -95,13 +95,9 @@ export default function Practice() {
   return <PracticeFlow file={upload.file} />;
 }
 
+const STEP_TITLES = ["Preparing your script", "Choose your role", "Choose your scene partner", "Rehearsal"];
+
 function PracticeFlow({ file }: { file: File | null }) {
-  useSeo({
-    title: "Rehearsal",
-    description: "Rehearse your script with every other character read aloud.",
-    path: "/practice",
-    noindex: true,
-  });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -697,6 +693,14 @@ function PracticeFlow({ file }: { file: File | null }) {
         : !voicesConfirmed && voiceableSpeakers.length > 0
           ? 2
           : 3;
+
+  // The tab title names the step, like a page of its own would.
+  useSeo({
+    title: STEP_TITLES[wizardStep],
+    description: "Rehearse your script with every other character read aloud.",
+    path: "/practice",
+    noindex: true,
+  });
 
   // Each step gets its own history entry and URL, so the browser's Back
   // (and a phone's back swipe) steps back through the wizard instead of

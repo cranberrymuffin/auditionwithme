@@ -442,6 +442,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
 
   return (
     <main className="rehearsal-page">
+      <h1 className="sr-only">Rehearsal: {fileName}</h1>
       <header className="rehearsal-header">
         <div className="rehearsal-context">
           <button

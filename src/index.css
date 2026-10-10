@@ -165,6 +165,28 @@ body {
   color: var(--ink);
 }
 
+/* Headings and <main> are focused by script on navigation (see
+   NavigationFocus.tsx) only so screen readers announce the new page; they
+   aren't controls, so no focus ring. */
+[tabindex="-1"]:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 1000;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #f8f1e6;
+  color: #131824;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 16px;
+}
+
 a:focus-visible,
 button:focus-visible,
 select:focus-visible,

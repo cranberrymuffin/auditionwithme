@@ -32,6 +32,8 @@ export default function SiteNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const isSubscriber = !!user && entitlement?.subscription_status === "active";
   const subscriptionLabel = isSubscriber ? "Manage subscription" : "Pricing";
@@ -48,6 +50,23 @@ export default function SiteNav() {
     setMenuOpen(false);
     setAccountMenuOpen(false);
   }, [location.pathname, location.hash]);
+
+  // Escape closes whichever is open and hands focus back to its button.
+  useEffect(() => {
+    if (!accountMenuOpen && !menuOpen) return;
+    function handleKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (accountMenuOpen) {
+        setAccountMenuOpen(false);
+        accountTriggerRef.current?.focus();
+      } else {
+        setMenuOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [accountMenuOpen, menuOpen]);
 
   // Close the account dropdown on outside click.
   useEffect(() => {
@@ -101,14 +120,24 @@ export default function SiteNav() {
       (location.pathname === "/pricing" || location.pathname === "/billing"));
 
   const accountDropdown = (
-    <div className="site-nav-account" ref={accountMenuRef}>
+    <div
+      className="site-nav-account"
+      ref={accountMenuRef}
+      // Tabbing out of the open dropdown closes it.
+      onBlur={(event) => {
+        if (!accountMenuRef.current?.contains(event.relatedTarget as Node | null)) {
+          setAccountMenuOpen(false);
+        }
+      }}
+    >
       <button
+        ref={accountTriggerRef}
         type="button"
         className={`eyebrow site-nav-link site-nav-account-trigger ${
           isAccountAreaActive ? "is-active" : ""
         }`}
-        aria-haspopup="menu"
         aria-expanded={accountMenuOpen}
+        aria-controls="site-nav-account-menu"
         onClick={() => setAccountMenuOpen((open) => !open)}
       >
         My account
@@ -128,11 +157,10 @@ export default function SiteNav() {
         </svg>
       </button>
       {accountMenuOpen && (
-        <div className="site-nav-account-menu" role="menu">
+        <div className="site-nav-account-menu" id="site-nav-account-menu">
           {showSubscriptionLink && (
             <NavLink
               to={subscriptionPath}
-              role="menuitem"
               className={({ isActive }) =>
                 `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
               }
@@ -143,7 +171,6 @@ export default function SiteNav() {
           )}
           <NavLink
             to="/account"
-            role="menuitem"
             className={({ isActive }) =>
               `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
             }
@@ -179,7 +206,7 @@ export default function SiteNav() {
   );
 
   return (
-    <nav className="site-nav">
+    <nav className="site-nav" aria-label="Main">
       <Link to="/" aria-label="AuditionWithMe home">
         <Wordmark />
       </Link>
@@ -196,10 +223,12 @@ export default function SiteNav() {
           </Link>
         )}
         <button
+          ref={menuButtonRef}
           type="button"
           className="site-nav-menu"
           aria-label={menuOpen ? "Close menu" : "Open menu"}
           aria-expanded={menuOpen}
+          aria-controls="site-nav-drawer"
           onClick={() => setMenuOpen((open) => !open)}
         >
           <svg
@@ -222,7 +251,7 @@ export default function SiteNav() {
       </div>
 
       {menuOpen && (
-        <div className="site-nav-drawer">
+        <div className="site-nav-drawer" id="site-nav-drawer">
           {sharedLinks}
           {loading ? null : user ? (
             <>
