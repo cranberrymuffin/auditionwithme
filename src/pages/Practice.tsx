@@ -177,9 +177,13 @@ function PracticeFlow({ file }: { file: File | null }) {
   const [characterVolumes, setCharacterVolumes] = useState<
     Record<string, number>
   >({});
-  // Saved scripts row backing this session, when the user is signed in —
-  // casting and delivery tags are written back to it as they settle.
-  const [scriptId, setScriptId] = useState<string | null>(null);
+  // This script's id from the moment it's uploaded (a replay's own), so
+  // everything kept on-device for it — reader audio included — is filed
+  // under it from the start. The saved row with this id only exists once
+  // scriptSaved: signed in, and the parse has been written.
+  const [scriptId] = useState(() => replayScript?.id ?? crypto.randomUUID());
+  // Casting and delivery tags are written back to the row as they settle.
+  const [scriptSaved, setScriptSaved] = useState(() => Boolean(replayScript?.id));
   // Set when the actor renames the script (ScriptName on step 1).
   const [scriptTitle, setScriptTitle] = useState<string | null>(null);
   // Per-line direction from the AI director (api/casting?action=direct-lines), aligned
@@ -244,7 +248,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     const userId = user.id;
     parseCacheRef.current ??= createParseCache({
       existingId: replayScript?.id,
-      newId: () => crypto.randomUUID(),
+      newId: () => scriptId,
       create: async (id, fields) =>
         saveScript(userId, {
           id,
@@ -254,7 +258,7 @@ function PracticeFlow({ file }: { file: File | null }) {
           contentHash: await getContentHash(),
         }),
       update: (id, fields) => updateScript(id, fields),
-      onCreated: setScriptId,
+      onCreated: () => setScriptSaved(true),
       onError: (err) => console.error("Failed to save script to account:", err),
     });
     void parseCacheRef.current({
@@ -278,7 +282,6 @@ function PracticeFlow({ file }: { file: File | null }) {
   // effects below can skip their model calls.
   useEffect(() => {
     if (!replayScript) return;
-    if (replayScript.id) setScriptId(replayScript.id);
     // Saved before its language was picked: ask again rather than rehearse
     // the translation the user never chose.
     if (replayScript.needsLanguageChoice) {
@@ -545,7 +548,7 @@ function PracticeFlow({ file }: { file: File | null }) {
   // with DIRECTOR_VERSION so a later prompt change knows to re-direct them.
   const persistedTagsRef = useRef(false);
   useEffect(() => {
-    if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
+    if (!user || !scriptSaved || !deliveryTags || persistedTagsRef.current) return;
     persistedTagsRef.current = true;
     if (
       replayScript?.deliveryTags &&
@@ -557,7 +560,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       deliveryTags,
       directorVersion: DIRECTOR_VERSION,
     }).catch((err) => console.error("Failed to save delivery tags:", err));
-  }, [user, scriptId, deliveryTags, replayScript]);
+  }, [user, scriptId, scriptSaved, deliveryTags, replayScript]);
 
   // Full voice catalog, so the user can override auto-assigned voices
   useEffect(() => {
@@ -611,7 +614,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     // Persist the confirmed casting so replaying this script keeps the same
     // scene partner instead of re-running auto-casting, and so My Account can
     // offer "Practice as X" for this role without going through casting again.
-    if (user && scriptId) {
+    if (user && scriptSaved) {
       void updateScript(scriptId, {
         characterVoices: next,
         characterVolumes,
@@ -626,7 +629,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (!role || rolesRead.includes(role)) return;
     const next = [...rolesRead, role];
     setRolesRead(next);
-    if (user && scriptId) {
+    if (user && scriptSaved) {
       void updateScript(scriptId, { rolesRead: next }).catch((err) =>
         console.error("Failed to save role history:", err),
       );
@@ -714,18 +717,18 @@ function PracticeFlow({ file }: { file: File | null }) {
   // Saved once the script has its record (the parse saves it as it lands,
   // so a rename made just before still gets there).
   useEffect(() => {
-    if (!user || !scriptId || scriptTitle === null) return;
+    if (!user || !scriptSaved || scriptTitle === null) return;
     void updateScript(scriptId, { title: scriptTitle }).catch((err) => {
       console.error("Failed to rename script:", err);
       toast("Couldn't rename that script. Please try again.");
     });
-  }, [user, scriptId, scriptTitle, toast]);
+  }, [user, scriptId, scriptSaved, scriptTitle, toast]);
 
   // Keeps this script's PDF with it, so reopening it from My Auditions can
   // still show it (See script). Once the record exists; skipped if it's
   // already stored (a re-upload of a script that has one).
   useEffect(() => {
-    if (!user || !scriptId || !file) return;
+    if (!user || !scriptSaved || !file) return;
     let active = true;
     void hasScriptPdf(scriptId)
       .then((stored) =>
@@ -735,7 +738,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     return () => {
       active = false;
     };
-  }, [user, scriptId, file]);
+  }, [user, scriptId, scriptSaved, file]);
 
   // Step 1 (upload) revisited: the parse is already applied, so this only
   // shows the finished upload screen again until Continue (or Forward).
@@ -1110,6 +1113,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       languageCode={scriptLanguage.code}
       fileName={scriptName}
       scriptId={scriptId}
+      scriptSaved={scriptSaved}
       pregen={pregen}
       onRecordingActiveChange={(active) => {
         recordingActiveRef.current = active;

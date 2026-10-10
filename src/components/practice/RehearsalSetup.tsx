@@ -36,7 +36,6 @@ export default function RehearsalSetup({
   cameraStream,
   cameraError,
   onRetryCamera,
-  signedIn,
   scriptSaved,
   onStart,
 }: {
@@ -50,8 +49,6 @@ export default function RehearsalSetup({
   cameraStream: MediaStream | null;
   cameraError: string | null;
   onRetryCamera: () => void;
-  /** Recording saves to the account, so it needs one. */
-  signedIn: boolean;
   /** The take is saved under the script's record, so it must exist. */
   scriptSaved: boolean;
   onStart: () => void;
@@ -81,7 +78,7 @@ export default function RehearsalSetup({
     pregen.done || (pregen.total > 0 && pregen.ready >= pregen.total);
   const cameraReady = !willRecord || Boolean(cameraStream);
   const canStart =
-    linesStartable && cameraReady && (!willRecord || (signedIn && scriptSaved));
+    linesStartable && cameraReady && (!willRecord || scriptSaved);
   const directing =
     pregen.waitingForDirection || (pregen.total === 0 && !pregen.done);
 
@@ -198,16 +195,14 @@ export default function RehearsalSetup({
         <span role="status">{startLabel}</span>
       </button>
       {/* Every line loaded: nothing left to explain. */}
-      {(!allLinesReady || (willRecord && !signedIn)) && (
+      {!allLinesReady && (
         <div className="preparing-note">
           <p>
-            {willRecord && !signedIn
-              ? "Sign in to rehearse."
-              : pregen.failed > 0
-                ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
-                : linesReady
-                  ? "The rest keep loading while you rehearse."
-                  : "You can start once enough lines are ready."}
+            {pregen.failed > 0
+              ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
+              : linesReady
+                ? "The rest keep loading while you rehearse."
+                : "You can start once enough lines are ready."}
           </p>
         </div>
       )}

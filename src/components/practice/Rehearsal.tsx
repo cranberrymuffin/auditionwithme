@@ -25,7 +25,7 @@ const COUNTDOWN_START = 3;
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, pregen, onRecordingActiveChange }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -40,14 +40,15 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   onRecordingActiveChange?: (active: boolean) => void;
   languageCode: string;
   fileName: string;
-  scriptId: string | null;
+  scriptId: string;
+  /** The script's saved row exists, so a take can be kept with it. */
+  scriptSaved: boolean;
   /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice
    * from step 4 on, and through the take. */
   pregen: ReaderAudioPregen;
 }) {
   const navigate = useNavigate();
   const {
-    user,
     status: recorderStatus,
     stream: cameraStream,
     error: recorderError,
@@ -57,7 +58,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     pause: pauseRecording,
     resume: resumeRecording,
     finish: finishRecording,
-  } = useSelfTapeSession(scriptId, selectedRole);
+  } = useSelfTapeSession(scriptSaved ? scriptId : null, selectedRole);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
@@ -423,8 +424,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
         cameraStream={cameraStream}
         cameraError={recorderError}
         onRetryCamera={() => void requestCamera()}
-        signedIn={Boolean(user)}
-        scriptSaved={Boolean(scriptId)}
+        scriptSaved={scriptSaved}
         onStart={beginRehearsal}
       />
     );
@@ -468,7 +468,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
-        {willRecord && scriptId && (
+        {willRecord && scriptSaved && (
           <SelfTapeRecorder
             status={recorderStatus}
             stream={cameraStream}
