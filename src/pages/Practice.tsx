@@ -131,7 +131,7 @@ const STEP_TITLES = [
   "Rehearsal setup",
   "Cast yourself",
   "Direct your scene partners",
-  "Rehearsal",
+  "Get ready",
 ];
 
 function PracticeFlow({ file }: { file: File | null }) {
@@ -190,13 +190,6 @@ function PracticeFlow({ file }: { file: File | null }) {
   );
   const [voices, setVoices] = useState<Voice[]>([]);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
-  // "Start rehearsal" was clicked on VoiceCasting: the scene partner's lines
-  // are being pre-generated there, and Rehearsal opens once enough are ready.
-  const [preparing, setPreparing] = useState(false);
-  // Rehearsal was reached through that preparation, so its Start needn't
-  // wait on pre-generation. False for paths that skip casting (monologues,
-  // "Practice as X"), where Rehearsal's start overlay gates Start instead.
-  const [preparedOnCasting, setPreparedOnCasting] = useState(false);
   // Characters the user has confirmed a full cast for and rehearsed as, this
   // script's saved row plus anything newly confirmed this session.
   const [rolesRead, setRolesRead] = useState<string[]>([]);
@@ -604,17 +597,10 @@ function PracticeFlow({ file }: { file: File | null }) {
     return next;
   };
 
-  // VoiceCasting's "Start rehearsal": fill any uncast speaker so the voices
-  // pre-generated are exactly the ones Rehearsal will play, then prepare.
-  const beginPreparing = () => {
-    setCharacterVoices(withDefaultVoices());
-    setPreparing(true);
-  };
-
+  // VoiceCasting's Next, on to step 4: fill any uncast speaker so the voices
+  // pre-generated there are exactly the ones Rehearsal will play.
   const startReading = () => {
     const next = withDefaultVoices();
-    setPreparing(false);
-    setPreparedOnCasting(true);
     setCharacterVoices(next);
     setVoicesConfirmed(true);
     const nextRolesRead =
@@ -697,12 +683,11 @@ function PracticeFlow({ file }: { file: File | null }) {
     }
   };
 
-  // Pre-generate the scene partner's lines from the moment "Start rehearsal"
-  // is clicked on VoiceCasting (never while just browsing voices — every line
-  // costs credits), and keep going through Rehearsal so the take itself makes
-  // no ElevenLabs round trips. The voice controls are hidden while preparing,
-  // so the cast can't change mid-run; backing out stops it, and the next click
-  // restarts with only the changed lines.
+  // Pre-generate the scene partner's lines from step 4 on (never while just
+  // browsing voices on step 3 — every line costs credits), and keep going
+  // through the take so it makes no ElevenLabs round trips. The cast is
+  // fixed by then; backing out stops it, and coming back restarts with only
+  // the changed lines.
   const rehearsalShowing =
     !loading &&
     !pendingParse &&
@@ -712,7 +697,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     selectedRole !== null &&
     (voicesConfirmed || voiceableSpeakers.length === 0);
   const pregen = useReaderAudioPregen({
-    enabled: preparing || rehearsalShowing,
+    enabled: rehearsalShowing,
     steps,
     selectedRole: selectedRole ?? "",
     characterVoices,
@@ -771,7 +756,6 @@ function PracticeFlow({ file }: { file: File | null }) {
     setRoleDraft(role || null);
     setSelectedRole(role);
     setVoicesConfirmed(false);
-    setPreparedOnCasting(false);
     if (role && characters.filter((s) => s !== role).length === 0) {
       recordRoleReadWithNoCasting(role);
     }
@@ -779,7 +763,8 @@ function PracticeFlow({ file }: { file: File | null }) {
 
   // Wizard step on screen, mirroring the render order below: 0 upload
   // (parsing, its finished preview, or anything before a role can be
-  // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal.
+  // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal (step 4, then the
+  // take).
   const wizardStep =
     loading ||
     pendingParse ||
@@ -836,7 +821,6 @@ function PracticeFlow({ file }: { file: File | null }) {
   };
 
   const showEarlierStep = (target: number) => {
-    setPreparing(false);
     if (target <= 1) {
       setSelectedRole(null);
       setVoicesConfirmed(false);
@@ -867,8 +851,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       return true;
     }
     if (wizardStep === 2) {
-      // Same as Start: prepare; Start rehearsal opens once lines are ready.
-      if (!preparing) beginPreparing();
+      startReading();
       return true;
     }
     return false;
@@ -1100,10 +1083,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         onVolumeChange={(speaker, volume) =>
           setCharacterVolumes((prev) => ({ ...prev, [speaker]: volume }))
         }
-        preparing={preparing}
-        pregen={pregen}
-        onStart={beginPreparing}
-        onStartAnyway={startReading}
+        onStart={startReading}
         languageCode={scriptLanguage.code}
         onGoToStep={goToStep}
       />
@@ -1126,11 +1106,15 @@ function PracticeFlow({ file }: { file: File | null }) {
           }
         })
       }
+      onGoToStep={goToStep}
+      cast={voiceableSpeakers.map((speaker) => ({
+        speaker,
+        voice: voices.find((voice) => voice.id === characterVoices[speaker]) ?? null,
+      }))}
       languageCode={scriptLanguage.code}
       fileName={scriptName}
       scriptId={scriptId}
       pregen={pregen}
-      awaitPregen={!preparedOnCasting}
       onRecordingActiveChange={(active) => {
         recordingActiveRef.current = active;
       }}

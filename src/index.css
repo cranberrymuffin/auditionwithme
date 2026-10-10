@@ -3013,6 +3013,29 @@ header .flow-back:hover {
 .voice-advanced-preview .role-option-copy q {
   margin-top: 0;
 }
+/* Closes the options, keeping the picks: the app's solid coral, full width. */
+.voice-advanced-save {
+  display: flex;
+  width: 100%;
+  min-height: 50px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+  border: 1px solid rgba(255, 205, 183, 0.64);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(16, 26, 40, 0.55);
+}
+.voice-advanced-save:hover {
+  filter: brightness(1.05);
+}
+.voice-advanced-save:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
 .voice-advanced-panel .voice-filter-bar {
   margin-top: 18px;
 }
@@ -3046,6 +3069,45 @@ header .flow-back:hover {
   font-size: clamp(1.35rem, 2vw, 1.55rem);
   font-weight: 600;
   outline: none;
+}
+/* Step 4's camera preview, between the subtitle and the device checks. */
+.rehearsal-setup-camera {
+  min-width: 0;
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(7, 14, 24, 0.62);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+}
+/* Step 4's camera and microphone, each ticked once it's on. */
+.rehearsal-setup-devices {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rehearsal-setup-devices li {
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  color: rgba(248, 241, 230, 0.62);
+  font-size: 0.875rem;
+}
+.rehearsal-setup-devices li.is-complete > span {
+  color: #f4a583;
+}
+.rehearsal-setup-devices strong {
+  color: #f8f1e6;
+  font-weight: 600;
+}
+.rehearsal-setup-devices small {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .preparing-cast {
   margin: 20px 0 0;
@@ -3989,81 +4051,6 @@ header .flow-back:hover {
   justify-content: center;
   background: rgba(8, 14, 22, 0.72);
   backdrop-filter: blur(3px);
-}
-.rehearsal-start-choice {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  max-width: 340px;
-  padding: 32px 28px;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 16px;
-  background: #101d2c;
-  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.4);
-}
-.rehearsal-start-choice h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-.rehearsal-start-choice > p {
-  margin: 0 0 14px;
-  color: rgba(248, 241, 230, 0.65);
-  font-size: 0.875rem;
-}
-.rehearsal-start-choice > div {
-  display: flex;
-  gap: 12px;
-}
-.rehearsal-start-choice button {
-  padding: 11px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 10px;
-  color: rgba(248, 241, 230, 0.9);
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.rehearsal-start-choice button:first-child {
-  border-color: rgba(255, 205, 183, 0.58);
-  background: linear-gradient(135deg, #f4a583, #e98464);
-  color: #101a28;
-}
-.rehearsal-start-choice button:hover:not(:disabled) {
-  filter: brightness(1.05);
-}
-.rehearsal-start-choice button:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-.rehearsal-start-choice > span {
-  margin-top: 12px;
-  color: rgba(248, 241, 230, 0.5);
-  font-size: 0.75rem;
-}
-.rehearsal-start-choice > .rehearsal-pregen {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
-  margin-bottom: 14px;
-}
-.rehearsal-pregen span {
-  color: rgba(248, 241, 230, 0.65);
-  font-size: 0.8125rem;
-}
-.rehearsal-pregen i {
-  display: block;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.12);
-}
-.rehearsal-pregen b {
-  display: block;
-  height: 100%;
-  background: linear-gradient(135deg, #f4a583, #e98464);
-  transition: width 0.3s ease;
 }
 .rehearsal-countdown {
   font-size: clamp(4rem, 14vw, 7rem);

@@ -136,6 +136,8 @@ export function useSelfTapeRecorder() {
       );
       await applyFrontCameraZoom(videoTrack);
     }
+    // Asked again (Try again, or StrictMode's double mount): one camera at a time.
+    streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = media;
     setStream(media);
     setStatus("ready");
