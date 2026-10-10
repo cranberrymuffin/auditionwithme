@@ -565,7 +565,8 @@ header .flow-back:hover {
 }
 .hero-actions {
   display: flex;
-  align-items: center;
+  /* Both CTAs share one height, the upload button's. */
+  align-items: stretch;
   flex-wrap: wrap;
   gap: 13px 22px;
   margin-top: clamp(22px, 4vh, 38px);
@@ -793,7 +794,7 @@ header .flow-back:hover {
 }
 .about-process-panel > header p {
   margin: 0 0 6px;
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.8125rem;
 }
 .about-process-panel h2 {
@@ -1432,7 +1433,7 @@ header .flow-back:hover {
   padding: 0 max(32px, calc((100vw - 1120px) / 2));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 16, 27, 0.34);
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.8125rem;
 }
 .pricing-footer span:first-child {
@@ -1562,13 +1563,33 @@ header .flow-back:hover {
 .faq-list summary::-webkit-details-marker {
   display: none;
 }
-.faq-list summary span {
-  color: #ef9a78;
-  font-size: 1.1rem;
+/* Plus that folds into a minus when open: same size, same weight. */
+.faq-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.faq-icon i {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: #ef9a78;
   transition: transform 0.2s ease;
 }
-.faq-list details[open] summary span {
-  transform: rotate(45deg);
+.faq-icon i + i {
+  transform: rotate(90deg);
+}
+.faq-list details[open] .faq-icon i + i {
+  transform: rotate(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .faq-icon i {
+    transition: none;
+  }
 }
 .faq-list details p {
   margin: -4px 25px 22px 0;
@@ -3002,16 +3023,22 @@ header .flow-back:hover {
   transform: translateY(-1px);
 }
 .stage-error-secondary {
+  display: inline-flex;
   min-height: 44px;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
+  align-items: center;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  font-size: 0.9375rem;
   font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: rgba(232, 117, 106, 0.6);
-  text-underline-offset: 4px;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 .stage-error-secondary:hover {
-  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 @media (max-width: 899px) {

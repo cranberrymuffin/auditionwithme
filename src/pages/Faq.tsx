@@ -88,7 +88,10 @@ export default function Faq() {
             <details key={question} open={index === 0}>
               <summary>
                 {question}
-                <span aria-hidden="true">+</span>
+                <span className="faq-icon" aria-hidden="true">
+                  <i />
+                  <i />
+                </span>
               </summary>
               <p>{answer}</p>
             </details>
@@ -110,11 +113,9 @@ export default function Faq() {
               </>
             ) : (
               <>
-                <strong>Sign up</strong>
+                <strong>Start rehearsing free</strong>
                 <small>
-                  {IS_BETA_TESTING
-                    ? "Beta test now"
-                    : "Three rehearsals for free"}
+                  {IS_BETA_TESTING ? "Free during beta" : "Three rehearsals for free"}
                 </small>
               </>
             )}
