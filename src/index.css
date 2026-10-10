@@ -3089,7 +3089,7 @@ header .flow-back:hover {
 }
 .rehearsal-setup-devices li {
   display: grid;
-  grid-template-columns: 22px auto minmax(0, 1fr);
+  grid-template-columns: 22px auto minmax(0, 1fr) 76px;
   gap: 10px;
   align-items: baseline;
   color: rgba(248, 241, 230, 0.62);
@@ -3108,6 +3108,44 @@ header .flow-back:hover {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The microphone's live level: bars light up as the actor speaks. */
+.mic-level {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-self: end;
+  gap: 3px;
+  height: 14px;
+}
+.mic-level i {
+  width: 4px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 80ms linear;
+}
+.mic-level i:nth-child(1) { height: 30%; }
+.mic-level i:nth-child(2) { height: 45%; }
+.mic-level i:nth-child(3) { height: 60%; }
+.mic-level i:nth-child(4) { height: 80%; }
+.mic-level i:nth-child(5) { height: 100%; }
+.mic-level i.is-lit {
+  background: #f4a583;
+}
+/* Plays a chime through the speakers the scene partner will use. */
+.speaker-test {
+  justify-self: end;
+  padding: 2px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: transparent;
+  color: #f8f1e6;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.speaker-test:hover {
+  border-color: #f4a583;
+  color: #f4a583;
 }
 .preparing-cast {
   margin: 20px 0 0;
