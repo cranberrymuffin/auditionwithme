@@ -9,7 +9,10 @@ import {
   type Voice,
 } from "../../lib/script";
 import { useTtsPlayer } from "../../hooks/useTtsPlayer";
-import { clampCharacterVolume, MAX_CHARACTER_VOLUME } from "../../lib/characterVolume";
+import {
+  clampCharacterVolume,
+  MAX_CHARACTER_VOLUME,
+} from "../../lib/characterVolume";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import { Wordmark } from "../SiteNav";
 import { useToast } from "../../lib/toast";
@@ -21,7 +24,9 @@ type FilterKey = "accent" | "gender" | "age" | "tone";
 const START_ANYWAY_AFTER_MS = 20_000;
 
 const displayCharacter = (name: string) =>
-  name.toLocaleLowerCase().replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+  name
+    .toLocaleLowerCase()
+    .replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
 
 export default function VoiceCasting({
   speakers,
@@ -64,7 +69,12 @@ export default function VoiceCasting({
   const { play, stop, setVolume } = useTtsPlayer();
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
   const [previewing, setPreviewing] = useState(false);
-  const [filters, setFilters] = useState<Record<FilterKey, string>>({ accent: "", gender: "", age: "", tone: "" });
+  const [filters, setFilters] = useState<Record<FilterKey, string>>({
+    accent: "",
+    gender: "",
+    age: "",
+    tone: "",
+  });
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
   const preparingHeadingRef = useRef<HTMLHeadingElement | null>(null);
 
@@ -78,7 +88,10 @@ export default function VoiceCasting({
     stop();
     setPreviewing(false);
     preparingHeadingRef.current?.focus();
-    const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
+    const timer = setTimeout(
+      () => setStartAnywayOffered(true),
+      START_ANYWAY_AFTER_MS,
+    );
     return () => clearTimeout(timer);
   }, [preparing, stop]);
 
@@ -90,8 +103,11 @@ export default function VoiceCasting({
   const facetOptions = (key: FilterKey) => {
     const voicesMatchingOtherFilters = languageVoices.filter((voice) =>
       (Object.keys(filters) as FilterKey[]).every(
-        (filterKey) => filterKey === key || !filters[filterKey] || voice[filterKey] === filters[filterKey]
-      )
+        (filterKey) =>
+          filterKey === key ||
+          !filters[filterKey] ||
+          voice[filterKey] === filters[filterKey],
+      ),
     );
     const values = new Set([
       ...voicesMatchingOtherFilters.map((voice) => voice[key]).filter(Boolean),
@@ -99,18 +115,24 @@ export default function VoiceCasting({
     ]);
     return [...values].sort().map((value) => ({
       value,
-      count: voicesMatchingOtherFilters.filter((voice) => voice[key] === value).length,
+      count: voicesMatchingOtherFilters.filter((voice) => voice[key] === value)
+        .length,
     }));
   };
   const facetTotal = (key: FilterKey) =>
     languageVoices.filter((voice) =>
       (Object.keys(filters) as FilterKey[]).every(
-        (filterKey) => filterKey === key || !filters[filterKey] || voice[filterKey] === filters[filterKey]
-      )
+        (filterKey) =>
+          filterKey === key ||
+          !filters[filterKey] ||
+          voice[filterKey] === filters[filterKey],
+      ),
     ).length;
 
   const filteredVoices = languageVoices.filter((voice) =>
-    (Object.keys(filters) as FilterKey[]).every((key) => !filters[key] || voice[key] === filters[key])
+    (Object.keys(filters) as FilterKey[]).every(
+      (key) => !filters[key] || voice[key] === filters[key],
+    ),
   );
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
@@ -121,15 +143,21 @@ export default function VoiceCasting({
     setFilters(nextFilters);
     const firstMatch = languageVoices.find((voice) =>
       (Object.keys(nextFilters) as FilterKey[]).every(
-        (key) => !nextFilters[key] || voice[key] === nextFilters[key]
-      )
+        (key) => !nextFilters[key] || voice[key] === nextFilters[key],
+      ),
     );
     if (firstMatch) onPick(activeSpeaker, firstMatch.id);
   };
 
-  const dialogue = steps.filter((step) => normalizeSpeaker(step.speaker) === activeSpeaker && step.verbalLine.trim());
+  const dialogue = steps.filter(
+    (step) =>
+      normalizeSpeaker(step.speaker) === activeSpeaker &&
+      step.verbalLine.trim(),
+  );
   const previewLine = dialogue[0]?.verbalLine ?? `Hello, I'm ${activeSpeaker}.`;
-  const currentVoice = voices.find((voice) => voice.id === characterVoices[activeSpeaker]) ?? languageVoices[0];
+  const currentVoice =
+    voices.find((voice) => voice.id === characterVoices[activeSpeaker]) ??
+    languageVoices[0];
   const volume = clampCharacterVolume(characterVolumes[activeSpeaker]);
   const changeVolume = (next: number) => {
     onVolumeChange(activeSpeaker, next);
@@ -145,15 +173,22 @@ export default function VoiceCasting({
     }
   });
   const isRecommended =
-    !currentVoice || !recommendedRef.current[activeSpeaker] || recommendedRef.current[activeSpeaker] === currentVoice.id;
+    !currentVoice ||
+    !recommendedRef.current[activeSpeaker] ||
+    recommendedRef.current[activeSpeaker] === currentVoice.id;
   // What's changed under the closed Advanced options, so it isn't hidden.
   const advancedNote = [
-    activeFilterCount > 0 && `${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} on`,
+    activeFilterCount > 0 &&
+      `${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} on`,
     Math.round(volume * 100) !== 100 && `Volume ${Math.round(volume * 100)}%`,
-  ].filter(Boolean).join(" · ");
-  const visibleVoices = currentVoice && !filteredVoices.some((voice) => voice.id === currentVoice.id)
-    ? [currentVoice, ...filteredVoices]
-    : filteredVoices;
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const visibleVoices =
+    currentVoice &&
+    !filteredVoices.some((voice) => voice.id === currentVoice.id)
+      ? [currentVoice, ...filteredVoices]
+      : filteredVoices;
 
   const preview = async () => {
     if (previewing) {
@@ -164,34 +199,60 @@ export default function VoiceCasting({
     if (!currentVoice) return;
     setPreviewing(true);
     try {
-      await play({ text: previewLine, voiceId: currentVoice.id }, { volume, onEnded: () => setPreviewing(false) });
+      await play(
+        { text: previewLine, voiceId: currentVoice.id },
+        { volume, onEnded: () => setPreviewing(false) },
+      );
     } catch {
       setPreviewing(false);
       toast("That voice preview couldn't be played. Try again.");
     }
   };
 
-  const speakerList = speakers.map(displayCharacter).join(speakers.length > 2 ? ", " : " and ");
+  const speakerList = speakers
+    .map(displayCharacter)
+    .join(speakers.length > 2 ? ", " : " and ");
 
   return (
     <main className="voice-setup-page">
       <header className="setup-header">
-        <Link to="/" aria-label="Audition With Me home"><Wordmark /></Link>
+        <Link to="/" aria-label="Audition With Me home">
+          <Wordmark />
+        </Link>
         <div className="setup-progress">
-          <span>Step 3 of 4<span className="sr-only">: Voice setup</span></span>
-          <div aria-hidden="true"><i /><i /><i className="is-active" /><i /></div>
+          <span>
+            Step 3 of 4 · Direct your scene partners
+          </span>
+          <div aria-hidden="true">
+            <i />
+            <i />
+            <i className="is-active" />
+            <i />
+          </div>
         </div>
-        <button onClick={() => navigate("/")} className="setup-header-action">Replace script</button>
+        <button onClick={() => navigate("/")} className="setup-header-action">
+          Replace script
+        </button>
       </header>
 
       <section className="voice-setup-layout">
         <div className="voice-setup-intro">
-          <button className="voice-setup-back" onClick={() => { stop(); onBack(); }}><span>←</span> Back</button>
-          <p>Step 3 of 4 · Voice setup</p>
+          <button
+            className="setup-back"
+            onClick={() => {
+              stop();
+              onBack();
+            }}
+          >
+            <span>←</span> Back
+          </button>
+          <p>Step 3 of 4 · Direct your scene partners</p>
           <h1>Choose your scene partner</h1>
           <div className="voice-setup-description">
-            Select the {speakers.length === 1 ? "voice" : "voices"} that will read {speakerList}.
-            Preview {speakers.length === 1 ? "it" : "each one"}, then adjust the voice settings before rehearsal.
+            Select the {speakers.length === 1 ? "voice" : "voices"} that will
+            read {speakerList}. Preview{" "}
+            {speakers.length === 1 ? "it" : "each one"}, then adjust the voice
+            settings before rehearsal.
           </div>
           <dl className="script-language">
             <dt>Script language</dt>
@@ -204,11 +265,15 @@ export default function VoiceCasting({
             <div className="preparing-panel">
               <header>
                 <p>Cast locked in</p>
-                <h2 ref={preparingHeadingRef} tabIndex={-1}>Preparing your scene partners</h2>
+                <h2 ref={preparingHeadingRef} tabIndex={-1}>
+                  Preparing your scene partners
+                </h2>
               </header>
               <ul className="preparing-cast" aria-label="Your cast">
                 {speakers.map((speaker) => {
-                  const voice = voices.find((candidate) => candidate.id === characterVoices[speaker]);
+                  const voice = voices.find(
+                    (candidate) => candidate.id === characterVoices[speaker],
+                  );
                   const descriptor = voice ? describeVoice(voice) : "";
                   return (
                     <li key={speaker}>
@@ -222,7 +287,12 @@ export default function VoiceCasting({
                 })}
               </ul>
               <div className="preparing-progress">
-                <i aria-hidden="true" style={{ width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%` }} />
+                <i
+                  aria-hidden="true"
+                  style={{
+                    width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%`,
+                  }}
+                />
                 <span role="status">
                   {pregen.waitingForDirection || pregen.total === 0
                     ? "Directing the scene…"
@@ -236,20 +306,30 @@ export default function VoiceCasting({
                     : "Rehearsal opens as soon as the first lines are ready."}
                 </p>
                 {(startAnywayOffered || pregen.failed > 0) && (
-                  <button type="button" onClick={onStartAnyway}>Start anyway</button>
+                  <button type="button" onClick={onStartAnyway}>
+                    Start anyway
+                  </button>
                 )}
               </div>
             </div>
           ) : (
             <>
               {speakers.length > 1 && (
-                <div className="speaker-tabs" role="tablist" aria-label="Scene partners">
+                <div
+                  className="speaker-tabs"
+                  role="tablist"
+                  aria-label="Scene partners"
+                >
                   {speakers.map((speaker) => (
                     <button
                       key={speaker}
                       role="tab"
                       aria-selected={activeSpeaker === speaker}
-                      onClick={() => { stop(); setPreviewing(false); setActiveSpeaker(speaker); }}
+                      onClick={() => {
+                        stop();
+                        setPreviewing(false);
+                        setActiveSpeaker(speaker);
+                      }}
                     >
                       {displayCharacter(speaker)}
                     </button>
@@ -258,18 +338,22 @@ export default function VoiceCasting({
               )}
 
               <header className="voice-panel-heading">
-                <div><p>{isRecommended ? "Recommended voice for" : "Your voice for"}</p><h2>{displayCharacter(activeSpeaker)}</h2></div>
+                <div>
+                  <p>
+                    {isRecommended ? "Recommended voice for" : "Your voice for"}
+                  </p>
+                  <h2>{displayCharacter(activeSpeaker)}</h2>
+                </div>
               </header>
-
-              <div className="selected-voice">
-                <div className="selected-voice-heading"><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
-                {currentVoice && <p>{describeVoice(currentVoice)}</p>}
-                <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
-                  <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
-                  {previewing ? "Pause preview" : "Preview voice"}
-                </button>
-                <q>{previewLine}</q>
-              </div>
+              <button
+                className={`voice-preview-button ${previewing ? "is-playing" : ""}`}
+                disabled={!currentVoice}
+                onClick={preview}
+              >
+                <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
+                {previewing ? "Pause preview" : "Preview voice"}
+              </button>
+              <q>{previewLine}</q>
 
               <details className="voice-advanced">
                 <summary>
@@ -281,9 +365,15 @@ export default function VoiceCasting({
                   <span>Voice</span>
                   <select
                     value={currentVoice?.id ?? ""}
-                    onChange={(event) => onPick(activeSpeaker, event.target.value)}
+                    onChange={(event) =>
+                      onPick(activeSpeaker, event.target.value)
+                    }
                   >
-                    {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
+                    {visibleVoices.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voiceDisplayName(voice.name)} — {describeVoice(voice)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="voice-volume">
@@ -294,43 +384,83 @@ export default function VoiceCasting({
                     max={MAX_CHARACTER_VOLUME}
                     step="0.05"
                     value={volume}
-                    onChange={(event) => changeVolume(Number(event.target.value))}
+                    onChange={(event) =>
+                      changeVolume(Number(event.target.value))
+                    }
                     aria-label={`Volume for ${displayCharacter(activeSpeaker)}`}
                     aria-valuetext={`${Math.round(volume * 100)}%`}
                   />
                   <output>{Math.round(volume * 100)}%</output>
                 </label>
                 <div className="voice-filter-bar">
-                  <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
-                  <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
+                  <div>
+                    <strong>Refine voice filter</strong>
+                    <span>
+                      {filteredVoices.length} compatible{" "}
+                      {filteredVoices.length === 1 ? "voice" : "voices"}
+                    </span>
+                  </div>
+                  <button
+                    disabled={!hasFilters}
+                    onClick={() =>
+                      applyFilters({
+                        accent: "",
+                        gender: "",
+                        age: "",
+                        tone: "",
+                      })
+                    }
+                  >
+                    Reset
+                  </button>
                 </div>
                 <div className="voice-setup-filters">
-                  {(["accent", "gender", "age", "tone"] as FilterKey[]).map((key) => (
-                    <label key={key}>
-                      <span>{key === "gender" ? "Voice type" : humanizeVoiceLabel(key)}</span>
-                      <select
-                        value={filters[key]}
-                        onChange={(event) => applyFilters({ ...filters, [key]: event.target.value })}
-                      >
-                        <option value="">Any ({facetTotal(key)})</option>
-                        {facetOptions(key).map(({ value, count }) => (
-                          <option key={value} value={value} disabled={count === 0}>
-                            {humanizeVoiceLabel(value)} ({count})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ))}
+                  {(["accent", "gender", "age", "tone"] as FilterKey[]).map(
+                    (key) => (
+                      <label key={key}>
+                        <span>
+                          {key === "gender"
+                            ? "Voice type"
+                            : humanizeVoiceLabel(key)}
+                        </span>
+                        <select
+                          value={filters[key]}
+                          onChange={(event) =>
+                            applyFilters({
+                              ...filters,
+                              [key]: event.target.value,
+                            })
+                          }
+                        >
+                          <option value="">Any ({facetTotal(key)})</option>
+                          {facetOptions(key).map(({ value, count }) => (
+                            <option
+                              key={value}
+                              value={value}
+                              disabled={count === 0}
+                            >
+                              {humanizeVoiceLabel(value)} ({count})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ),
+                  )}
                 </div>
 
                 {filteredVoices.length === 0 && (
                   <p className="voice-filter-empty" role="status">
-                    No additional voices match this combination. Your selected voice is unchanged.
+                    No additional voices match this combination. Your selected
+                    voice is unchanged.
                   </p>
                 )}
               </details>
 
-              <button className="start-rehearsal" disabled={!currentVoice} onClick={onStart}>
+              <button
+                className="start-rehearsal"
+                disabled={!currentVoice}
+                onClick={onStart}
+              >
                 Start rehearsal <span>→</span>
               </button>
             </>

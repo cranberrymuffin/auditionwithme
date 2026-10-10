@@ -21,6 +21,7 @@ import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 import { loadUpload, peekUpload } from "../lib/pendingUpload";
+import { useStartRehearsal } from "../hooks/useStartRehearsal";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
 // Account — re-launches practice from a script that's already been parsed,
@@ -69,9 +70,16 @@ const stepFromPath = (pathname: string) => {
   return index === -1 ? 0 : index;
 };
 
+export default function Practice() {
+  const location = useLocation();
+  // Step 1's Replace script starts a new upload on this same route; keying
+  // by its session starts the whole flow over for the new script.
+  return <PracticeSession key={location.state?.session ?? "none"} />;
+}
+
 /** Finds the uploaded PDF (by the id Home put in history state) before the
  * flow mounts: this tab's copy at once, or IndexedDB's after a reload. */
-export default function Practice() {
+function PracticeSession() {
   const location = useLocation();
   const [uploadId] = useState<string | null>(() => location.state?.uploadId ?? null);
   const [upload, setUpload] = useState<{ file: File | null } | null>(() =>
@@ -95,9 +103,13 @@ export default function Practice() {
   return <PracticeFlow file={upload.file} />;
 }
 
-const STEP_TITLES = ["Preparing your script", "Choose your role", "Choose your scene partner", "Rehearsal"];
+// The steps' names, as the step counters show them.
+const STEP_TITLES = ["Rehearsal setup", "Cast yourself", "Direct your scene partners", "Rehearsal"];
 
 function PracticeFlow({ file }: { file: File | null }) {
+  const startRehearsal = useStartRehearsal();
+  // Step 1's Replace script: a new upload, in place of this one.
+  const replaceScript = (next: File) => void startRehearsal(next, { replace: true });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -682,11 +694,36 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (preparing && pregen.canStart) startReadingRef.current();
   }, [preparing, pregen.canStart]);
 
-  // Wizard step on screen: 1 RolePicker, 2 VoiceCasting, 3 Rehearsal (0 =
-  // parsing or any screen before a role can be picked). Mirrors the render
-  // order below.
+  // Step 1 (upload) revisited: the parse is already applied, so this only
+  // shows the finished upload screen again until Continue (or Forward).
+  // A script parsed before (re-uploaded, or reopened from My Auditions)
+  // opens here too, already complete — every rehearsal starts at step 1.
+  const [reviewingUpload, setReviewingUpload] = useState(
+    () => !!replayScript && !hasPresetRole && !replayScript.needsLanguageChoice,
+  );
+  // The role last picked, so Forward can re-pick it ("" — listen to the
+  // whole scene — is a real choice, unlike roleDraft's null).
+  const chosenRoleRef = useRef<string | null>(null);
+  // "Practice as" jumps straight into Rehearsal, so it alone has no step 1
+  // to go back to.
+  const hasUploadStep = !hasPresetRole;
+
+  const chooseRole = (role: string) => {
+    chosenRoleRef.current = role;
+    setRoleDraft(role || null);
+    setSelectedRole(role);
+    setVoicesConfirmed(false);
+    setPreparedOnCasting(false);
+    if (role && characters.filter((s) => s !== role).length === 0) {
+      recordRoleReadWithNoCasting(role);
+    }
+  };
+
+  // Wizard step on screen, mirroring the render order below: 0 upload
+  // (parsing, its finished preview, or anything before a role can be
+  // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal.
   const wizardStep =
-    loading || pendingParse || error || languageChoice || steps.length === 0
+    loading || pendingParse || reviewingUpload || error || languageChoice || steps.length === 0
       ? 0
       : selectedRole === null
         ? characters.length > 0 ? 1 : 0
@@ -702,17 +739,21 @@ function PracticeFlow({ file }: { file: File | null }) {
     noindex: true,
   });
 
-  // Each step gets its own history entry and URL, so the browser's Back
-  // (and a phone's back swipe) steps back through the wizard instead of
-  // leaving /practice. The first step reached here is the base: Back from it
-  // leaves the page as before. A reload restarts the flow, then lands back
-  // on the first step's URL.
+  // Each step has its own URL and history entry, so Back and Forward (and a
+  // phone's back swipe) move through the wizard like pages. One effect keeps
+  // the two in step, whichever moved: the app advancing (push a new entry),
+  // or history moving (show that step — back directly, forward by re-making
+  // the choice that led there). A reload restarts at the upload.
   const historyStep = stepFromPath(location.pathname);
-  const baseStepRef = useRef<number | null>(null);
-  const wizardStepRef = useRef(wizardStep);
-  wizardStepRef.current = wizardStep;
   const locationStateRef = useRef(location.state);
   locationStateRef.current = location.state;
+  const prevHistoryStepRef = useRef(historyStep);
+  // Set just before the app navigates, so that move isn't taken for the
+  // user's own Back/Forward.
+  const selfNavRef = useRef(false);
+  // The step history asked for, while the screen catches up to it.
+  const targetStepRef = useRef<number | null>(null);
+  const movedOnceRef = useRef(false);
   // A take in progress, reported by Rehearsal. Leaving through history
   // can't be cancelled (beforeunload doesn't fire for it), so it's
   // confirmed by hand below.
@@ -720,67 +761,140 @@ function PracticeFlow({ file }: { file: File | null }) {
   // Set when the leave was already confirmed (Rehearsal's own Back button).
   const leaveConfirmedRef = useRef(false);
 
-  useEffect(() => {
-    if (wizardStep === 0) return;
-    const path = STEP_PATHS[wizardStep];
+  // practiceIndex counts this flow's entries below the current one, so the
+  // in-app Back only goes through history when there's a step to return to.
+  const goToStepUrl = (step: number, replace: boolean) => {
+    selfNavRef.current = true;
     const state = locationStateRef.current;
-    if (baseStepRef.current === null) {
-      baseStepRef.current = wizardStep;
-      navigate(path, { replace: true, state });
-      return;
-    }
-    const recorded = Math.max(stepFromPath(window.location.pathname), baseStepRef.current);
-    if (wizardStep > recorded) navigate(path, { state });
-    else if (wizardStep < recorded) navigate(path, { replace: true, state });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on step changes
-  }, [wizardStep]);
+    const practiceIndex = (state?.practiceIndex ?? 0) + (replace ? 0 : 1);
+    navigate(STEP_PATHS[step], { replace, state: { ...state, practiceIndex } });
+  };
 
-  // History moved back to an earlier step: show it.
-  useEffect(() => {
-    const current = wizardStepRef.current;
-    if (baseStepRef.current === null || historyStep === 0 || historyStep >= current) return;
-    const confirmed = leaveConfirmedRef.current;
-    leaveConfirmedRef.current = false;
-    if (
-      current === 3 &&
-      recordingActiveRef.current &&
-      !confirmed &&
-      !window.confirm("You have unsaved changes. Are you sure you want to leave?")
-    ) {
-      // Stay on the take: put its entry back.
-      navigate(STEP_PATHS[3], { state: locationStateRef.current });
-      return;
-    }
-    if (historyStep <= 1) {
-      setPreparing(false);
+  const showEarlierStep = (target: number) => {
+    setPreparing(false);
+    if (target <= 1) {
       setSelectedRole(null);
       setVoicesConfirmed(false);
+      if (target === 0) setReviewingUpload(true);
     } else {
       setVoicesConfirmed(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on history moves
-  }, [historyStep]);
+  };
 
-  /** In-app Back: through history when there's a step entry to return to
-   * (so browser Back/Forward stay in step), else straight to `fallback`. */
+  /** Re-makes the choice that leads past the current step; false if
+   * there's none to re-make (still parsing, no role picked yet). */
+  const advanceStep = (): boolean => {
+    if (wizardStep === 0) {
+      if (reviewingUpload) {
+        setReviewingUpload(false);
+        return true;
+      }
+      if (pendingParse) {
+        finalizeParse(pendingParse);
+        setPendingParse(null);
+        return true;
+      }
+      return false;
+    }
+    if (wizardStep === 1) {
+      if (chosenRoleRef.current === null) return false;
+      chooseRole(chosenRoleRef.current);
+      return true;
+    }
+    if (wizardStep === 2) {
+      // Same as Start: prepare, and Rehearsal opens once lines are ready.
+      if (!preparing) beginPreparing();
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const historyMoved = prevHistoryStepRef.current !== historyStep;
+    prevHistoryStepRef.current = historyStep;
+    if (historyMoved) {
+      if (selfNavRef.current) selfNavRef.current = false;
+      else targetStepRef.current = historyStep;
+    }
+
+    const target = targetStepRef.current;
+    if (target !== null) {
+      if (target === wizardStep) {
+        targetStepRef.current = null;
+        return;
+      }
+      if (target < wizardStep) {
+        const confirmed = leaveConfirmedRef.current;
+        leaveConfirmedRef.current = false;
+        if (
+          wizardStep === 3 &&
+          recordingActiveRef.current &&
+          !confirmed &&
+          !window.confirm("You have unsaved changes. Are you sure you want to leave?")
+        ) {
+          // Stay on the take: put its entry back.
+          targetStepRef.current = null;
+          goToStepUrl(3, false);
+          return;
+        }
+        if (target === 0 && !hasUploadStep) {
+          // Nothing of this flow before the role: keep going back, out.
+          targetStepRef.current = null;
+          navigate(-1);
+          return;
+        }
+        showEarlierStep(target);
+        return;
+      }
+      // Forward: one step at a time; this effect runs again as each lands.
+      if (!advanceStep()) {
+        targetStepRef.current = null;
+        goToStepUrl(wizardStep, true);
+      }
+      return;
+    }
+
+    // The app moved the wizard. Without an upload step, the first step
+    // reached takes over /practice's entry rather than stacking on it.
+    if (wizardStep === historyStep) return;
+    const first = !movedOnceRef.current;
+    movedOnceRef.current = true;
+    if (wizardStep > historyStep) goToStepUrl(wizardStep, first && !hasUploadStep);
+    else goToStepUrl(wizardStep, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
+  }, [wizardStep, historyStep]);
+
+  /** In-app Back: through history when there's an earlier step entry (so
+   * browser Back/Forward stay in step), else `fallback`. */
   const stepBack = (fallback: () => void) => {
-    const base = baseStepRef.current;
-    if (base !== null && historyStep > base) {
+    if ((location.state?.practiceIndex ?? 0) > 0) {
       leaveConfirmedRef.current = true;
       navigate(-1);
     } else fallback();
   };
 
-  if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
+  if (loading) return <ParsingScreen file={file!} phase={processingPhase} onReplace={replaceScript} />;
   if (pendingParse) {
     return (
       <ParsingScreen
         file={file!}
         phase="done"
+        onReplace={replaceScript}
         onContinue={() => {
           finalizeParse(pendingParse);
           setPendingParse(null);
         }}
+      />
+    );
+  }
+  if (reviewingUpload) {
+    return (
+      <ParsingScreen
+        file={file}
+        title={replayScript?.title}
+        phase="done"
+        onReplace={replaceScript}
+        onContinue={() => setReviewingUpload(false)}
       />
     );
   }
@@ -873,15 +987,8 @@ function PracticeFlow({ file }: { file: File | null }) {
         steps={steps}
         fileName={file?.name ?? replayScript?.title ?? "Uploaded script"}
         initialSelected={roleDraft}
-        onChoose={(role) => {
-          setRoleDraft(role || null);
-          setSelectedRole(role);
-          setVoicesConfirmed(false);
-          setPreparedOnCasting(false);
-          if (role && characters.filter((s) => s !== role).length === 0) {
-            recordRoleReadWithNoCasting(role);
-          }
-        }}
+        onChoose={chooseRole}
+        onBack={() => stepBack(() => navigate(replayScript ? "/account" : "/"))}
       />
     );
   }

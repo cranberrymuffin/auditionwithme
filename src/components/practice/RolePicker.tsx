@@ -10,12 +10,15 @@ export default function RolePicker({
   fileName,
   initialSelected,
   onChoose,
+  onBack,
 }: {
   characters: string[];
   steps: Step[];
   fileName: string;
   initialSelected: string | null;
   onChoose: (role: string) => void;
+  /** Back to step 1, the uploaded script. */
+  onBack: () => void;
 }) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<string | null>(initialSelected);
@@ -29,13 +32,14 @@ export default function RolePicker({
       <header className="setup-header">
         <Link to="/" aria-label="Audition With Me home"><Wordmark /></Link>
         <div className="setup-progress">
-          <span>Step 2 of 4<span className="sr-only">: Choose role</span></span>
+          <span>Step 2 of 4 · Cast yourself</span>
           <div aria-hidden="true"><i /><i className="is-active" /><i /><i /></div>
         </div>
         <button onClick={() => navigate("/")} className="setup-header-action">Replace script</button>
       </header>
 
       <section className="role-content">
+        <button type="button" className="setup-back" onClick={onBack}><span aria-hidden="true">←</span> Back</button>
         <div className="role-intro">
           <p>{fileName} · {characters.length} {characters.length === 1 ? "role" : "roles"} detected</p>
           <h1>Choose your role</h1>

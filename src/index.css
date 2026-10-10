@@ -2341,7 +2341,8 @@ header .flow-back:hover {
 .processing-page {
   min-height: 100vh;
   min-height: 100dvh;
-  overflow: hidden;
+  /* Vertical overflow scrolls: See script can open the page past the fold. */
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 82% 18%, rgba(48, 66, 91, 0.32), transparent 32%),
     #101b2a;
@@ -2377,22 +2378,10 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.5);
   font-size: 0.75rem;
 }
-.workflow-back {
-  justify-self: end;
-  min-height: 44px;
-  padding: 0 4px;
-  color: rgba(248, 241, 230, 0.82);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.workflow-back span {
-  margin-right: 8px;
-  color: #ef9a78;
-}
 .processing-layout {
   width: min(1280px, 100%);
-  height: calc(100vh - 72px);
-  height: calc(100dvh - 72px);
+  min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
   display: grid;
   grid-template-columns: minmax(380px, 0.85fr) minmax(390px, 0.72fr);
   align-items: center;
@@ -2502,27 +2491,46 @@ header .flow-back:hover {
   font-size: 0.875rem;
   line-height: 1.5;
 }
-.processing-continue {
-  display: inline-flex;
-  min-height: 52px;
+.processing-preview {
+  min-width: 0;
+}
+/* See script: the read script, folded under the explanation. Open, Replace
+   script sits beside Hide script and the PDF below. */
+.script-accordion {
+  margin-top: 6px;
+}
+.script-accordion-actions {
+  display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 22px;
-  padding: 0 26px;
-  border: 1px solid rgba(255, 218, 197, 0.72);
-  border-radius: 8px;
-  background: linear-gradient(135deg, #f5b092, #ed906f);
-  box-shadow:
-    0 12px 28px rgba(5, 11, 19, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
-  color: #111d2b;
-  font-size: 1rem;
-  font-weight: 700;
-  transition: 0.25s ease;
 }
-.processing-continue:hover {
-  filter: brightness(1.04);
-  transform: translateY(-2px);
+.script-accordion-dot {
+  color: rgba(248, 241, 230, 0.45);
+}
+.script-accordion-toggle {
+  min-height: 44px;
+  color: #f5ad8d;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.script-accordion-toggle:hover {
+  color: #f8f1e6;
+}
+/* Beside Hide script, not pushed to the far end. */
+.script-accordion-actions .replace-script {
+  margin-top: 0;
+  margin-left: 0;
+}
+.script-accordion-next {
+  margin-left: auto;
+}
+.script-accordion .document-panel {
+  margin-top: 8px;
+}
+/* Script read: no preview, so the status takes a single centered column. */
+.processing-layout--single {
+  grid-template-columns: minmax(0, 640px);
+  justify-content: center;
 }
 .document-panel {
   min-width: 0;
@@ -2800,16 +2808,31 @@ header .flow-back:hover {
 .voice-setup-intro {
   max-width: 470px;
 }
-.voice-setup-back {
+/* The practice setup steps' Back (top left of the content) and step 1's
+   Replace script: plain text buttons. */
+.setup-back,
+.replace-script {
+  display: block;
   min-height: 44px;
-  margin-bottom: clamp(25px, 4vh, 42px);
   color: rgba(248, 241, 230, 0.75);
   font-size: 0.875rem;
   font-weight: 500;
 }
-.voice-setup-back span {
+.setup-back:hover,
+.replace-script:hover {
+  color: #f8f1e6;
+}
+.setup-back {
+  margin-bottom: clamp(25px, 4vh, 42px);
+}
+.setup-back span {
   margin-right: 8px;
   color: #ef9a78;
+}
+.replace-script {
+  margin-top: 6px;
+  margin-left: auto;
+  color: #f5ad8d;
 }
 .voice-setup-intro > p {
   margin: 0 0 13px;
@@ -3263,7 +3286,7 @@ header .flow-back:hover {
   .voice-setup-intro {
     max-width: 650px;
   }
-  .voice-setup-back {
+  .setup-back {
     margin-bottom: 18px;
   }
   .voice-setup-intro h1 {
@@ -3298,7 +3321,7 @@ header .flow-back:hover {
     padding-top: 24px;
     padding-bottom: 24px;
   }
-  .voice-setup-back {
+  .setup-back {
     margin-bottom: 15px;
   }
   .voice-setup-intro h1 {
