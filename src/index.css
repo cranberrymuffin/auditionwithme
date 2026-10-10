@@ -2731,6 +2731,9 @@ header .flow-back:hover {
   .processing-layout {
     height: auto;
     min-height: calc(100dvh - 72px);
+    /* Phones start every setup step at the top, not mid-screen. */
+    align-content: start;
+    align-items: start;
     grid-template-columns: 1fr;
     gap: 34px;
     padding: 48px 22px 36px;
@@ -3279,6 +3282,8 @@ header .flow-back:hover {
 @media (max-width: 850px) {
   .voice-setup-layout {
     min-height: calc(100dvh - 66px);
+    align-content: start;
+    align-items: start;
     grid-template-columns: 1fr;
     gap: 30px;
     padding: 30px 20px 40px;
@@ -4643,6 +4648,11 @@ header .flow-back:hover {
   }
 }
 @media (max-width: 760px) {
+  /* The start card sits at the top, under the header, like the setup steps. */
+  .rehearsal-start-overlay {
+    align-items: flex-start;
+    padding-top: calc(78px + env(safe-area-inset-top));
+  }
   .rehearsal-header {
     height: 62px;
     grid-template-columns: 1fr auto;
