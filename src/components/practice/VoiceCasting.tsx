@@ -168,10 +168,9 @@ export default function VoiceCasting({
     };
     return languageVoices
       .filter((voice) => voice[key] === value)
-      .reduce<Voice | undefined>(
-        (top, voice) => (!top || score(voice) > score(top) ? voice : top),
-        undefined,
-      );
+      .reduce<
+        Voice | undefined
+      >((top, voice) => (!top || score(voice) > score(top) ? voice : top), undefined);
   };
   // A filter's options, each labeled with the other filters picking it would
   // change; the ones that change nothing first, then fewest changes.
@@ -350,7 +349,23 @@ export default function VoiceCasting({
                   ))}
                 </div>
               )}
-
+              <div className="voice-advanced-preview">
+                <button
+                  type="button"
+                  className={`role-option--play ${previewing === activeSpeaker ? "is-selected" : ""}`}
+                  aria-pressed={previewing === activeSpeaker}
+                  aria-label={`Play ${displayCharacter(activeSpeaker)}'s voice`}
+                  disabled={!currentVoice}
+                  onClick={() => preview(activeSpeaker)}
+                >
+                  <span className="role-radio" aria-hidden="true">
+                    {playMark(previewing === activeSpeaker)}
+                  </span>
+                </button>
+                <span className="role-option-copy">
+                  <q>{previewLineFor(activeSpeaker)}</q>
+                </span>
+              </div>
               <div className="voice-filter-bar">
                 <div>
                   <strong>Refine voice</strong>
@@ -404,23 +419,6 @@ export default function VoiceCasting({
                     </select>
                   </label>
                 ))}
-              </div>
-              <div className="voice-advanced-preview">
-                <button
-                  type="button"
-                  className={`role-option--play ${previewing === activeSpeaker ? "is-selected" : ""}`}
-                  aria-pressed={previewing === activeSpeaker}
-                  aria-label={`Play ${displayCharacter(activeSpeaker)}'s voice`}
-                  disabled={!currentVoice}
-                  onClick={() => preview(activeSpeaker)}
-                >
-                  <span className="role-radio" aria-hidden="true">
-                    {playMark(previewing === activeSpeaker)}
-                  </span>
-                </button>
-                <span className="role-option-copy">
-                  <q>{previewLineFor(activeSpeaker)}</q>
-                </span>
               </div>
             </div>
           </Accordion>

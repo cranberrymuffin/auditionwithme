@@ -2583,6 +2583,10 @@ header .flow-back:hover {
 .voice-advanced-accordion .script-accordion-actions {
   justify-content: center;
 }
+.voice-advanced-accordion .script-accordion-toggle:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 /* Script read: no preview, so the status takes a single centered column. */
 .processing-layout--single {
   grid-template-columns: minmax(0, 640px);
