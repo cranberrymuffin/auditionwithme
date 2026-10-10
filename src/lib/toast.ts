@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-export type ToastKind = "error" | "info";
+export type ToastKind = "error" | "info" | "success";
 
 /** Fire-and-forget notice; rendered by ToastProvider at the app root. */
 export const ToastContext = createContext<(message: string, kind?: ToastKind) => void>(() => {});

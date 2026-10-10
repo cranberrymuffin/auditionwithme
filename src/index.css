@@ -1906,10 +1906,55 @@ header .flow-back:hover {
   background: linear-gradient(145deg, #1d2d43, #142236);
   box-shadow: 0 24px 60px rgba(4, 8, 14, 0.5);
 }
+.modal-content:focus {
+  outline: none;
+}
 .modal-title {
   margin: 0 0 18px;
   font-size: 1.125rem;
   font-weight: 600;
+}
+.modal-copy {
+  margin: -6px 0 20px;
+  color: rgba(248, 241, 230, 0.8);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.modal-actions button {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.modal-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #f8f1e6;
+}
+.modal-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.modal-primary {
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+}
+.modal-primary:hover {
+  filter: brightness(1.04);
+}
+.modal-danger {
+  border: 1px solid rgba(255, 107, 97, 0.6);
+  background: rgba(255, 59, 48, 0.12);
+  color: #ff9a92;
+}
+.modal-danger:hover {
+  background: rgba(255, 59, 48, 0.2);
 }
 @media (max-width: 520px) {
   .modal-overlay {
@@ -1928,6 +1973,16 @@ header .flow-back:hover {
   }
   .modal-content .modal-title {
     flex: 0 0 auto;
+  }
+  /* Short confirmations stay a card instead of taking the whole screen. */
+  .modal-content.is-compact {
+    width: calc(100% - 32px);
+    height: auto;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 11px;
+  }
+  .modal-content.is-compact .modal-actions button {
+    flex: 1 1 100%;
   }
   .modal-content .stripe-elements-form {
     flex: 1 1 auto;
@@ -2702,6 +2757,10 @@ header .flow-back:hover {
 .toast-info .toast-icon {
   background: var(--sky);
   color: var(--ink-soft);
+}
+.toast-success .toast-icon {
+  background: #d9efdf;
+  color: #23633a;
 }
 .toast > button {
   min-width: 28px;
