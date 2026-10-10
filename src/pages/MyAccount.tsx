@@ -16,6 +16,7 @@ import {
 } from "../lib/scriptStore";
 import { displayCharacterName } from "../lib/script";
 import { useToast } from "../lib/toast";
+import { useStartRehearsal } from "../hooks/useStartRehearsal";
 import type { SavedScript, SelfTape } from "../types";
 
 // Tapes recorded before the per-take role field existed have none saved.
@@ -30,6 +31,9 @@ function roleForTape(tape: SelfTape, script: SavedScript | null | undefined): st
 export default function MyAccount() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  // Upload a script: the same start as Home's, straight to step 1.
+  const startRehearsal = useStartRehearsal();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const location = useLocation();
   const toast = useToast();
   const [scripts, setScripts] = useState<SavedScript[]>([]);
@@ -301,9 +305,21 @@ export default function MyAccount() {
         ) : scripts.length === 0 ? (
           <div className="account-empty">
             <p>You haven't uploaded a script on this device.</p>
-            <button type="button" onClick={() => navigate("/")}>
+            <button type="button" onClick={() => uploadInputRef.current?.click()}>
               Upload a script <span>→</span>
             </button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                // Cleared so picking the same file again still fires.
+                event.target.value = "";
+                if (file) void startRehearsal(file);
+              }}
+            />
           </div>
         ) : (
           <ul className="account-scripts">
