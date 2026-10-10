@@ -15,6 +15,9 @@ export type TtsLine = {
   deliveryTag?: string;
   /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
   performance?: string;
+  /** The character's emotion setting (lib/characterDelivery.ts), -1 … 1;
+   * missing or 0 is the natural read. */
+  emotion?: number;
 };
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
@@ -38,4 +41,7 @@ export const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     // Always "natural" now (Rehearsal pins it), but kept in the key: dropping
     // it would change every key's shape and orphan already-cached audio.
     intensity,
+    // Appended only off natural, so lines read at the default keep the key
+    // they were already stored under.
+    ...(line.emotion ? [line.emotion] : []),
   ]);

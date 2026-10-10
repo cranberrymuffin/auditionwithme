@@ -48,6 +48,8 @@ type ReplayScript = {
   characterVoices?: Record<string, string> | null;
   /** Scene partner levels from a past rehearsal, speaker → gain. */
   characterVolumes?: Record<string, number> | null;
+  characterEmotions?: Record<string, number> | null;
+  characterPaces?: Record<string, number> | null;
   /** AI-director delivery tags from a past parse, aligned with steps. */
   deliveryTags?: (string | null)[] | null;
   /** DIRECTOR_VERSION those tags were generated under (null/absent = stale). */
@@ -222,6 +224,12 @@ function PracticeFlow({
   const [characterVolumes, setCharacterVolumes] = useState<
     Record<string, number>
   >({});
+  const [characterEmotions, setCharacterEmotions] = useState<
+    Record<string, number>
+  >({});
+  const [characterPaces, setCharacterPaces] = useState<
+    Record<string, number>
+  >({});
   // This script's id from the moment it's uploaded (a replay's own), so
   // everything kept on-device for it — reader audio included — is filed
   // under it from the start. The saved row with this id only exists once
@@ -356,6 +364,12 @@ function PracticeFlow({
     }
     if (replayScript.characterVolumes) {
       setCharacterVolumes(replayScript.characterVolumes);
+    }
+    if (replayScript.characterEmotions) {
+      setCharacterEmotions(replayScript.characterEmotions);
+    }
+    if (replayScript.characterPaces) {
+      setCharacterPaces(replayScript.characterPaces);
     }
     // Tags from an older director prompt are dropped rather than seeded, so
     // the director effect below re-runs with the current prompt (and the
@@ -699,6 +713,8 @@ function PracticeFlow({
       void updateScript(scriptId, {
         characterVoices: next,
         characterVolumes,
+        characterEmotions,
+        characterPaces,
         rolesRead: nextRolesRead,
       }).catch((err) => console.error("Failed to save voice casting:", err));
     }
@@ -785,6 +801,7 @@ function PracticeFlow({
     steps,
     selectedRole: selectedRole ?? "",
     characterVoices,
+    characterEmotions,
     deliveryTags,
     // Pinned, as in Rehearsal — part of the cache key.
     intensity: "natural",
@@ -1185,6 +1202,14 @@ function PracticeFlow({
         onVolumeChange={(speaker, volume) =>
           setCharacterVolumes((prev) => ({ ...prev, [speaker]: volume }))
         }
+        characterEmotions={characterEmotions}
+        onEmotionChange={(speaker, emotion) =>
+          setCharacterEmotions((prev) => ({ ...prev, [speaker]: emotion }))
+        }
+        characterPaces={characterPaces}
+        onPaceChange={(speaker, pace) =>
+          setCharacterPaces((prev) => ({ ...prev, [speaker]: pace }))
+        }
         onStart={startReading}
         languageCode={scriptLanguage.code}
         onGoToStep={goToStep}
@@ -1198,6 +1223,8 @@ function PracticeFlow({
       selectedRole={selectedRole ?? ""}
       characterVoices={characterVoices}
       characterVolumes={characterVolumes}
+      characterEmotions={characterEmotions}
+      characterPaces={characterPaces}
       deliveryTags={deliveryTags ?? []}
       onBack={() =>
         stepBack(() => {

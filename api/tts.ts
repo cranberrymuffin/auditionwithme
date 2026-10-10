@@ -16,8 +16,28 @@ const FALLBACK_MODEL = "eleven_multilingual_v2";
 // Fixed at the old "natural" preset. The client still sends an `intensity`
 // field (pinned to "natural" and kept in its cache key), but it's ignored
 // here: a global intensity knob made every line louder at once, which beta
-// testers heard as over-acting. Emotion now comes from per-line audio tags.
+// testers heard as over-acting. Emotion now comes from per-line audio tags,
+// plus each character's own Emotion setting (see v2Stability below).
 const V2_SETTINGS = { stability: 0.45, style: 0.35 };
+
+// How far a character's Emotion setting (-1 very reserved … 1 very
+// expressive, src/lib/characterDelivery.ts) moves stability off its natural
+// value: the full range spans 0.6 of it, lower being more expressive.
+const EMOTION_STABILITY_SPAN = 0.3;
+
+/** The request's emotion setting, made safe (missing or junk → natural). */
+export function parseEmotion(emotion: unknown): number {
+  return typeof emotion === "number" && Number.isFinite(emotion)
+    ? Math.min(Math.max(emotion, -1), 1)
+    : 0;
+}
+
+const clampStability = (stability: number) =>
+  Math.round(Math.min(Math.max(stability, 0), 1) * 100) / 100;
+
+export function v2Stability(emotion = 0): number {
+  return clampStability(V2_SETTINGS.stability - emotion * EMOTION_STABILITY_SPAN);
+}
 
 // Cap on how much surrounding dialogue is sent as prosody context — roughly
 // the last/next five or six lines, enough to carry the scene's emotional arc.
@@ -40,9 +60,11 @@ export const BIG_DELIVERY_TAGS = new Set([
 // exaggerated every tagged line into something beta testers called "over
 // the top" for an audition reader. Emotion still comes mainly from the
 // director's scene-aware audio tags. Creative is kept only for the script's
-// own big-delivery parentheticals.
-export function v3Stability(bigDelivery: boolean): number {
-  return bigDelivery ? 0 : 0.3;
+// own big-delivery parentheticals, whatever the character's Emotion setting:
+// the script itself asked for it. Otherwise that setting moves the 0.3 —
+// Very expressive reaches Creative, Very reserved goes past Natural.
+export function v3Stability(bigDelivery: boolean, emotion = 0): number {
+  return bigDelivery ? 0 : clampStability(0.3 - emotion * EMOTION_STABILITY_SPAN);
 }
 
 // Best-effort guard for the ElevenLabs Starter plan's 3 concurrent TTS slots,
@@ -84,8 +106,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
   }
 
-  const { text, voiceId, previousText, nextText, deliveryTag, performance } =
-    (req.body ?? {}) as {
+  const {
+    text,
+    voiceId,
+    previousText,
+    nextText,
+    deliveryTag,
+    performance,
+    emotion: rawEmotion,
+  } = (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
       previousText?: string;
@@ -93,7 +122,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       deliveryTag?: string;
       /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
       performance?: string;
+      /** The character's Emotion setting, -1 … 1 (missing = natural). */
+      emotion?: unknown;
     };
+  const emotion = parseEmotion(rawEmotion);
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
   }
@@ -154,6 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 voice_settings: {
                   stability: v3Stability(
                     tag != null && BIG_DELIVERY_TAGS.has(tag),
+                    emotion,
                   ),
                 },
               }
@@ -162,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 model_id: modelId,
                 voice_settings: {
                   ...V2_SETTINGS,
+                  stability: v2Stability(emotion),
                   similarity_boost: 0.75,
                   use_speaker_boost: true,
                 },

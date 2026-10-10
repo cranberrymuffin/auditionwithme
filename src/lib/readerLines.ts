@@ -11,6 +11,7 @@ import {
   type ReaderBeat,
 } from "./delivery";
 import { normalizeSpeaker } from "./speaker";
+import { clampCharacterEmotion } from "./characterDelivery";
 import type { TtsLine } from "./ttsCacheKey";
 
 /** Indices of the steps the reader voices: every spoken line not belonging
@@ -46,13 +47,15 @@ export type ReaderCue = { line: TtsLine; beatMs: number };
  * tag on scripts saved before the markup upgrade. A beat — an explicit
  * "(beat)"-style cue before the line, else the director's leading
  * "[short pause]" / "[long pause]" — is split off here so it never reaches
- * the TTS text or the cache key.
+ * the TTS text or the cache key. The speaker's emotion setting goes on the
+ * request only when it's off natural, so default reads keep their keys.
  */
 export function buildReaderCue(
   steps: Step[],
   index: number,
   characterVoices: Record<string, string>,
   deliveryTags: (string | null)[],
+  characterEmotions: Record<string, number> = {},
 ): ReaderCue | null {
   const step = steps[index];
   if (!step?.verbalLine.trim()) return null;
@@ -69,6 +72,7 @@ export function buildReaderCue(
       : undefined;
   const legacyTag = directed && directed !== step.verbalLine && !performance ? directed : undefined;
   const beat = beatFromContent(step.content) ?? directedBeat;
+  const emotion = clampCharacterEmotion(characterEmotions[normalizeSpeaker(step.speaker)]);
   return {
     line: {
       text: step.verbalLine,
@@ -77,6 +81,7 @@ export function buildReaderCue(
       nextText: after?.verbalLine,
       deliveryTag: parenthetical ?? legacyTag,
       performance,
+      ...(emotion ? { emotion } : {}),
     },
     beatMs: beat ? BEAT_MS[beat] : 0,
   };
@@ -89,6 +94,7 @@ export function buildReaderLine(
   index: number,
   characterVoices: Record<string, string>,
   deliveryTags: (string | null)[],
+  characterEmotions: Record<string, number> = {},
 ): TtsLine | null {
-  return buildReaderCue(steps, index, characterVoices, deliveryTags)?.line ?? null;
+  return buildReaderCue(steps, index, characterVoices, deliveryTags, characterEmotions)?.line ?? null;
 }

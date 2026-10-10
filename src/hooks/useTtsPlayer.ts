@@ -139,6 +139,7 @@ async function fetchTtsBlob(
         nextText: line.nextText,
         deliveryTag: line.deliveryTag,
         performance: line.performance,
+        emotion: line.emotion,
         intensity,
       }),
       signal: controller.signal,

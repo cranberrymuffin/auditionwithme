@@ -3415,8 +3415,13 @@ header .flow-back:hover {
   min-width: 0;
   accent-color: #ef9a78;
 }
+/* Fixed widths line Volume, Emotion and Pace's sliders up with each other. */
+.voice-volume > span {
+  min-width: 3.75rem;
+}
 .voice-volume output {
-  min-width: 4.5ch;
+  min-width: 7.5rem;
+  white-space: nowrap;
   text-align: right;
   color: #f8f1e6;
   font-variant-numeric: tabular-nums;

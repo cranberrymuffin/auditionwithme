@@ -18,6 +18,9 @@ type ScriptRecord = {
   characterVoices: Record<string, string> | null;
   /** Missing on rows saved before per-character levels existed. */
   characterVolumes?: Record<string, number>;
+  /** Missing on rows saved before per-character emotion and pace existed. */
+  characterEmotions?: Record<string, number>;
+  characterPaces?: Record<string, number>;
   deliveryTags: (string | null)[] | null;
   /** DIRECTOR_VERSION (src/lib/director.ts) the deliveryTags came from;
    * missing on rows saved before versioning, which readers treat as stale. */
@@ -54,6 +57,8 @@ function toSavedScript(record: ScriptRecord): SavedScript {
     content_hash: record.contentHash,
     character_voices: record.characterVoices,
     character_volumes: record.characterVolumes ?? null,
+    character_emotions: record.characterEmotions ?? null,
+    character_paces: record.characterPaces ?? null,
     delivery_tags: record.deliveryTags,
     director_version: record.directorVersion ?? null,
     roles_read: record.rolesRead ?? [],
@@ -107,6 +112,8 @@ export function toReplayScript(script: SavedScript) {
     languageName: script.language_name,
     characterVoices: script.character_voices,
     characterVolumes: script.character_volumes,
+    characterEmotions: script.character_emotions,
+    characterPaces: script.character_paces,
     deliveryTags: script.delivery_tags,
     directorVersion: script.director_version,
     rolesRead: script.roles_read,
@@ -136,6 +143,8 @@ export async function updateScript(
       | "title"
       | "characterVoices"
       | "characterVolumes"
+      | "characterEmotions"
+      | "characterPaces"
       | "deliveryTags"
       | "directorVersion"
       | "rolesRead"

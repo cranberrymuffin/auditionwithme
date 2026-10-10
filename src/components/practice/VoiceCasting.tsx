@@ -13,6 +13,15 @@ import {
   clampCharacterVolume,
   MAX_CHARACTER_VOLUME,
 } from "../../lib/characterVolume";
+import {
+  CHARACTER_EMOTION_STEP,
+  characterEmotionLabel,
+  characterPaceLabel,
+  clampCharacterEmotion,
+  clampCharacterPace,
+  MAX_CHARACTER_PACE,
+  MIN_CHARACTER_PACE,
+} from "../../lib/characterDelivery";
 import SetupStep from "./SetupStep";
 import SetupActions from "./SetupActions";
 import CastGrid, { CastCard } from "./CastGrid";
@@ -35,6 +44,10 @@ export default function VoiceCasting({
   characterVoices,
   characterVolumes,
   onVolumeChange,
+  characterEmotions,
+  onEmotionChange,
+  characterPaces,
+  onPaceChange,
   languageCode,
   onPick,
   onStart,
@@ -50,6 +63,12 @@ export default function VoiceCasting({
   /** Speaker → level (missing = unity), fixed once the take starts. */
   characterVolumes: Record<string, number>;
   onVolumeChange: (speaker: string, volume: number) => void;
+  /** Speaker → emotion, -1 … 1 (missing = natural); changes the generated read. */
+  characterEmotions: Record<string, number>;
+  onEmotionChange: (speaker: string, emotion: number) => void;
+  /** Speaker → playback rate (missing = normal), applied client-side. */
+  characterPaces: Record<string, number>;
+  onPaceChange: (speaker: string, pace: number) => void;
   /** On to step 4 with the current voices. */
   onStart: () => void;
   /** Back to an earlier step (1-based), from the header's step bars. */
@@ -58,7 +77,7 @@ export default function VoiceCasting({
   scriptName: string;
 }) {
   const toast = useToast();
-  const { play, stop, setVolume } = useTtsPlayer();
+  const { play, stop, setVolume, setPlaybackRate } = useTtsPlayer();
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
   // The speaker whose voice preview is playing, if any.
   const [previewing, setPreviewing] = useState<string | null>(null);
@@ -105,6 +124,21 @@ export default function VoiceCasting({
     onVolumeChange(activeSpeaker, next);
     if (previewing === activeSpeaker) setVolume(next);
   };
+  const emotion = clampCharacterEmotion(characterEmotions[activeSpeaker]);
+  const changeEmotion = (next: number) => {
+    // A preview playing was generated at the old emotion: hearing the new
+    // one means playing it again.
+    if (previewing === activeSpeaker) {
+      stop();
+      setPreviewing(null);
+    }
+    onEmotionChange(activeSpeaker, next);
+  };
+  const pace = clampCharacterPace(characterPaces[activeSpeaker]);
+  const changePace = (next: number) => {
+    onPaceChange(activeSpeaker, next);
+    if (previewing === activeSpeaker) setPlaybackRate(next);
+  };
   // The voice each speaker started with (auto-cast, or saved from a past
   // rehearsal), for Restore default.
   const initialVoicesRef = useRef<Record<string, string>>({});
@@ -124,8 +158,23 @@ export default function VoiceCasting({
     }
   });
   const initialVolume = initialVolumesRef.current[activeSpeaker];
+  // And their starting emotion and pace.
+  const initialDeliveryRef = useRef<
+    Record<string, { emotion: number; pace: number }>
+  >({});
+  speakers.forEach((speaker) => {
+    if (!(speaker in initialDeliveryRef.current)) {
+      initialDeliveryRef.current[speaker] = {
+        emotion: clampCharacterEmotion(characterEmotions[speaker]),
+        pace: clampCharacterPace(characterPaces[speaker]),
+      };
+    }
+  });
+  const initialDelivery = initialDeliveryRef.current[activeSpeaker];
   const voiceChanged = !!initialVoiceId && initialVoiceId !== currentVoice?.id;
   const volumeChanged = volume !== initialVolume;
+  const emotionChanged = emotion !== initialDelivery?.emotion;
+  const paceChanged = pace !== initialDelivery?.pace;
 
   const pickVoice = (voiceId: string) => {
     stop();
@@ -197,9 +246,14 @@ export default function VoiceCasting({
     setPreviewing(speaker);
     try {
       await play(
-        { text: previewLineFor(speaker), voiceId: voice.id },
+        {
+          text: previewLineFor(speaker),
+          voiceId: voice.id,
+          emotion: clampCharacterEmotion(characterEmotions[speaker]) || undefined,
+        },
         {
           volume: clampCharacterVolume(characterVolumes[speaker]),
+          speed: clampCharacterPace(characterPaces[speaker]),
           onEnded: () =>
             setPreviewing((playing) => (playing === speaker ? null : playing)),
         },
@@ -301,9 +355,16 @@ export default function VoiceCasting({
                   <strong>Refine voice</strong>
                 </div>
                 <button
-                  disabled={!voiceChanged && !volumeChanged}
+                  disabled={
+                    !voiceChanged &&
+                    !volumeChanged &&
+                    !emotionChanged &&
+                    !paceChanged
+                  }
                   onClick={() => {
                     if (volumeChanged) changeVolume(initialVolume);
+                    if (paceChanged) changePace(initialDelivery.pace);
+                    if (emotionChanged) changeEmotion(initialDelivery.emotion);
                     if (voiceChanged) pickVoice(initialVoiceId);
                   }}
                 >
@@ -328,6 +389,43 @@ export default function VoiceCasting({
                 </datalist>
                 <output>{volume === 1 ? "Normal" : `${Math.round(volume * 100)}%`}</output>
               </label>
+              <label className="voice-volume">
+                <span>Emotion</span>
+                <input
+                  type="range"
+                  min="-1"
+                  max="1"
+                  step={CHARACTER_EMOTION_STEP}
+                  value={emotion}
+                  onChange={(event) => changeEmotion(Number(event.target.value))}
+                  aria-label={`Emotion for ${displayCharacter(activeSpeaker)}`}
+                  aria-valuetext={characterEmotionLabel(emotion)}
+                />
+                <output>{characterEmotionLabel(emotion)}</output>
+              </label>
+              <label className="voice-volume">
+                <span>Pace</span>
+                <input
+                  type="range"
+                  min={MIN_CHARACTER_PACE}
+                  max={MAX_CHARACTER_PACE}
+                  step="0.05"
+                  value={pace}
+                  onChange={(event) => changePace(Number(event.target.value))}
+                  aria-label={`Pace for ${displayCharacter(activeSpeaker)}`}
+                  aria-valuetext={characterPaceLabel(pace)}
+                  list="voice-pace-marks"
+                />
+                <datalist id="voice-pace-marks">
+                  <option value="1" label="Normal" />
+                </datalist>
+                <output>{characterPaceLabel(pace)}</output>
+              </label>
+              <p className="voice-filter-note">
+                Emotion sets how much feeling goes into each line: Reserved
+                keeps it even, Expressive lets it swing. Pace speeds the voice
+                up or slows it down without changing its pitch.
+              </p>
               <div className="voice-setup-filters">
                 {FILTER_KEYS.map((key) => (
                   <label

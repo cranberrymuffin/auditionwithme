@@ -30,7 +30,13 @@ import {
   START_EARLY_LINES,
   targetWorkers,
 } from "../src/lib/pregenSchedule";
-import { shouldHoldPregen as serverShouldHold } from "../api/tts";
+import {
+  parseEmotion,
+  shouldHoldPregen as serverShouldHold,
+  v2Stability,
+  v3Stability,
+} from "../api/tts";
+import { clampCharacterEmotion } from "../src/lib/characterDelivery";
 import { planReaderAudioEviction } from "../src/lib/readerAudioStore";
 import type { Step } from "../src/types";
 
@@ -324,6 +330,44 @@ check("eviction stops once under the total", () => {
     rec("d1", "D", 100, "2026-01-03"),
   ];
   assert.deepEqual(planReaderAudioEviction(records, null, caps), ["b1"]);
+});
+
+check("a natural emotion setting keeps the line's existing key", () => {
+  const line = buildReaderLine(steps, 1, voices, [], { BEN: 0 })!;
+  assert.equal("emotion" in line, false);
+  assert.equal(cacheKey(line, "natural"), cacheKey(buildReaderLine(steps, 1, voices, [])!, "natural"));
+});
+
+check("an emotion setting changes only that speaker's keys", () => {
+  const plain = keysFor("ANNA", voices, []);
+  const emotional = readerLineIndices(steps, "ANNA").map((index) =>
+    cacheKey(buildReaderLine(steps, index, voices, [], { BEN: 0.5 })!, "natural"),
+  );
+  assert.notEqual(emotional[0], plain[0]); // BEN
+  assert.notEqual(emotional[1], plain[1]); // BEN
+  assert.equal(emotional[2], plain[2]); // CARL
+  assert.equal(buildReaderCue(steps, 1, voices, [], { BEN: 0.5 })!.line.emotion, 0.5);
+});
+
+check("emotion settings snap to the slider's stops", () => {
+  assert.equal(clampCharacterEmotion(undefined), 0);
+  assert.equal(clampCharacterEmotion(-0.1), 0);
+  assert.equal(Object.is(clampCharacterEmotion(-0.1), -0), false);
+  assert.equal(clampCharacterEmotion(0.4), 0.5);
+  assert.equal(clampCharacterEmotion(7), 1);
+});
+
+check("emotion moves stability, but never a script's big delivery", () => {
+  assert.equal(v3Stability(false), 0.3);
+  assert.equal(v3Stability(false, 1), 0);
+  assert.equal(v3Stability(false, 0.5), 0.15);
+  assert.equal(v3Stability(false, -1), 0.6);
+  assert.equal(v3Stability(true, -1), 0);
+  assert.equal(v2Stability(), 0.45);
+  assert.equal(v2Stability(1), 0.15);
+  assert.equal(v2Stability(-1), 0.75);
+  assert.equal(parseEmotion("1"), 0);
+  assert.equal(parseEmotion(-9), -1);
 });
 
 console.log(`\n${passed} checks passed`);

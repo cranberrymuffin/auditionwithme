@@ -20,6 +20,8 @@ export type SavedScript = {
   character_voices: Record<string, string> | null;
   /** Scene partner levels from a past rehearsal, speaker → gain (1 = unity) */
   character_volumes: Record<string, number> | null;
+  character_emotions: Record<string, number> | null;
+  character_paces: Record<string, number> | null;
   /** AI-director delivery tags, aligned by index with steps */
   delivery_tags: (string | null)[] | null;
   /** DIRECTOR_VERSION the delivery tags were generated under; null on rows

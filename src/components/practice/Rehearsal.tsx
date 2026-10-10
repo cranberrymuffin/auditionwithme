@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
 import { normalizeSpeaker } from "../../lib/script";
 import { buildReaderCue, type ReaderCue } from "../../lib/readerLines";
+import { clampCharacterPace } from "../../lib/characterDelivery";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
 import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
@@ -26,12 +27,15 @@ const COUNTDOWN_START = 3;
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, characterEmotions, characterPaces, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
   /** Speaker → level set on the voice setup screen (missing = unity). */
   characterVolumes: Record<string, number>;
+  /** Speaker → emotion and pace set beside volume (lib/characterDelivery.ts). */
+  characterEmotions: Record<string, number>;
+  characterPaces: Record<string, number>;
   deliveryTags: (string | null)[];
   onBack: () => void;
   /** Back to an earlier setup step (1-based), from step 4's step bars. */
@@ -88,13 +92,17 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   // and its cache key — match what was generated before Start. The cue also
   // carries the line's intentional beat, held before it plays.
   const readerCue = useCallback(
-    (index: number): ReaderCue | null => buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current),
-    [steps, characterVoices],
+    (index: number): ReaderCue | null => buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions),
+    [steps, characterVoices, characterEmotions],
   );
   // Fixed for the take: set on the voice setup screen, never mid-scene.
   const volumeFor = useCallback(
     (index: number) => characterVolumes[normalizeSpeaker(steps[index]?.speaker ?? "")],
     [steps, characterVolumes],
+  );
+  const paceFor = useCallback(
+    (index: number) => clampCharacterPace(characterPaces[normalizeSpeaker(steps[index]?.speaker ?? "")]),
+    [steps, characterPaces],
   );
   const ttsLine = useCallback((index: number): TtsLine | null => readerCue(index)?.line ?? null, [readerCue]);
 
@@ -263,6 +271,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       play(line, {
         intensity,
         volume: volumeFor(currentStepIndex),
+        speed: paceFor(currentStepIndex),
         signal: controller.signal,
         onPlaying,
         onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
@@ -287,7 +296,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       holdTimer = setTimeout(startPlayback, holdMs);
     } else startPlayback();
     return () => { if (holdTimer) clearTimeout(holdTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, volumeFor, play, prefetch, stop, recording]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, volumeFor, paceFor, play, prefetch, stop, recording]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -362,10 +371,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     play(line, {
       intensity,
       volume: volumeFor(cueIndex),
+      speed: paceFor(cueIndex),
       onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
       onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
     }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
-  }, [cueIndex, ttsLine, volumeFor, intensity, isMyLine, play, stop]);
+  }, [cueIndex, ttsLine, volumeFor, paceFor, intensity, isMyLine, play, stop]);
 
   const togglePause = useCallback(() => {
     setPaused((value) => {
