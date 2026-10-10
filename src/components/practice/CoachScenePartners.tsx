@@ -4,7 +4,7 @@ import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
 import { buildReaderCue, readerLineIndices } from "../../lib/readerLines";
 import { clampCharacterPace } from "../../lib/characterDelivery";
 import { clampCharacterVolume } from "../../lib/characterVolume";
-import { deleteCoachTake, saveCoachTake } from "../../lib/coachTakeStore";
+import { saveCoachTake } from "../../lib/coachTakeStore";
 import { useTtsPlayer } from "../../hooks/useTtsPlayer";
 import SetupStep from "./SetupStep";
 
@@ -165,8 +165,10 @@ export default function CoachScenePartners({
     }
     if (unmountedRef.current) return false;
     const speaker = speakerOf(index);
-    const audio = (previewRef.current ??= new Audio());
     stop();
+    // A fresh element per preview, so its listeners never pile up.
+    const audio = new Audio();
+    previewRef.current = audio;
     const url = URL.createObjectURL(blob);
     previewUrlRef.current = url;
     audio.src = url;
@@ -230,7 +232,20 @@ export default function CoachScenePartners({
   function stopRecording() {
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     autoStopRef.current = null;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (recorderRef.current?.state === "recording") {
+      recorderRef.current.stop();
+      return;
+    }
+    // The recorder already stopped without us (its microphone went away, or
+    // a dev hot reload ran the cleanup below): nothing will finish the take,
+    // so don't leave Stop showing with nothing behind it.
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setBusy(null);
+    setError({
+      index: busy?.index ?? activeIndex ?? 0,
+      message: "The recording stopped before you did. Tap Record to try again.",
+    });
   }
 
   const finishTake = async (index: number, mimeType: string) => {
@@ -265,26 +280,25 @@ export default function CoachScenePartners({
     }
     if (unmountedRef.current) return;
     onTakeChange(index, id);
-    const next =
-      partnerLines.find((line) => line > index && !coachTakes[line]) ??
-      partnerLines.find((line) => line > index);
-    // Stays on the line if its read couldn't be made, so the error shows.
-    const heard = await hear(index, id);
-    if (heard && !unmountedRef.current && next !== undefined) setActiveIndex(next);
+    // Stays on the line to listen back; the actor picks the next line to
+    // coach themselves.
+    await hear(index, id);
   };
 
-  const removeTake = (index: number) => {
-    const takeId = coachTakes[index];
-    if (!takeId) return;
-    stop();
-    setBusy(null);
-    onTakeChange(index, null);
-    void deleteCoachTake(takeId).catch((err) =>
-      console.warn("Couldn't delete the coached take:", err),
-    );
+  /** Makes `index` the line being coached, stopping any read playing. */
+  const selectLine = (index: number) => {
+    if (busy?.phase === "playing") {
+      stop();
+      setBusy(null);
+    }
+    setError(null);
+    setActiveIndex(index);
   };
 
   const recording = busy?.phase === "recording";
+  // Free to switch lines (or hear one) while a read plays; not mid-take, or
+  // while a take is still being turned into the character's voice.
+  const switchLocked = busy !== null && busy.phase !== "playing";
 
   return (
     <SetupStep step={3} scriptName={scriptName} onGoToStep={onGoToStep}>
@@ -331,17 +345,35 @@ export default function CoachScenePartners({
               }}
               className={`coach-line ${active ? "is-active" : ""} ${takeId ? "is-coached" : ""}`}
             >
+              <div className="coach-speaker">
+                {name}
+                {takeId && (
+                  <>
+                    <span className="coach-badge">Coached</span>
+                    <button
+                      type="button"
+                      className="coach-hear"
+                      disabled={switchLocked}
+                      onClick={() => {
+                        selectLine(index);
+                        void hear(index, takeId);
+                      }}
+                    >
+                      <span aria-hidden="true">▶</span> Hear it
+                    </button>
+                  </>
+                )}
+              </div>
+              {/* Stretched over the whole row (CSS), so clicking anywhere on
+                  the line but Hear it picks it. */}
               <button
                 type="button"
                 className="coach-line-select"
                 aria-current={active ? "step" : undefined}
-                disabled={busy !== null}
-                onClick={() => setActiveIndex(index)}
+                aria-label={`${name}: ${step.verbalLine}`}
+                disabled={switchLocked}
+                onClick={() => selectLine(index)}
               >
-                <span className="coach-speaker">
-                  {name}
-                  {takeId && <span className="coach-badge">Coached</span>}
-                </span>
                 <span className="coach-text">{step.verbalLine}</span>
               </button>
               {active && (
@@ -355,34 +387,18 @@ export default function CoachScenePartners({
                       <span aria-hidden="true">■</span> Stop · {formatElapsed(elapsed)}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      className="coach-record"
-                      disabled={voiceMissing || busy !== null}
-                      onClick={() => void startRecording(index)}
-                    >
-                      <span aria-hidden="true">●</span> {takeId ? "Record again" : "Record"}
-                    </button>
-                  )}
-                  {takeId && (
-                    <>
+                    // Hidden, not greyed out, while it can't be used: the
+                    // status beside it says why.
+                    !voiceMissing &&
+                    busy === null && (
                       <button
                         type="button"
-                        className="speaker-test"
-                        disabled={busy !== null}
-                        onClick={() => void hear(index, takeId)}
+                        className="coach-record"
+                        onClick={() => void startRecording(index)}
                       >
-                        Hear it
+                        <span aria-hidden="true">●</span> {takeId ? "Record again" : "Record"}
                       </button>
-                      <button
-                        type="button"
-                        className="speaker-test"
-                        disabled={recording}
-                        onClick={() => removeTake(index)}
-                      >
-                        Use the AI read
-                      </button>
-                    </>
+                    )
                   )}
                   <span className="coach-status" role="status">
                     {lineBusy === "requesting"
