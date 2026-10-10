@@ -9,7 +9,6 @@ import StepHeader from "./StepHeader";
  */
 export default function SetupStep({
   step,
-  title,
   scriptName,
   onGoToStep,
   aside,
@@ -18,7 +17,6 @@ export default function SetupStep({
 }: {
   /** 1-based. */
   step: number;
-  title: string;
   scriptName: string;
   /** Back to an earlier step (1-based), from the header's step bars. */
   onGoToStep?: (step: number) => void;
@@ -34,7 +32,7 @@ export default function SetupStep({
         className={`processing-layout ${aside ? "" : "processing-layout--single"}`}
       >
         <div className="processing-status">
-          <StepHeader step={step} title={title} scriptName={scriptName} />
+          <StepHeader step={step} scriptName={scriptName} />
           {children}
         </div>
         {aside}

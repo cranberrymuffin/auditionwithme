@@ -17,6 +17,9 @@ export const SIDES_NOTE_SUFFIX = "⟧";
 const TEXT_START_CUE = /^(?:START\s*>*|>+\s*START)$/;
 const TEXT_END_CUE = /^(?:<+\s*END|END\s*<*|STOP)$/;
 
+// A scene heading ("INT. CAR - DAY", with or without margin scene numbers).
+const SCENE_HEADING = /^(?:\d+[A-Z]?\s+)?(?:INT|EXT|INT\.?\s*\/\s*EXT|EXT\.?\s*\/\s*INT|I\/E)[.\s]/;
+
 // Sides page furniture that isn't script content.
 const SIDES_JUNK: RegExp[] = [
   /^PG\s+\d+\s+OF\s+\d+$/i, // "PG 1 OF 7"
@@ -37,7 +40,10 @@ export type SidesResult = {
 /**
  * Resolve sides sentinels and cue text: strip furniture, convert margin notes
  * to parenthetical cue lines, and — when START/END cues exist — keep only the
- * marked selection (multiple START…END segments supported).
+ * marked selection (multiple START…END segments supported). Each selection
+ * keeps the scene heading printed above it even when the START cue sits
+ * below that heading, so the rehearsal can mark where one scene ends and the
+ * next begins.
  */
 export function applySidesMarkup(tuples: LayoutLineTuple[]): SidesResult {
   type Marker =
@@ -79,13 +85,23 @@ export function applySidesMarkup(tuples: LayoutLineTuple[]): SidesResult {
 
   const lines: LayoutLineTuple[] = [];
   const pendingNotes: string[] = [];
+  // The last scene heading passed over outside a selection; a START picks it
+  // up so the selection opens with its scene's heading.
+  let skippedHeading: LayoutLineTuple | null = null;
   for (let i = 0; i < markers.length; i++) {
     const marker = markers[i];
-    if (marker.type === "start") keep = true;
-    else if (marker.type === "end") keep = false;
+    if (marker.type === "start") {
+      if (!keep && skippedHeading) lines.push(skippedHeading);
+      skippedHeading = null;
+      keep = true;
+    } else if (marker.type === "end") keep = false;
     else if (marker.type === "note") {
       if (keep) pendingNotes.push(marker.text);
-    } else if (keep) {
+    } else if (marker.type !== "line") {
+      continue;
+    } else if (!keep) {
+      if (SCENE_HEADING.test(marker.tuple[2].trim())) skippedHeading = marker.tuple;
+    } else {
       if (pendingNotes.length) {
         // Anchor queued margin notes to this line's column so the layout
         // parser treats them as parenthetical/action cues, not dialogue.

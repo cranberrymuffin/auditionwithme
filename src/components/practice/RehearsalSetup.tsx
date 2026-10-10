@@ -159,6 +159,8 @@ export default function RehearsalSetup({
   onRetryCamera,
   scriptSaved,
   onStart,
+  onPracticeRun,
+  onBack,
 }: {
   scriptName: string;
   /** Back to an earlier step (1-based), from the header's step bars. */
@@ -173,6 +175,10 @@ export default function RehearsalSetup({
   /** The take is saved under the script's record, so it must exist. */
   scriptSaved: boolean;
   onStart: () => void;
+  /** Run the scene without recording — only offered when there'd be a tape. */
+  onPracticeRun?: () => void;
+  /** Back to the scene partners step. */
+  onBack: () => void;
 }) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
@@ -287,7 +293,6 @@ export default function RehearsalSetup({
   return (
     <SetupStep
       step={4}
-      title="Get ready"
       scriptName={scriptName}
       onGoToStep={onGoToStep}
     >
@@ -296,7 +301,7 @@ export default function RehearsalSetup({
       </div>
       <p className="processing-explanation">
         {willRecord
-          ? "We’ll record a self-tape while you run the scene. Check your framing while your scene partners get ready."
+          ? "We’ll record a self-tape while you run the scene — or run your lines first without recording. Check your framing while your scene partners get ready."
           : "Sit back and listen to the full scene while your scene partners get ready."}
       </p>
 
@@ -380,6 +385,22 @@ export default function RehearsalSetup({
         />
         <span role="status">{startLabel}</span>
       </button>
+      {/* Back, and a run without the tape, beside the start button's row. */}
+      <div className="rehearsal-setup-actions">
+        <button type="button" className="btn-secondary" onClick={onBack}>
+          Back
+        </button>
+        {onPracticeRun && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={!linesStartable}
+            onClick={onPracticeRun}
+          >
+            Just run lines
+          </button>
+        )}
+      </div>
       {/* Every line loaded: nothing left to explain. */}
       {!allLinesReady && (
         <div className="preparing-note">

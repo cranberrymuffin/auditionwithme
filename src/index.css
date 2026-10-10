@@ -266,6 +266,8 @@ header .flow-back:hover {
   height: auto;
   min-height: 100dvh;
   overflow: visible;
+  /* The backdrop's slight scale-up mustn't add a sideways scroll. */
+  overflow-x: clip;
 }
 .home-page .cinematic-backdrop {
   height: 100dvh;
@@ -507,6 +509,11 @@ header .flow-back:hover {
   color: #f2a080;
 }
 
+/* The landing header shares the hero's side margins, so the logo sits on
+   the same left edge as the headline. */
+.home-page .site-nav {
+  padding-inline: clamp(22px, 7vw, 108px);
+}
 .hero-editorial {
   min-height: calc(100dvh - clamp(68px, 10vh, 92px));
   display: flex;
@@ -527,7 +534,9 @@ header .flow-back:hover {
   line-height: 1.35;
   letter-spacing: 0.015em;
   font-style: italic;
-  color: #ef9a78;
+  /* Soft cream, leaving coral to the headline's italic line and the
+     upload button. */
+  color: rgba(255, 248, 237, 0.78);
 }
 .hero-title {
   margin: 0;
@@ -565,7 +574,8 @@ header .flow-back:hover {
 }
 .hero-actions {
   display: flex;
-  align-items: center;
+  /* Both CTAs share one height, the upload button's. */
+  align-items: stretch;
   flex-wrap: wrap;
   gap: 13px 22px;
   margin-top: clamp(22px, 4vh, 38px);
@@ -793,7 +803,7 @@ header .flow-back:hover {
 }
 .about-process-panel > header p {
   margin: 0 0 6px;
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.8125rem;
 }
 .about-process-panel h2 {
@@ -998,6 +1008,9 @@ header .flow-back:hover {
   .site-nav {
     height: 66px;
     padding: 0 18px;
+  }
+  .home-page .site-nav {
+    padding-inline: 22px;
   }
   .site-nav-links {
     display: none;
@@ -1432,7 +1445,7 @@ header .flow-back:hover {
   padding: 0 max(32px, calc((100vw - 1120px) / 2));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(8, 16, 27, 0.34);
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.8125rem;
 }
 .pricing-footer span:first-child {
@@ -1562,13 +1575,33 @@ header .flow-back:hover {
 .faq-list summary::-webkit-details-marker {
   display: none;
 }
-.faq-list summary span {
-  color: #ef9a78;
-  font-size: 1.1rem;
+/* Plus that folds into a minus when open: same size, same weight. */
+.faq-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.faq-icon i {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: #ef9a78;
   transition: transform 0.2s ease;
 }
-.faq-list details[open] summary span {
-  transform: rotate(45deg);
+.faq-icon i + i {
+  transform: rotate(90deg);
+}
+.faq-list details[open] .faq-icon i + i {
+  transform: rotate(0deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .faq-icon i {
+    transition: none;
+  }
 }
 .faq-list details p {
   margin: -4px 25px 22px 0;
@@ -1639,6 +1672,27 @@ header .flow-back:hover {
   font-size: 1rem;
   line-height: 1.5;
 }
+.account-upload-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #1b120c;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.account-upload-button:hover {
+  filter: brightness(1.05);
+}
+.account-upload-button span {
+  font-size: 1.1rem;
+  line-height: 1;
+}
 .account-empty {
   display: flex;
   flex-direction: column;
@@ -1705,7 +1759,7 @@ header .flow-back:hover {
 .account-script-subtitle {
   display: block;
   margin-top: -11px;
-  color: rgba(248, 241, 230, 0.62);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.8125rem;
 }
 .account-script-actions {
@@ -1728,7 +1782,7 @@ header .flow-back:hover {
   min-width: 160px;
 }
 .account-script-role-picker span {
-  color: rgba(248, 241, 230, 0.62);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.8125rem;
   white-space: nowrap;
 }
@@ -1774,21 +1828,25 @@ header .flow-back:hover {
 .account-script-btn--outline {
   border: 1px solid rgba(248, 241, 230, 0.3);
   background: transparent;
-  color: rgba(248, 241, 230, 0.7);
+  color: rgba(248, 241, 230, 0.85);
 }
 .account-script-btn--outline:hover {
   border-color: #e98464;
   color: #f4a583;
 }
+/* Quiet until hovered: deleting is never the action a row is about. */
 .account-script-btn--danger {
   width: 40px;
   padding: 0;
-  border: 1px solid #eb6a6a;
-  background: #eb6a6a;
-  color: #1b120c;
+  border: 1px solid rgba(248, 241, 230, 0.22);
+  background: transparent;
+  color: rgba(248, 241, 230, 0.7);
 }
-.account-script-btn--danger:hover {
-  filter: brightness(1.08);
+.account-script-btn--danger:hover,
+.account-script-btn--danger:focus-visible {
+  border-color: rgba(255, 107, 97, 0.7);
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff8a80;
 }
 
 .billing-card {
@@ -1906,10 +1964,55 @@ header .flow-back:hover {
   background: linear-gradient(145deg, #1d2d43, #142236);
   box-shadow: 0 24px 60px rgba(4, 8, 14, 0.5);
 }
+.modal-content:focus {
+  outline: none;
+}
 .modal-title {
   margin: 0 0 18px;
   font-size: 1.125rem;
   font-weight: 600;
+}
+.modal-copy {
+  margin: -6px 0 20px;
+  color: rgba(248, 241, 230, 0.8);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.modal-actions button {
+  min-height: 46px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.modal-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: #f8f1e6;
+}
+.modal-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+.modal-primary {
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+}
+.modal-primary:hover {
+  filter: brightness(1.04);
+}
+.modal-danger {
+  border: 1px solid rgba(255, 107, 97, 0.6);
+  background: rgba(255, 59, 48, 0.12);
+  color: #ff9a92;
+}
+.modal-danger:hover {
+  background: rgba(255, 59, 48, 0.2);
 }
 @media (max-width: 520px) {
   .modal-overlay {
@@ -1928,6 +2031,16 @@ header .flow-back:hover {
   }
   .modal-content .modal-title {
     flex: 0 0 auto;
+  }
+  /* Short confirmations stay a card instead of taking the whole screen. */
+  .modal-content.is-compact {
+    width: calc(100% - 32px);
+    height: auto;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 11px;
+  }
+  .modal-content.is-compact .modal-actions button {
+    flex: 1 1 100%;
   }
   .modal-content .stripe-elements-form {
     flex: 1 1 auto;
@@ -2012,15 +2125,30 @@ header .flow-back:hover {
   flex-direction: column;
   gap: 16px;
 }
+.feedback-gate-rating {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.feedback-gate-rating-label {
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.875rem;
+}
 .feedback-gate-stars {
   display: flex;
-  gap: 6px;
+  gap: 2px;
 }
 .feedback-gate-star {
+  /* A full 44px touch target around each star. */
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 8px;
   padding: 0;
   border: none;
   background: none;
-  color: rgba(248, 241, 230, 0.3);
+  color: rgba(248, 241, 230, 0.45);
   font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
@@ -2030,6 +2158,10 @@ header .flow-back:hover {
 }
 .feedback-gate-star:hover {
   transform: scale(1.08);
+}
+.feedback-gate-star:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 0;
 }
 .feedback-gate-star.is-filled {
   color: var(--color-coral-500);
@@ -2048,6 +2180,18 @@ header .flow-back:hover {
   outline: none;
   border-color: rgba(255, 205, 183, 0.55);
 }
+.feedback-gate-textarea.is-invalid {
+  border-color: #ff8a80;
+}
+.feedback-gate-textarea::placeholder {
+  color: rgba(248, 241, 230, 0.55);
+}
+.feedback-gate-problem {
+  margin: -8px 0 0;
+  color: #ffb3a7;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
 .feedback-gate-submit {
   min-height: 50px;
   border: 1px solid rgba(255, 205, 183, 0.55);
@@ -2061,6 +2205,41 @@ header .flow-back:hover {
   opacity: 0.7;
 }
 
+.modal-content.nda-modal {
+  max-width: 520px;
+}
+.nda-modal-intro {
+  margin: -8px 0 14px;
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.875rem;
+}
+.nda-modal-intro a {
+  color: #f3a17e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.nda-modal-body:focus-visible {
+  outline: 2px solid rgba(239, 154, 120, 0.7);
+  outline-offset: 2px;
+}
+.nda-modal-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.nda-modal-agree input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  margin-top: 1px;
+  accent-color: #ef9a78;
+}
 .nda-modal-body {
   max-height: 45vh;
   margin-bottom: 18px;
@@ -2096,7 +2275,8 @@ header .flow-back:hover {
   color: #101a28;
 }
 .nda-modal-actions button:last-child:disabled {
-  opacity: 0.7;
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .nda-modal-actions button:first-child {
   padding: 0 18px;
@@ -2165,6 +2345,124 @@ header .flow-back:hover {
   border-color: rgba(239, 154, 120, 0.72);
   outline: none;
 }
+.password-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.password-field input {
+  padding-right: 68px;
+}
+.password-field.has-hint input {
+  margin-bottom: 6px;
+}
+.password-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 52px;
+  height: 34px;
+  border-radius: 6px;
+  color: rgba(248, 241, 230, 0.82);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: rgba(248, 241, 230, 0.1);
+  color: #f8f1e6;
+}
+.auth-hint {
+  margin: 0 0 18px;
+  color: rgba(248, 241, 230, 0.68);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.auth-forgot {
+  margin: -8px 0 16px;
+  text-align: right;
+  font-size: 0.8125rem;
+}
+.auth-forgot a {
+  color: #f3a17e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.auth-forgot a:hover {
+  color: #f8f1e6;
+}
+.auth-success p {
+  color: rgba(248, 241, 230, 0.82);
+  line-height: 1.55;
+}
+.auth-success .auth-email {
+  color: #f8f1e6;
+  font-weight: 600;
+  /* Moves to its own line whole rather than splitting at a hyphen; only
+     an address wider than the card breaks, anywhere. */
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.auth-success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+.auth-secondary-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.auth-secondary-button:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.14);
+}
+.auth-secondary-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.auth-link-button {
+  display: inline-flex;
+  align-items: center;
+}
+.auth-success .auth-link-button {
+  color: #f8f1e6;
+}
+.not-found-copy {
+  margin: -10px 0 4px;
+  color: rgba(248, 241, 230, 0.8);
+  line-height: 1.55;
+}
+.not-found-card .auth-secondary-button {
+  color: #f8f1e6;
+}
+.btn-primary-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.btn-primary-link:hover {
+  filter: brightness(1.04);
+}
+.auth-notice {
+  margin: 14px 0 0;
+  color: rgba(248, 241, 230, 0.78);
+  font-size: 0.875rem;
+}
 .auth-error {
   margin: -6px 0 16px;
   color: #f3a17e;
@@ -2200,19 +2498,38 @@ header .flow-back:hover {
   opacity: 0.65;
 }
 .auth-card > footer {
-  margin-top: 18px;
-  color: rgba(248, 241, 230, 0.66);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.875rem;
   text-align: center;
 }
-.auth-card > footer a,
-.auth-success a {
-  color: #f3a17e;
+.auth-card > footer a {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+}
+.auth-card > footer a:hover {
+  background: rgba(248, 241, 230, 0.14);
+}
+.auth-card > footer a {
   font-weight: 600;
 }
-.auth-card > footer a:hover,
-.auth-success a:hover {
-  color: #f8f1e6;
+.auth-success p a {
+  color: #f3a17e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 @media (max-width: 520px) {
@@ -2233,6 +2550,40 @@ header .flow-back:hover {
   width: 36px;
   height: 36px;
   border-radius: 8px;
+}
+/* The site header's brand: the icon with the name beside it, so it reads
+   as a logo rather than a stray app icon. */
+.site-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+/* Two-toned like the hero headline: roman cream, then italic coral. */
+.brand-wordmark {
+  color: rgba(255, 248, 237, 0.92);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.brand-wordmark em {
+  color: #f2b08f;
+  font-style: italic;
+}
+@media (max-width: 720px) {
+  .site-nav-brand {
+    gap: 10px;
+  }
+  .brand-wordmark {
+    font-size: 1.0625rem;
+  }
+}
+/* Too narrow for the name beside Start free and the menu: icon only. */
+@media (max-width: 380px) {
+  .brand-wordmark {
+    display: none;
+  }
 }
 .display-title {
   font-family: var(--font-display);
@@ -2364,6 +2715,8 @@ header .flow-back:hover {
 .processing-status h1 {
   max-width: 580px;
   margin: 0;
+  /* Even line lengths, so "for" never ends up alone above a long name. */
+  text-wrap: balance;
   font-family: var(--font-display);
   font-size: clamp(3.5rem, 5.2vw, 4.5rem);
   font-weight: 500;
@@ -2439,7 +2792,7 @@ header .flow-back:hover {
 .script-name.script-name-input::placeholder {
   font: inherit;
   letter-spacing: inherit;
-  color: rgba(248, 241, 230, 0.4);
+  color: rgba(248, 241, 230, 0.55);
   opacity: 1;
 }
 .script-name.script-name-input::selection {
@@ -2455,9 +2808,18 @@ header .flow-back:hover {
   margin: 0 0 0.2em 0.18em;
   color: #ef9a78;
 }
-/* Long file names (no spaces, underscores) wrap instead of overflowing. */
+/* Long file names wrap at their underscores and hyphens (see ScriptName),
+   and only break mid-word when one part alone is wider than the line. */
 .processing-script-name {
   overflow-wrap: anywhere;
+}
+.processing-status h1.is-long-name {
+  font-size: clamp(2.5rem, 3.8vw, 3.25rem);
+}
+/* A long name starts its own line, so the lead-in above it never leaves
+   a word ("for") stranded. */
+.processing-status h1.is-long-name .processing-script-name {
+  display: block;
 }
 .processing-explanation {
   max-width: 560px;
@@ -2546,8 +2908,8 @@ header .flow-back:hover {
 .processing-preview {
   min-width: 0;
 }
-/* See script: the read script, folded under the explanation. Open, Replace
-   script sits beside Hide script and the PDF below. */
+/* A fold-away section (step 3's voice settings): its toggle row, then
+   the content while open. */
 .script-accordion {
   margin-top: 6px;
 }
@@ -2556,37 +2918,112 @@ header .flow-back:hover {
   align-items: center;
   gap: 10px;
 }
-.script-accordion-dot {
-  color: rgba(248, 241, 230, 0.45);
+/* Step 3's Customize voices: centered under the title. */
+.voice-advanced-accordion {
+  margin-top: 18px;
 }
-.script-accordion-toggle {
-  min-height: 44px;
-  color: #f5ad8d;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.script-accordion-toggle:hover {
-  color: #f8f1e6;
-}
-/* Beside Hide script, not pushed to the far end. */
-.script-accordion-actions .replace-script {
-  margin-top: 0;
-  margin-left: 0;
-}
-.script-accordion-next {
-  margin-left: auto;
-}
-.script-accordion .document-panel {
-  margin-top: 8px;
-}
-/* Step 3's Show/Hide advanced options: centered under the title. */
 .voice-advanced-accordion .script-accordion-actions {
   justify-content: center;
+  margin-bottom: 18px;
 }
-.voice-advanced-accordion .script-accordion-toggle:hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+#uploaded-script > .document-panel {
+  margin-top: 10px;
 }
+/* See script: what we read, or the original PDF. */
+.script-view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(8, 18, 30, 0.4);
+}
+.script-view-tabs button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.script-view-tabs button[aria-selected="true"] {
+  background: rgba(239, 154, 120, 0.16);
+  color: #f5ad8d;
+}
+.script-lines-preview {
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  margin: 10px 0 0;
+  padding: 18px clamp(16px, 3vw, 28px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 18, 30, 0.45);
+  list-style: none;
+}
+.script-lines-preview li + li {
+  margin-top: 14px;
+}
+.script-lines-preview p {
+  margin: 0;
+}
+.script-lines-scene {
+  margin: 10px 0 10px !important;
+  padding-top: 12px;
+  border-top: 1px solid rgba(239, 154, 120, 0.3);
+  color: #f5ad8d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.script-lines-preview li:first-child .script-lines-scene {
+  margin-top: 0 !important;
+  padding-top: 0;
+  border-top: 0;
+}
+.script-lines-action {
+  margin-bottom: 6px !important;
+  color: rgba(248, 241, 230, 0.66);
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.45;
+}
+.script-lines-speaker {
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.script-lines-speech {
+  margin-top: 2px !important;
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.script-lines-speech em {
+  color: rgba(248, 241, 230, 0.66);
+  font-family: var(--font-display);
+}
+.processing-rename-hint {
+  margin: 16px 0 0;
+  color: rgba(248, 241, 230, 0.68);
+  font-size: 0.8125rem;
+}
+.processing-actions .replace-script {
+  margin: 0;
+}
+.processing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+/* Step 3's Show/Hide advanced options: centered under the title. */
+
+
 /* Script read: no preview, so the status takes a single centered column. */
 .processing-layout--single {
   grid-template-columns: minmax(0, 640px);
@@ -2629,7 +3066,7 @@ header .flow-back:hover {
   justify-content: space-between;
   gap: 18px;
   margin: 13px 2px 0;
-  color: rgba(248, 241, 230, 0.56);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.75rem;
 }
 .document-panel > p strong {
@@ -2703,6 +3140,10 @@ header .flow-back:hover {
   background: var(--sky);
   color: var(--ink-soft);
 }
+.toast-success .toast-icon {
+  background: #d9efdf;
+  color: #23633a;
+}
 .toast > button {
   min-width: 28px;
   min-height: 28px;
@@ -2770,16 +3211,22 @@ header .flow-back:hover {
   transform: translateY(-1px);
 }
 .stage-error-secondary {
+  display: inline-flex;
   min-height: 44px;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
+  align-items: center;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  font-size: 0.9375rem;
   font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: rgba(232, 117, 106, 0.6);
-  text-underline-offset: 4px;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 .stage-error-secondary:hover {
-  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
 }
 
 @media (max-width: 899px) {
@@ -2861,9 +3308,8 @@ header .flow-back:hover {
   color: #f8f1e6;
 }
 .replace-script {
-  margin-top: 6px;
+  margin-top: 12px;
   margin-left: auto;
-  color: #f5ad8d;
 }
 .voice-selector-panel {
   min-width: 0;
@@ -2935,18 +3381,26 @@ header .flow-back:hover {
   font-weight: 600;
 }
 .voice-filter-bar span {
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.75rem;
 }
 .voice-filter-bar button {
-  min-height: 36px;
-  color: #f3a17e;
-  font-size: 0.75rem;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.8125rem;
   font-weight: 600;
+}
+.voice-filter-bar button:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.14);
 }
 .voice-filter-bar button:disabled {
   cursor: default;
-  color: rgba(248, 241, 230, 0.3);
+  background: rgba(248, 241, 230, 0.04);
+  color: rgba(248, 241, 230, 0.45);
 }
 .voice-setup-filters {
   display: grid;
@@ -3001,6 +3455,12 @@ header .flow-back:hover {
 .voice-advanced-panel {
   padding: 4px 0 16px;
 }
+.voice-filter-note {
+  margin: 10px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
 /* Under the filters: the card's play button and quote, to hear the voice
    just picked. Laid out like the card's. */
 .voice-advanced-preview {
@@ -3024,10 +3484,10 @@ header .flow-back:hover {
   border: 1px solid rgba(255, 205, 183, 0.64);
   border-radius: 9px;
   background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
-  color: #f8f1e6;
+  /* Dark on coral, like every other primary button. */
+  color: #101a28;
   font-size: 0.9375rem;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(16, 26, 40, 0.55);
 }
 .voice-advanced-save:hover {
   filter: brightness(1.05);
@@ -3059,6 +3519,9 @@ header .flow-back:hover {
 .voice-advanced-voice select:focus {
   border-color: #ef9a78;
 }
+.preparing-panel {
+  margin-top: 24px;
+}
 .preparing-panel > header p {
   margin: 0 0 3px;
   color: rgba(248, 241, 230, 0.62);
@@ -3071,6 +3534,13 @@ header .flow-back:hover {
   outline: none;
 }
 /* Step 4's camera preview, between the subtitle and the device checks. */
+/* Step 4's Back and Just run lines, under the start button. */
+.rehearsal-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
 .rehearsal-setup-camera {
   min-width: 0;
   margin-top: 24px;
@@ -3244,22 +3714,23 @@ header .flow-back:hover {
 .preparing-progress:disabled {
   cursor: default;
 }
-/* Clickable: the fill turns the app's solid coral, cream text reading over
-   both the filled and unfilled parts. */
+/* Clickable: the whole button turns the app's solid coral with dark text,
+   like every other primary action; how many lines are ready narrows to a
+   strip along its bottom edge. */
 .preparing-progress.is-ready {
   border-color: rgba(255, 205, 183, 0.64);
-  color: #f8f1e6;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-size: 0.9375rem;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(16, 26, 40, 0.55);
 }
 .preparing-progress.is-ready i {
-  background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
+  inset: auto auto 0 0;
+  height: 3px;
+  background: rgba(16, 26, 40, 0.4);
 }
 .preparing-progress.is-ready:hover {
-  background: rgba(244, 165, 131, 0.16);
-}
-.preparing-progress.is-ready:hover i {
-  filter: brightness(1.05);
+  filter: brightness(1.04);
 }
 .preparing-progress.is-ready:focus-visible {
   outline: 2px solid #f4a583;
@@ -3442,36 +3913,22 @@ header .flow-back:hover {
   font-size: clamp(1.0625rem, 1.3vw, 1.125rem);
   line-height: 1.55;
 }
-/* Two rows at most, split evenly and laid like bricks: the second row
-   sits half a card in. Past two cards a row, the rows scroll sideways. */
+/* Two cards to a row, wrapping as the cast needs; an odd last card sits
+   centered. Nothing scrolls sideways. */
 .role-grid {
   --role-gap: 18px;
-  container-type: inline-size;
-  overflow-x: auto;
-  /* Room for a card's hover lift and shadow, which the scroller would clip. */
-  margin: 26px 0 0;
-  padding: 6px 0 0;
-}
-.role-rows {
-  display: grid;
-  gap: var(--role-gap);
-  width: max-content;
-  margin: 0 auto;
-}
-.role-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--role-gap);
+  margin: 26px 0 0;
 }
-.role-row + .role-row {
-  margin-left: calc((100cqw - var(--role-gap)) / 4 + var(--role-gap) / 2);
+.role-grid > .role-option {
+  flex: 0 1 calc((100% - var(--role-gap)) / 2);
+  min-width: 0;
 }
-.role-row .role-option {
-  width: calc((100cqw - var(--role-gap)) / 2);
-  flex: none;
-}
-/* A lone role takes the whole column. */
-.role-row:only-child .role-option:only-child {
-  width: 100cqw;
+.role-grid.is-single > .role-option {
+  flex-basis: 100%;
 }
 .role-option {
   position: relative;
@@ -3570,28 +4027,103 @@ header .flow-back:hover {
   -webkit-line-clamp: 2;
 }
 .role-secondary {
-  color: rgba(248, 241, 230, 0.62);
+  margin-top: 18px;
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.875rem;
 }
-.role-secondary button {
-  padding: 5px;
-  color: rgba(248, 241, 230, 0.9);
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: rgba(239, 154, 120, 0.58);
-  text-underline-offset: 4px;
-}
-.role-secondary button:hover {
-  color: #f3a17e;
+.role-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 /* Same row as step 1's: Back on the left, the next step on the right. */
 .role-actions {
-  margin-top: 14px;
+  flex-wrap: wrap;
+  margin-top: 22px;
 }
-.script-accordion-toggle:disabled {
+/* Secondary actions (Back, See script, Customize voices…): a soft tonal
+   fill instead of an outline — clearly a button, but compact and quiet
+   beside the step's one coral primary. */
+.btn-secondary {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.14);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
+.btn-secondary:disabled {
   cursor: not-allowed;
-  color: rgba(248, 241, 230, 0.42);
+  opacity: 0.5;
+}
+/* Each setup step's one primary action. */
+.setup-next {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-left: auto;
+  padding: 0 22px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #101a28;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.setup-next:hover:not(:disabled) {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+.setup-next:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 3px;
+}
+.setup-next:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.45;
+}
+.setup-next-hint {
+  width: 100%;
+  margin: 8px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+@media (max-width: 760px) {
+  /* Thumb reach: the primary action spans the row's width. */
+  .role-actions .setup-next {
+    flex: 1 1 auto;
+  }
+  .processing-actions .setup-next {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -3614,22 +4146,12 @@ header .flow-back:hover {
     margin-top: 12px;
     font-size: 1rem;
   }
-  /* Phones: one column that grows downward, no sideways scroll. */
+  /* Phones: one column that grows downward. */
   .role-grid {
     --role-gap: 14px;
-    overflow-x: visible;
   }
-  .role-rows {
-    width: auto;
-  }
-  .role-row {
-    flex-direction: column;
-  }
-  .role-row + .role-row {
-    margin-left: 0;
-  }
-  .role-row .role-option {
-    width: auto;
+  .role-grid > .role-option {
+    flex-basis: 100%;
   }
   .role-option {
     min-height: 132px;
@@ -3683,6 +4205,9 @@ header .flow-back:hover {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  /* Not even scrollable by script or focus — only the script pane scrolls,
+     so the sticky header can never slide over the active line. */
+  overflow: clip;
   background: #0f1b2a;
   color: #f8f1e6;
 }
@@ -3708,6 +4233,18 @@ header .flow-back:hover {
 .rehearsal-header > div:last-child {
   justify-content: flex-end;
 }
+.rehearsal-header > div:last-child a {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.rehearsal-header > div:last-child a:hover {
+  background: rgba(248, 241, 230, 0.14);
+}
 .rehearsal-header button,
 .rehearsal-header a {
   min-height: 44px;
@@ -3723,7 +4260,7 @@ header .flow-back:hover {
 .rehearsal-header > div > span {
   max-width: 220px;
   overflow: hidden;
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3760,7 +4297,7 @@ header .flow-back:hover {
   font-size: 0.9375rem;
 }
 .rehearsal-header > p span {
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.75rem;
 }
 .rehearsal-progress {
@@ -3849,23 +4386,73 @@ header .flow-back:hover {
 }
 .rehearsal-line-number {
   padding-top: 3px;
-  color: rgba(248, 241, 230, 0.42);
+  color: rgba(248, 241, 230, 0.55);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 .rehearsal-line-copy {
   min-width: 0;
 }
+/* Speaker names: scene partners muted, the actor's own coral and tagged
+   "You", so their lines stand out at a glance down the whole script. */
 .rehearsal-line-copy strong {
-  display: block;
-  color: #f1a081;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.rehearsal-line.is-active.is-user .rehearsal-line-copy strong {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.rehearsal-line.is-user .rehearsal-line-copy strong {
+  color: #f1a081;
+}
+.rehearsal-you-tag {
+  padding: 1px 7px;
+  border: 1px solid rgba(239, 154, 120, 0.55);
+  border-radius: 999px;
+  color: #f5ad8d;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rehearsal-line.is-active.is-user .rehearsal-you-tag {
+  border-color: rgba(255, 59, 48, 0.6);
+  color: #ff6b61;
+}
+/* Directions before anyone speaks: above the name, like the page. */
+.rehearsal-line-copy > .rehearsal-line-action {
+  display: block;
+  margin: 0 0 8px;
+  color: rgba(248, 241, 230, 0.6);
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.45;
+}
+.rehearsal-line-action > span {
+  display: block;
+}
+.rehearsal-line-action > span + span {
+  margin-top: 4px;
+}
+/* A new scene: its heading as a divider across the script. */
+.rehearsal-scene-heading {
+  margin: 0;
+  padding: 18px clamp(18px, 3vw, 32px) 8px calc(clamp(18px, 3vw, 32px) + 44px);
+  border-top: 1px solid rgba(239, 154, 120, 0.35);
+  background: rgba(8, 18, 30, 0.35);
+  color: #f5ad8d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rehearsal-line:first-child .rehearsal-scene-heading {
+  border-top: 0;
+}
+.rehearsal-line.is-active.is-user .rehearsal-line-copy strong {
   color: #ff3b30;
 }
 .rehearsal-live-dot {
@@ -3887,12 +4474,12 @@ header .flow-back:hover {
 .rehearsal-line-copy em {
   display: block;
   margin-top: 4px;
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.66);
   font-family: var(--font-display);
   font-size: 0.875rem;
   font-style: italic;
 }
-.rehearsal-line-copy > span {
+.rehearsal-line-copy > span:not(.rehearsal-line-action) {
   display: block;
   margin-top: 6px;
   color: rgba(248, 241, 230, 0.82);
@@ -3903,7 +4490,7 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.35);
   font-style: italic;
 }
-.rehearsal-line.is-active .rehearsal-line-copy > span {
+.rehearsal-line.is-active .rehearsal-line-copy > span:not(.rehearsal-line-action) {
   color: #f8f1e6;
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 2.4vw, 1.85rem);
@@ -4119,6 +4706,74 @@ header .flow-back:hover {
   background: rgba(8, 14, 22, 0.72);
   backdrop-filter: blur(3px);
 }
+/* The "Scene complete" card after a run without a tape. */
+.rehearsal-start-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 380px;
+  padding: 32px 28px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: #101d2c;
+  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.4);
+}
+.rehearsal-start-choice h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+.rehearsal-start-choice > p {
+  margin: 0 0 14px;
+  color: rgba(248, 241, 230, 0.8);
+  font-size: 0.875rem;
+}
+.rehearsal-start-choice > div {
+  display: flex;
+  gap: 12px;
+}
+.rehearsal-start-choice button {
+  padding: 11px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  color: rgba(248, 241, 230, 0.9);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.rehearsal-start-choice .rehearsal-start-primary {
+  border-color: rgba(255, 205, 183, 0.58);
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+}
+.rehearsal-start-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.rehearsal-start-choice .rehearsal-start-back {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 0;
+  background: rgba(248, 241, 230, 0.08);
+  color: rgba(248, 241, 230, 0.9);
+  font-weight: 500;
+}
+.rehearsal-start-choice .rehearsal-start-back:hover {
+  background: rgba(248, 241, 230, 0.14);
+  filter: none;
+}
+.rehearsal-start-choice button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.rehearsal-start-choice button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.rehearsal-start-choice > span {
+  margin-top: 12px;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.75rem;
+}
 .rehearsal-countdown {
   font-size: clamp(4rem, 14vw, 7rem);
   font-weight: 700;
@@ -4226,36 +4881,53 @@ header .flow-back:hover {
     opacity: 0.35;
   }
 }
-.self-tape-video-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), transparent);
+.self-tape-rec time {
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
-.self-tape-video-controls button {
-  width: 36px;
-  height: 36px;
+.self-tape-rec.is-practice {
+  background: rgba(16, 29, 44, 0.78);
+  color: rgba(248, 241, 230, 0.9);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+/* Pause / End take under the picture, never over the actor's face. */
+.self-tape-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.self-tape-controls button {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #f8f1e6;
   font-size: 0.875rem;
-  line-height: 1;
+  font-weight: 600;
 }
-.self-tape-video-controls button:hover {
-  background: rgba(0, 0, 0, 0.6);
+.self-tape-controls button span {
+  font-size: 0.75rem;
 }
-.self-tape-video-controls button:disabled {
+.self-tape-controls button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+}
+.self-tape-controls .self-tape-end {
+  border-color: rgba(255, 107, 97, 0.5);
+  color: #ff8a80;
+}
+.self-tape-controls .self-tape-end:hover:not(:disabled) {
+  border-color: rgba(255, 107, 97, 0.8);
+  background: rgba(255, 59, 48, 0.08);
+}
+.self-tape-controls button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.5;
 }
 .account-self-tapes {
   display: flex;
@@ -4272,7 +4944,7 @@ header .flow-back:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 140px;
+  width: 208px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 9px;
@@ -4290,7 +4962,8 @@ header .flow-back:hover {
 .account-tape-tile video {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* Tapes are recorded 16:9 — the tile shows the whole frame. */
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   background: #000;
   pointer-events: none;
@@ -4298,7 +4971,7 @@ header .flow-back:hover {
 .account-tape-tile-loading {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   background: #000;
 }
 .account-tape-tile-play {
@@ -4316,6 +4989,18 @@ header .flow-back:hover {
   color: #fff;
   font-size: 0.75rem;
   transform: translate(-50%, -50%);
+}
+.account-tape-tile-duration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(8, 14, 22, 0.78);
+  color: #f8f1e6;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .account-tape-tile-role {
   position: absolute;
@@ -4452,7 +5137,7 @@ header .flow-back:hover {
 }
 @media (min-width: 1100px) {
   .rehearsal-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 26vw);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 30vw);
     grid-template-rows: minmax(0, 1fr);
     column-gap: 24px;
   }
@@ -4472,20 +5157,40 @@ header .flow-back:hover {
   /* The start card sits at the top, under the header, like the setup steps. */
   .rehearsal-start-overlay {
     align-items: flex-start;
-    padding-top: calc(78px + env(safe-area-inset-top));
+    padding: calc(78px + env(safe-area-inset-top)) 16px 16px;
   }
   .rehearsal-header {
     height: 62px;
     grid-template-columns: 1fr auto;
     padding: 0 16px;
   }
+  /* A compact strip: the picture at 45% width, controls beside it, so
+     the script keeps most of the screen. */
   .self-tape-setting {
     position: static;
+    display: grid;
+    grid-template-columns: 45% 1fr;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     margin: 0;
+    padding: 10px 16px;
     border-left: 0;
     border-right: 0;
     border-radius: 0;
+  }
+  .self-tape-setting.is-practice {
+    grid-template-columns: 45%;
+    justify-content: center;
+  }
+  .self-tape-controls {
+    grid-template-columns: 1fr;
+  }
+  .self-tape-rec {
+    top: 6px;
+    left: 6px;
+    padding: 3px 7px;
+    font-size: 0.625rem;
   }
   .rehearsal-progress {
     top: 62px;
@@ -4513,8 +5218,11 @@ header .flow-back:hover {
   .rehearsal-line-active-panel {
     padding: 0 16px 16px;
   }
-  .rehearsal-line.is-active .rehearsal-line-copy > span {
+  .rehearsal-line.is-active .rehearsal-line-copy > span:not(.rehearsal-line-action) {
     font-size: clamp(1.35rem, 6.5vw, 1.75rem);
+  }
+  .rehearsal-scene-heading {
+    padding: 16px 16px 6px 52px;
   }
   .rehearsal-line-active-panel > footer {
     grid-template-columns: 1fr 1fr;

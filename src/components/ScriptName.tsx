@@ -1,20 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 // Shown in the emptied field, which is sized to fit it.
 const PLACEHOLDER = "scene name";
 const MAX_WORDS = 10;
 
 /**
- * A name as the actor may type it: letters (any script), numbers and
- * spaces, at most MAX_WORDS words. Only the default name — the PDF's own
- * file name — may have anything else (".pdf", underscores); editing it
- * applies these rules. Pasted line breaks become spaces.
+ * A name as the actor may type it: letters (any script), numbers, spaces
+ * and everyday punctuation (- _ . ' & ( ) , : ! ? # / +), at most MAX_WORDS
+ * words. Pasted line breaks become spaces.
  */
 function cleanScriptName(value: string): string {
-  const allowed = value.replace(/\s/g, " ").replace(/[^\p{L}\p{N} ]/gu, "");
+  const allowed = value
+    .replace(/\s/g, " ")
+    .replace(/[^\p{L}\p{N} \-_.'’&(),:!?#/+]/gu, "");
   // Up to the end of the last allowed word; a trailing space survives below
   // the limit, so the next word can still be typed.
   return allowed.match(new RegExp(`^ *(?:\\S+ +){0,${MAX_WORDS - 1}}\\S*`))?.[0] ?? allowed;
+}
+
+/**
+ * The name with a line-break opportunity after each underscore and hyphen,
+ * so a file name like "CANNED_-_CARL_Sides_3.10.26.pdf" wraps between its
+ * words instead of mid-number.
+ */
+function breakable(name: string) {
+  return name.split(/(?<=[_-])/).map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ));
 }
 
 /**
@@ -58,7 +73,7 @@ export default function ScriptName({
     inputRef.current?.select();
   }, [editing]);
 
-  if (!onRename) return <span className="script-name">{name}</span>;
+  if (!onRename) return <span className="script-name">{breakable(name)}</span>;
 
   const finish = (save: boolean) => {
     if (settledRef.current) return;
@@ -83,7 +98,7 @@ export default function ScriptName({
           ref={inputRef}
           className="script-name script-name-input"
           aria-label="Script name"
-          aria-description={`Letters, numbers and spaces, up to ${MAX_WORDS} words`}
+          aria-description={`Up to ${MAX_WORDS} words`}
           placeholder={PLACEHOLDER}
           rows={1}
           value={draft}
@@ -124,15 +139,19 @@ export default function ScriptName({
       aria-label={`${name}, rename script`}
       onClick={() => {
         settledRef.current = false;
-        // The default name (the PDF's file name) is tidied into an allowed
-        // one to edit from: no ".pdf", separators as spaces.
-        const start = cleanScriptName(name.replace(/\.pdf$/i, "").replace(/[_.-]+/g, " "));
+        // The default name (the PDF's file name) is tidied to edit from:
+        // no ".pdf", underscores as spaces ("CANNED_-_CARL_Sides_3.10.26.pdf"
+        // → "CANNED - CARL Sides 3.10.26"). A name the actor typed is left
+        // exactly as they wrote it.
+        const start = /\.pdf$/i.test(name)
+          ? cleanScriptName(name.replace(/\.pdf$/i, "").replace(/_+/g, " ").replace(/ {2,}/g, " ").trim())
+          : name;
         startRef.current = start;
         setDraft(start);
         setEditing(true);
       }}
     >
-      {name}
+      {breakable(name)}
     </button>
   );
 }

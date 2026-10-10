@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Step } from "../../types";
-import { normalizeSpeaker } from "../../lib/script";
+import { normalizeSpeaker, splitStepContent } from "../../lib/script";
 import TrackedWords from "../TrackedWords";
 import { useAudioDiagnostics } from "../../hooks/useAudioDiagnostics";
 
@@ -10,9 +10,25 @@ function formatLogTime(ms: number): string {
 }
 
 /**
- * TEMPORARY: live feed of audio/recording/mic events for chasing the mobile
- * cue-reliability issues. Always visible (not gated on error) so a failure
- * with no visible symptom still leaves a trail. Remove once resolved.
+ * Whether the audio debug panel shows. Off for actors; a tester chasing the
+ * mobile cue-reliability issues turns it on with ?audioDebug=1 (it sticks on
+ * that device until ?audioDebug=0). Events are logged either way.
+ */
+function audioDebugEnabled(): boolean {
+  try {
+    const param = new URLSearchParams(window.location.search).get("audioDebug");
+    if (param === "1") localStorage.setItem("awm:audioDebug", "1");
+    if (param === "0") localStorage.removeItem("awm:audioDebug");
+    return localStorage.getItem("awm:audioDebug") === "1";
+  } catch {
+    return false;
+  }
+}
+const SHOW_AUDIO_DEBUG = audioDebugEnabled();
+
+/**
+ * Live feed of audio/recording/mic events for chasing the mobile
+ * cue-reliability issues — see audioDebugEnabled() for how it's shown.
  */
 function AudioDebugPanel() {
   const log = useAudioDiagnostics();
@@ -47,6 +63,7 @@ export default function RehearsalLineList({
   onNext,
   onReplay,
   onStop,
+  stopLabel,
 }: {
   steps: Step[];
   currentIndex: number;
@@ -61,14 +78,23 @@ export default function RehearsalLineList({
   onNext: () => void;
   onReplay: () => void;
   onStop: () => void;
+  /** The last line's button: ends and saves the take, or finishes a run. */
+  stopLabel: string;
 }) {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
   // Align to the top, not the centre: the active block is line text plus a tall
   // control panel, and centring that on a short phone pushes the text itself
-  // off the top of the script pane.
+  // off the top of the script pane. Only the script pane scrolls —
+  // scrollIntoView would also scroll the page around it (overflow: hidden
+  // still scrolls programmatically), sliding the line, and any scene heading
+  // above it, under the sticky header.
   useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    const line = activeRef.current;
+    const pane = line?.closest<HTMLElement>(".rehearsal-center");
+    if (!line || !pane) return;
+    const top = line.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop - 12;
+    pane.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }, [currentIndex]);
 
   const isLastStep = currentIndex >= steps.length - 1;
@@ -86,7 +112,11 @@ export default function RehearsalLineList({
         const masked = isOwnLine && lineMode !== "full";
         const showTracking = !masked && active && isMyLine;
 
-        // Render content in its real order so a stage direction that falls
+        // The scene heading a step opens, if any, prints as a divider above
+        // it; directions before the speech sit above the speaker's name.
+        const { sceneHeading, leadIn, speech } = splitStepContent(step);
+
+        // Render the speech in its real order so a stage direction that falls
         // mid-speech lands between the spoken segments it actually splits,
         // instead of every direction bunching ahead of the whole line.
         let wordOffset = 0;
@@ -96,7 +126,7 @@ export default function RehearsalLineList({
                 {lineMode === "hidden" ? "Line hidden" : `${step.verbalLine.split(/\s+/).slice(0, 3).join(" ")}…`}
               </span>
             )
-          : step.content.map((item, i) => {
+          : speech.map((item, i) => {
               if (item.kind === "nonverbal") return <em key={i}>{item.text}</em>;
               const wordCount = item.text.split(/\s+/).filter(Boolean).length;
               // Wrapped in a real <span> (not left as TrackedWords' bare word
@@ -120,6 +150,12 @@ export default function RehearsalLineList({
             ref={active ? activeRef : undefined}
             className={`rehearsal-line ${active ? "is-active" : ""} ${isOwnLine ? "is-user" : ""} ${index < currentIndex ? "is-past" : ""}`}
           >
+            {sceneHeading && (
+              <p className="rehearsal-scene-heading">
+                <span className="sr-only">New scene: </span>
+                {sceneHeading}
+              </p>
+            )}
             <button
               type="button"
               className="rehearsal-line-row"
@@ -129,16 +165,22 @@ export default function RehearsalLineList({
             >
               <span className="rehearsal-line-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="rehearsal-line-copy">
+                {leadIn.length > 0 && (
+                  <span className="rehearsal-line-action">
+                    {leadIn.map((text, i) => <span key={i}>{text}</span>)}
+                  </span>
+                )}
                 <strong>
                   {active && isOwnLine && <span className="rehearsal-live-dot" aria-hidden="true" />}
                   {speaker || "Stage direction"}
+                  {isOwnLine && <span className="rehearsal-you-tag" aria-hidden="true">You</span>}
                 </strong>
                 {bodyNodes}
               </span>
             </button>
             {active && (
               <div className="rehearsal-line-active-panel">
-                <AudioDebugPanel />
+                {SHOW_AUDIO_DEBUG && <AudioDebugPanel />}
                 {status.kind === "error" && (
                   <>
                     <div className={`rehearsal-status is-${status.kind}`}>
@@ -154,7 +196,7 @@ export default function RehearsalLineList({
                   <button onClick={onPrev} disabled={index === 0}>← Previous</button>
                   <span>Line {index + 1} of {steps.length}</span>
                   {index >= steps.length - 1
-                    ? <button className="next-line" onClick={onStop}>Stop</button>
+                    ? <button className="next-line" onClick={onStop}>{stopLabel}</button>
                     : <button className="next-line" onClick={onNext}>Next →</button>}
                 </footer>
               </div>

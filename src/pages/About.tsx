@@ -56,8 +56,8 @@ export default function About() {
                 </>
               ) : (
                 <>
-                  <strong>Sign up</strong>
-                  <small>{IS_BETA_TESTING ? "Beta test now" : "Three rehearsals for free"}</small>
+                  <strong>Start rehearsing free</strong>
+                  <small>{IS_BETA_TESTING ? "Free during beta" : "Three rehearsals for free"}</small>
                 </>
               )}
             </span>

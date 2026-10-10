@@ -33,6 +33,7 @@ Rules:
 4. "line" is what the character speaks in that step, joined into one string. Rejoin words hyphenated across line breaks. A parenthetical or brief stage direction that falls IN THE MIDDLE of the speech (e.g. an actor's aside like "(turning drunk sad on a dime)") stays embedded in "line", wrapped in parentheses, exactly where it occurs — do not pull it out or move it.
 4b. MUSICAL NUMBERS: do NOT transcribe song lyrics — not even one line. This includes sections marked "MUSIC #", and any sung verse formatted like dialogue (stacked short rhyming lines under speaker labels, often a parody of a well-known song), including songs continuing from a previous page. Replace each song with ONE step: "speaker": "", empty "line", and a "direction" summarizing it, e.g. "MUSIC #4 — In The Navy parody, sung by EVERYBODY". Resume normal steps at the first spoken (non-sung) dialogue after the song.
 5. "direction" (optional) holds ONLY a stage direction or scene description that appears BEFORE the speaker begins talking — never text that falls inside the speech itself (that stays in "line" per rule 4). Omit the field when there is none.
+5b. SCENE HEADINGS: on the first step of each scene (and of each START…END selection, even when the START cue sits below the heading), begin "direction" with that scene's heading exactly as printed (e.g. "INT. CAR - RENTAL HOME - PARKING LOT - DAY"), without scene numbers, followed by a newline before any other direction text.
 6. Transcribe what is printed — do not invent, rewrite, summarize, or translate. Ignore handwritten annotations, crossed-out lines, page headers, footers, and page numbers.
 6b. AUDITION SIDES MARKUP — these pages may be audition sides with production markup. Apply it:
    - Content crossed out by strikethrough lines, diagonal slashes, or X boxes is CUT — exclude it from steps entirely.
@@ -184,9 +185,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           speaker: step.speaker?.trim() ?? "",
           verbalLine,
           content: [
-            ...(direction
-              ? [{ kind: "nonverbal" as const, text: direction }]
-              : []),
+            // One item per line, so a scene heading (rule 5b) stays its own
+            // item rather than running into the action after it.
+            ...direction
+              .split(/\n+/)
+              .map((text) => text.trim())
+              .filter(Boolean)
+              .map((text) => ({ kind: "nonverbal" as const, text })),
             ...spokenContent,
           ],
         };

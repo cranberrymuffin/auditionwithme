@@ -1,4 +1,5 @@
 import ScriptName from "../ScriptName";
+import { STEP_NAMES } from "./StepProgress";
 
 /**
  * The row atop each practice setup step: which step this is on the left,
@@ -7,17 +8,15 @@ import ScriptName from "../ScriptName";
  */
 export default function StepHeader({
   step,
-  title,
   scriptName,
 }: {
   step: number;
-  title: string;
   scriptName: string;
 }) {
   return (
     <div className="step-header">
       <p className="step-header-label">
-        Step {step} of 4 · {title}
+        Step {step} of {STEP_NAMES.length} · {STEP_NAMES[step - 1]}
       </p>
       <div className="step-header-script" title={scriptName}>
         <ScriptName name={scriptName} />

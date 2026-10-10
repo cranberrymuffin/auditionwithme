@@ -6,6 +6,7 @@ type Toast = { id: number; kind: ToastKind; message: string; leaving?: boolean }
 const AUTO_DISMISS_MS = 6000;
 const LEAVE_MS = 220;
 const MAX_VISIBLE = 3;
+const ICONS: Record<ToastKind, string> = { error: "!", info: "i", success: "✓" };
 
 /** App-level host for transient error/info notices. Wrap once, fire via useToast(). */
 export default function ToastProvider({ children }: { children: ReactNode }) {
@@ -27,7 +28,17 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
       if (current.some((toast) => toast.message === message && !toast.leaving)) return current;
       const id = nextId.current++;
       setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
-      return [...current.slice(-(MAX_VISIBLE - 1)), { id, kind, message }];
+      // A success settles whatever went wrong before it: errors still on
+      // screen would contradict it.
+      const kept = kind === "success"
+        ? current.map((toast) => (toast.kind === "error" ? { ...toast, leaving: true } : toast))
+        : current;
+      if (kind === "success") {
+        setTimeout(() => {
+          setToasts((latest) => latest.filter((toast) => !(toast.kind === "error" && toast.leaving)));
+        }, LEAVE_MS);
+      }
+      return [...kept.slice(-(MAX_VISIBLE - 1)), { id, kind, message }];
     });
   }, [dismiss]);
 
@@ -41,7 +52,7 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
             className={`toast toast-${toast.kind}${toast.leaving ? " is-leaving" : ""}`}
             role={toast.kind === "error" ? "alert" : "status"}
           >
-            <span className="toast-icon" aria-hidden="true">!</span>
+            <span className="toast-icon" aria-hidden="true">{ICONS[toast.kind]}</span>
             <p>{toast.message}</p>
             <button type="button" onClick={() => dismiss(toast.id)} aria-label="Dismiss notification">
               ×

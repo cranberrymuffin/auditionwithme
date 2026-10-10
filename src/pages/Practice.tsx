@@ -238,6 +238,9 @@ function PracticeFlow({
     null,
   );
   const [voices, setVoices] = useState<Voice[]>([]);
+  // Auto-casting has answered (or failed): anyone it left uncast gets a
+  // default voice of their own from here on.
+  const [castingSettled, setCastingSettled] = useState(false);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
   // Characters the user has confirmed a full cast for and rehearsed as, this
   // script's saved row plus anything newly confirmed this session.
@@ -518,8 +521,10 @@ function PracticeFlow({
     // don't re-run auto-casting and risk recasting voices.
     const savedVoices = replayScript?.characterVoices;
     if (savedVoices && uniqueSpeakers.every((name) => savedVoices[name])) {
+      setCastingSettled(true);
       return;
     }
+    setCastingSettled(false);
     const characterList = uniqueSpeakers.map((name) => ({
       name,
       sampleLines: steps
@@ -553,7 +558,9 @@ function PracticeFlow({
       } catch (err) {
         console.error("Character voice matching error:", err);
         if (!cancelled)
-          toast("Automatic voice casting didn't work — pick voices manually.");
+          toast("Automatic voice casting didn't work, so we picked voices for you. Change them under Customize voices.");
+      } finally {
+        if (!cancelled) setCastingSettled(true);
       }
     })();
 
@@ -647,13 +654,32 @@ function PracticeFlow({
     };
   }, [toast, navigate]);
 
-  const withDefaultVoices = () => {
-    const next = { ...characterVoices };
+  // Fills anyone still uncast — each with a different voice in the script's
+  // language, so a failed auto-cast never leaves the whole scene sounding
+  // like one person.
+  const withDefaultVoices = (base = characterVoices) => {
+    const next = { ...base };
+    const inLanguage = voices.filter((voice) => voice.language === scriptLanguage.code);
+    const pool = inLanguage.length ? inLanguage : voices;
+    const used = new Set(Object.values(next));
     voiceableSpeakers.forEach((speaker) => {
-      if (!next[speaker] && voices[0]) next[speaker] = voices[0].id;
+      if (next[speaker]) return;
+      const voice = pool.find((candidate) => !used.has(candidate.id)) ?? pool[0];
+      if (!voice) return;
+      next[speaker] = voice.id;
+      used.add(voice.id);
     });
     return next;
   };
+  const withDefaultVoicesRef = useRef(withDefaultVoices);
+  withDefaultVoicesRef.current = withDefaultVoices;
+  useEffect(() => {
+    if (!castingSettled || !voices.length) return;
+    setCharacterVoices((current) => {
+      const next = withDefaultVoicesRef.current(current);
+      return Object.keys(next).length === Object.keys(current).length ? current : next;
+    });
+  }, [castingSettled, voices, selectedRole]);
 
   // VoiceCasting's Next, on to step 4: fill any uncast speaker so the voices
   // pre-generated there are exactly the ones Rehearsal will play.
@@ -1024,6 +1050,7 @@ function PracticeFlow({
         onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
+        steps={pendingParse.steps}
         onContinue={() => {
           finalizeParse(pendingParse);
           setPendingParse(null);
@@ -1039,6 +1066,7 @@ function PracticeFlow({
         onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
+        steps={steps}
         onContinue={() => setReviewingUpload(false)}
       />
     );

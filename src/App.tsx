@@ -9,6 +9,8 @@ import Billing from "./pages/Billing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import MyAccount from "./pages/MyAccount";
+import NotFound from "./pages/NotFound";
+import ResetPassword, { ForgotPassword } from "./pages/ResetPassword";
 import RequireAuth from "./components/RequireAuth";
 import ToastProvider from "./components/ToastProvider";
 import FeedbackGate from "./components/FeedbackGate";
@@ -47,6 +49,8 @@ function App() {
             />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/how-it-works" element={<About />} />
             <Route
               path="/about"
@@ -73,6 +77,7 @@ function App() {
                 )
               }
             />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           {IS_BETA_TESTING && <FeedbackGate />}
         </AuthProvider>

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Step } from "../../types";
-import { dialogueTurnsLabel, spokenLines } from "../../lib/script";
+import { dialogueTurnsLabel, displayCharacterName, spokenLines } from "../../lib/script";
 import SetupStep from "./SetupStep";
 import SetupActions from "./SetupActions";
 import CastGrid, { CastCard } from "./CastGrid";
@@ -27,7 +27,6 @@ export default function RolePicker({
   return (
     <SetupStep
       step={2}
-      title="Cast yourself"
       scriptName={fileName}
       onGoToStep={onGoToStep}
     >
@@ -48,13 +47,14 @@ export default function RolePicker({
               aria-checked={isSelected}
               active={isSelected}
               mark={isSelected ? "✓" : ""}
-              name={character}
+              name={displayCharacterName(character)}
               detail={dialogueTurnsLabel(lines.length)}
               quote={lines[0]?.verbalLine ?? "No spoken dialogue detected."}
               buttonRef={(element) => {
                 roleRefs.current[index] = element;
               }}
-              onClick={() => setSelected(isSelected ? null : character)}
+              // A radio: clicking selects, never clears.
+              onClick={() => setSelected(character)}
               onKeyDown={(event) => {
                 if (
                   !["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(
@@ -78,14 +78,17 @@ export default function RolePicker({
       />
       <div className="role-intro">
         <div className="role-secondary">
-          <span>Not rehearsing a role?</span>
-          <button onClick={() => onChoose("")}>Skip</button>
+          <span>Not reading a part?</span>
+          <button type="button" className="btn-secondary" onClick={() => onChoose("")}>
+            Just listen to the scene
+          </button>
         </div>
       </div>
       <SetupActions
         onBack={() => onGoToStep(1)}
-        nextLabel="Direct your scene"
+        nextLabel="Set up scene partners"
         nextDisabled={!selected}
+        nextHint="Choose the role you’re reading to continue."
         onNext={() => selected && onChoose(selected)}
       />
     </SetupStep>
