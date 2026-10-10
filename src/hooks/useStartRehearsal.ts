@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
-import { findScriptByContentHash } from "../lib/scriptStore";
+import { findScriptByContentHash, toReplayScript } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { stashUpload } from "../lib/pendingUpload";
 
@@ -51,20 +51,7 @@ export function useStartRehearsal() {
             // Previewed on step 1; and if it was saved before its language
             // was picked, the original language can still be read from it.
             uploadId: await stashUpload(file),
-            replayScript: {
-              id: existing.id,
-              title: existing.title,
-              steps: existing.steps,
-              characters: existing.characters,
-              languageCode: existing.language_code,
-              languageName: existing.language_name,
-              characterVoices: existing.character_voices,
-              characterVolumes: existing.character_volumes,
-              deliveryTags: existing.delivery_tags,
-              directorVersion: existing.director_version,
-              rolesRead: existing.roles_read,
-              needsLanguageChoice: existing.needs_language_choice,
-            },
+            replayScript: toReplayScript(existing),
           },
         });
         return;

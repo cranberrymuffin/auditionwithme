@@ -13,7 +13,12 @@ import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
-import { saveScript, updateScript } from "../lib/scriptStore";
+import {
+  findSavedScript,
+  saveScript,
+  toReplayScript,
+  updateScript,
+} from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { createParseCache, type CachedParseFields } from "../lib/parseCache";
 import { DIRECTOR_VERSION } from "../lib/director";
@@ -93,11 +98,15 @@ export default function Practice() {
  * Auditions. */
 function PracticeSession() {
   const location = useLocation();
+  const { user } = useAuth();
   const [uploadId] = useState<string | null>(
     () => location.state?.uploadId ?? null,
   );
   const [savedScriptId] = useState<string | null>(
     () => location.state?.replayScript?.id ?? null,
+  );
+  const [contentHash] = useState<string | null>(
+    () => location.state?.contentHash ?? null,
   );
   const [upload, setUpload] = useState<{ file: File | null } | null>(() => {
     if (uploadId) {
@@ -106,6 +115,13 @@ function PracticeSession() {
     }
     return savedScriptId ? null : { file: null };
   });
+  // The script as saved now, not as history state remembers it: after a
+  // reload, a fresh upload's parse (and any casting and direction since) is
+  // on its saved row, so the session picks up from there instead of paying
+  // for the parse, casting and director calls again. undefined = looking.
+  const [saved, setSaved] = useState<ReplayScript | null | undefined>(() =>
+    savedScriptId || contentHash ? undefined : null,
+  );
   useEffect(() => {
     if (upload) return;
     let active = true;
@@ -121,9 +137,22 @@ function PracticeSession() {
       active = false;
     };
   }, [upload, uploadId, savedScriptId]);
+  useEffect(() => {
+    if (saved !== undefined || !user) return;
+    let active = true;
+    void findSavedScript(user.id, { id: savedScriptId, contentHash })
+      .catch(() => null)
+      .then((script) => {
+        if (active) setSaved(script ? toReplayScript(script) : null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [saved, user, savedScriptId, contentHash]);
 
-  if (!upload) return <div className="cinematic-page" aria-busy="true" />;
-  return <PracticeFlow file={upload.file} />;
+  if (!upload || saved === undefined)
+    return <div className="cinematic-page" aria-busy="true" />;
+  return <PracticeFlow file={upload.file} saved={saved} />;
 }
 
 // The steps' names, as the step counters show them.
@@ -131,10 +160,18 @@ const STEP_TITLES = [
   "Rehearsal setup",
   "Cast yourself",
   "Direct your scene partners",
-  "Rehearsal",
+  "Get ready",
 ];
 
-function PracticeFlow({ file }: { file: File | null }) {
+function PracticeFlow({
+  file,
+  saved,
+}: {
+  file: File | null;
+  /** This script's saved row, when it has one already (a replay, or a
+   * reload after the parse landed). */
+  saved: ReplayScript | null;
+}) {
   const startRehearsal = useStartRehearsal();
   // Step 1's Replace script: a new upload, in place of this one.
   const replaceScript = (next: File) =>
@@ -150,7 +187,15 @@ function PracticeFlow({ file }: { file: File | null }) {
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = entryState?.rehearsalGrant ?? null;
-  const replayScript: ReplayScript | null = entryState?.replayScript ?? null;
+  const replayScript: ReplayScript | null =
+    saved ?? entryState?.replayScript ?? null;
+  // A reload mid-flow lands back on the step its URL names: the role picked
+  // then rides along in history state (see goToStepUrl).
+  const [resumeStep] = useState(() =>
+    replayScript ? stepFromPath(location.pathname) : 0,
+  );
+  const resumeRole: string | null =
+    typeof entryState?.chosenRole === "string" ? entryState.chosenRole : null;
   // Home.tsx already hashed this upload for its saved-script lookup.
   const uploadContentHash: string | null = entryState?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
@@ -177,9 +222,13 @@ function PracticeFlow({ file }: { file: File | null }) {
   const [characterVolumes, setCharacterVolumes] = useState<
     Record<string, number>
   >({});
-  // Saved scripts row backing this session, when the user is signed in —
-  // casting and delivery tags are written back to it as they settle.
-  const [scriptId, setScriptId] = useState<string | null>(null);
+  // This script's id from the moment it's uploaded (a replay's own), so
+  // everything kept on-device for it — reader audio included — is filed
+  // under it from the start. The saved row with this id only exists once
+  // scriptSaved: signed in, and the parse has been written.
+  const [scriptId] = useState(() => replayScript?.id ?? crypto.randomUUID());
+  // Casting and delivery tags are written back to the row as they settle.
+  const [scriptSaved, setScriptSaved] = useState(() => Boolean(replayScript?.id));
   // Set when the actor renames the script (ScriptName on step 1).
   const [scriptTitle, setScriptTitle] = useState<string | null>(null);
   // Per-line direction from the AI director (api/casting?action=direct-lines), aligned
@@ -193,13 +242,6 @@ function PracticeFlow({ file }: { file: File | null }) {
   // default voice of their own from here on.
   const [castingSettled, setCastingSettled] = useState(false);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
-  // "Start rehearsal" was clicked on VoiceCasting: the scene partner's lines
-  // are being pre-generated there, and Rehearsal opens once enough are ready.
-  const [preparing, setPreparing] = useState(false);
-  // Rehearsal was reached through that preparation, so its Start needn't
-  // wait on pre-generation. False for paths that skip casting (monologues,
-  // "Practice as X"), where Rehearsal's start overlay gates Start instead.
-  const [preparedOnCasting, setPreparedOnCasting] = useState(false);
   // Characters the user has confirmed a full cast for and rehearsed as, this
   // script's saved row plus anything newly confirmed this session.
   const [rolesRead, setRolesRead] = useState<string[]>([]);
@@ -254,7 +296,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     const userId = user.id;
     parseCacheRef.current ??= createParseCache({
       existingId: replayScript?.id,
-      newId: () => crypto.randomUUID(),
+      newId: () => scriptId,
       create: async (id, fields) =>
         saveScript(userId, {
           id,
@@ -264,7 +306,7 @@ function PracticeFlow({ file }: { file: File | null }) {
           contentHash: await getContentHash(),
         }),
       update: (id, fields) => updateScript(id, fields),
-      onCreated: setScriptId,
+      onCreated: () => setScriptSaved(true),
       onError: (err) => console.error("Failed to save script to account:", err),
     });
     void parseCacheRef.current({
@@ -288,7 +330,6 @@ function PracticeFlow({ file }: { file: File | null }) {
   // effects below can skip their model calls.
   useEffect(() => {
     if (!replayScript) return;
-    if (replayScript.id) setScriptId(replayScript.id);
     // Saved before its language was picked: ask again rather than rehearse
     // the translation the user never chose.
     if (replayScript.needsLanguageChoice) {
@@ -334,8 +375,18 @@ function PracticeFlow({ file }: { file: File | null }) {
       setRoleDraft(presetRole || null);
       setSelectedRole(presetRole);
       setVoicesConfirmed(true);
+    } else if (resumeStep >= 2 && resumeRole !== null) {
+      chosenRoleRef.current = resumeRole;
+      setRoleDraft(resumeRole || null);
+      setSelectedRole(resumeRole);
+      // Back on step 4 only with the cast that was confirmed for it saved.
+      const voices = replayScript.characterVoices ?? {};
+      const castSaved = replayScript.characters
+        .filter((name) => name !== resumeRole)
+        .every((name) => voices[name]);
+      if (resumeStep === 3 && castSaved) setVoicesConfirmed(true);
     }
-  }, [replayScript, hasPresetRole, presetRole]);
+  }, [replayScript, hasPresetRole, presetRole]); // eslint-disable-line react-hooks/exhaustive-deps -- resume is read once
 
   useEffect(() => {
     if (replayScript) return;
@@ -559,7 +610,7 @@ function PracticeFlow({ file }: { file: File | null }) {
   // with DIRECTOR_VERSION so a later prompt change knows to re-direct them.
   const persistedTagsRef = useRef(false);
   useEffect(() => {
-    if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
+    if (!user || !scriptSaved || !deliveryTags || persistedTagsRef.current) return;
     persistedTagsRef.current = true;
     if (
       replayScript?.deliveryTags &&
@@ -571,7 +622,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       deliveryTags,
       directorVersion: DIRECTOR_VERSION,
     }).catch((err) => console.error("Failed to save delivery tags:", err));
-  }, [user, scriptId, deliveryTags, replayScript]);
+  }, [user, scriptId, scriptSaved, deliveryTags, replayScript]);
 
   // Full voice catalog, so the user can override auto-assigned voices
   useEffect(() => {
@@ -630,17 +681,10 @@ function PracticeFlow({ file }: { file: File | null }) {
     });
   }, [castingSettled, voices, selectedRole]);
 
-  // VoiceCasting's "Start rehearsal": fill any uncast speaker so the voices
-  // pre-generated are exactly the ones Rehearsal will play, then prepare.
-  const beginPreparing = () => {
-    setCharacterVoices(withDefaultVoices());
-    setPreparing(true);
-  };
-
+  // VoiceCasting's Next, on to step 4: fill any uncast speaker so the voices
+  // pre-generated there are exactly the ones Rehearsal will play.
   const startReading = () => {
     const next = withDefaultVoices();
-    setPreparing(false);
-    setPreparedOnCasting(true);
     setCharacterVoices(next);
     setVoicesConfirmed(true);
     const nextRolesRead =
@@ -651,7 +695,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     // Persist the confirmed casting so replaying this script keeps the same
     // scene partner instead of re-running auto-casting, and so My Account can
     // offer "Practice as X" for this role without going through casting again.
-    if (user && scriptId) {
+    if (user && scriptSaved) {
       void updateScript(scriptId, {
         characterVoices: next,
         characterVolumes,
@@ -666,7 +710,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (!role || rolesRead.includes(role)) return;
     const next = [...rolesRead, role];
     setRolesRead(next);
-    if (user && scriptId) {
+    if (user && scriptSaved) {
       void updateScript(scriptId, { rolesRead: next }).catch((err) =>
         console.error("Failed to save role history:", err),
       );
@@ -723,12 +767,11 @@ function PracticeFlow({ file }: { file: File | null }) {
     }
   };
 
-  // Pre-generate the scene partner's lines from the moment "Start rehearsal"
-  // is clicked on VoiceCasting (never while just browsing voices — every line
-  // costs credits), and keep going through Rehearsal so the take itself makes
-  // no ElevenLabs round trips. The voice controls are hidden while preparing,
-  // so the cast can't change mid-run; backing out stops it, and the next click
-  // restarts with only the changed lines.
+  // Pre-generate the scene partner's lines from step 4 on (never while just
+  // browsing voices on step 3 — every line costs credits), and keep going
+  // through the take so it makes no ElevenLabs round trips. The cast is
+  // fixed by then; backing out stops it, and coming back restarts with only
+  // the changed lines.
   const rehearsalShowing =
     !loading &&
     !pendingParse &&
@@ -738,7 +781,7 @@ function PracticeFlow({ file }: { file: File | null }) {
     selectedRole !== null &&
     (voicesConfirmed || voiceableSpeakers.length === 0);
   const pregen = useReaderAudioPregen({
-    enabled: preparing || rehearsalShowing,
+    enabled: rehearsalShowing,
     steps,
     selectedRole: selectedRole ?? "",
     characterVoices,
@@ -755,18 +798,18 @@ function PracticeFlow({ file }: { file: File | null }) {
   // Saved once the script has its record (the parse saves it as it lands,
   // so a rename made just before still gets there).
   useEffect(() => {
-    if (!user || !scriptId || scriptTitle === null) return;
+    if (!user || !scriptSaved || scriptTitle === null) return;
     void updateScript(scriptId, { title: scriptTitle }).catch((err) => {
       console.error("Failed to rename script:", err);
       toast("Couldn't rename that script. Please try again.");
     });
-  }, [user, scriptId, scriptTitle, toast]);
+  }, [user, scriptId, scriptSaved, scriptTitle, toast]);
 
   // Keeps this script's PDF with it, so reopening it from My Auditions can
   // still show it (See script). Once the record exists; skipped if it's
   // already stored (a re-upload of a script that has one).
   useEffect(() => {
-    if (!user || !scriptId || !file) return;
+    if (!user || !scriptSaved || !file) return;
     let active = true;
     void hasScriptPdf(scriptId)
       .then((stored) =>
@@ -776,14 +819,18 @@ function PracticeFlow({ file }: { file: File | null }) {
     return () => {
       active = false;
     };
-  }, [user, scriptId, file]);
+  }, [user, scriptId, scriptSaved, file]);
 
   // Step 1 (upload) revisited: the parse is already applied, so this only
   // shows the finished upload screen again until Continue (or Forward).
   // A script parsed before (re-uploaded, or reopened from My Auditions)
   // opens here too, already complete — every rehearsal starts at step 1.
   const [reviewingUpload, setReviewingUpload] = useState(
-    () => !!replayScript && !hasPresetRole && !replayScript.needsLanguageChoice,
+    () =>
+      !!replayScript &&
+      !hasPresetRole &&
+      !replayScript.needsLanguageChoice &&
+      resumeStep === 0,
   );
   // The role last picked, so Forward can re-pick it ("" — listen to the
   // whole scene — is a real choice, unlike roleDraft's null).
@@ -797,7 +844,6 @@ function PracticeFlow({ file }: { file: File | null }) {
     setRoleDraft(role || null);
     setSelectedRole(role);
     setVoicesConfirmed(false);
-    setPreparedOnCasting(false);
     if (role && characters.filter((s) => s !== role).length === 0) {
       recordRoleReadWithNoCasting(role);
     }
@@ -805,7 +851,8 @@ function PracticeFlow({ file }: { file: File | null }) {
 
   // Wizard step on screen, mirroring the render order below: 0 upload
   // (parsing, its finished preview, or anything before a role can be
-  // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal.
+  // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal (step 4, then the
+  // take).
   const wizardStep =
     loading ||
     pendingParse ||
@@ -845,6 +892,9 @@ function PracticeFlow({ file }: { file: File | null }) {
   // The step history asked for, while the screen catches up to it.
   const targetStepRef = useRef<number | null>(null);
   const movedOnceRef = useRef(false);
+  // Reloaded mid-flow: the saved script lands a render after mount, so leave
+  // the URL alone until it has, rather than rewinding it to the upload.
+  const resumingRef = useRef(resumeStep > 0);
   // A take in progress, reported by Rehearsal. Leaving through history
   // can't be cancelled (beforeunload doesn't fire for it), so it's
   // confirmed by hand below.
@@ -858,11 +908,15 @@ function PracticeFlow({ file }: { file: File | null }) {
     selfNavRef.current = true;
     const state = locationStateRef.current;
     const practiceIndex = (state?.practiceIndex ?? 0) + (replace ? 0 : 1);
-    navigate(STEP_PATHS[step], { replace, state: { ...state, practiceIndex } });
+    // Steps past the role picker remember it, for a reload to resume with.
+    const chosenRole = step >= 2 ? selectedRole : undefined;
+    navigate(STEP_PATHS[step], {
+      replace,
+      state: { ...state, practiceIndex, chosenRole },
+    });
   };
 
   const showEarlierStep = (target: number) => {
-    setPreparing(false);
     if (target <= 1) {
       setSelectedRole(null);
       setVoicesConfirmed(false);
@@ -893,14 +947,17 @@ function PracticeFlow({ file }: { file: File | null }) {
       return true;
     }
     if (wizardStep === 2) {
-      // Same as Start: prepare; Start rehearsal opens once lines are ready.
-      if (!preparing) beginPreparing();
+      startReading();
       return true;
     }
     return false;
   };
 
   useEffect(() => {
+    if (resumingRef.current) {
+      if (steps.length === 0) return;
+      resumingRef.current = false;
+    }
     const historyMoved = prevHistoryStepRef.current !== historyStep;
     prevHistoryStepRef.current = historyStep;
     if (historyMoved) {
@@ -956,7 +1013,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       goToStepUrl(wizardStep, first && !hasUploadStep);
     else goToStepUrl(wizardStep, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
-  }, [wizardStep, historyStep]);
+  }, [wizardStep, historyStep, steps.length]);
 
   /** The header's step bars: back to an earlier setup step (1-based).
    * Through history when the entries are there (so Back/Forward stay in
@@ -1128,10 +1185,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         onVolumeChange={(speaker, volume) =>
           setCharacterVolumes((prev) => ({ ...prev, [speaker]: volume }))
         }
-        preparing={preparing}
-        pregen={pregen}
-        onStart={beginPreparing}
-        onStartAnyway={startReading}
+        onStart={startReading}
         languageCode={scriptLanguage.code}
         onGoToStep={goToStep}
       />
@@ -1154,11 +1208,12 @@ function PracticeFlow({ file }: { file: File | null }) {
           }
         })
       }
+      onGoToStep={goToStep}
       languageCode={scriptLanguage.code}
       fileName={scriptName}
       scriptId={scriptId}
+      scriptSaved={scriptSaved}
       pregen={pregen}
-      awaitPregen={!preparedOnCasting}
       onRecordingActiveChange={(active) => {
         recordingActiveRef.current = active;
       }}

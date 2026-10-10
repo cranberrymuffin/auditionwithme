@@ -1,6 +1,6 @@
 // The four practice steps' names, as the header's bars announce them.
 // One name per step, used everywhere the step is named.
-export const STEP_NAMES = ["Script", "Your role", "Scene partners", "Rehearse"];
+export const STEP_NAMES = ["Script", "Your role", "Scene partners", "Get ready"];
 const STEPS = STEP_NAMES;
 
 /**

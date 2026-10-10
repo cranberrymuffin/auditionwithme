@@ -91,8 +91,8 @@ export function useReaderAudioPregen({
   /** null until the AI director answers (or forever if it failed). */
   deliveryTags: (string | null)[] | null;
   intensity: TtsIntensity;
-  /** Saved script the audio is stored under; null keeps it in memory only. */
-  scriptId: string | null;
+  /** Script the audio is stored under on-device. */
+  scriptId: string;
 }): ReaderAudioPregen {
   const [state, setState] = useState<ReaderAudioPregenState>(IDLE);
   const [tagsWaitExpired, setTagsWaitExpired] = useState(false);
@@ -218,11 +218,9 @@ export function useReaderAudioPregen({
       try {
         const blob = await request;
         markReady(index);
-        if (scriptId) {
-          void saveReaderAudio(key, scriptId, blob).catch((err) =>
-            console.warn("Couldn't store reader audio on-device:", err),
-          );
-        }
+        void saveReaderAudio(key, scriptId, blob).catch((err) =>
+          console.warn("Couldn't store reader audio on-device:", err),
+        );
       } catch (err) {
         if (err instanceof TtsRateLimitError) {
           // Held by api/tts.ts or 429'd upstream: wait as told, and stay at
@@ -240,9 +238,9 @@ export function useReaderAudioPregen({
     };
 
     const run = async () => {
-      publish(false);
-      // Opening lines first: anything already in memory or on-device is
-      // ready immediately and costs nothing.
+      // Anything already in memory or on-device is ready immediately and
+      // costs nothing. Checked before the first publish, so returning to
+      // step 4 doesn't show progress starting over.
       await Promise.all(
         items.map(async ({ index, key }) => {
           if (peekTtsCache(key)) return; // generate() settles it in order
@@ -285,7 +283,7 @@ export function useReaderAudioPregen({
       publish(true);
       // Generation just added to the store; trim it back under its caps,
       // never touching the script being rehearsed except over its own cap.
-      if (!cancelled && scriptId) {
+      if (!cancelled) {
         void enforceReaderAudioCap(scriptId).catch((err) =>
           console.warn("Reader audio eviction failed:", err),
         );

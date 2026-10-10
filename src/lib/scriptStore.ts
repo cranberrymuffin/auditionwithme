@@ -95,6 +95,39 @@ export async function findScriptByContentHash(
   return scripts.find((script) => script.content_hash === contentHash) ?? null;
 }
 
+/** A saved script as Practice's replayScript: everything a session needs
+ * to pick it up again without re-parsing, re-casting or re-directing. */
+export function toReplayScript(script: SavedScript) {
+  return {
+    id: script.id,
+    title: script.title,
+    steps: script.steps,
+    characters: script.characters,
+    languageCode: script.language_code,
+    languageName: script.language_name,
+    characterVoices: script.character_voices,
+    characterVolumes: script.character_volumes,
+    deliveryTags: script.delivery_tags,
+    directorVersion: script.director_version,
+    rolesRead: script.roles_read,
+    needsLanguageChoice: script.needs_language_choice,
+  };
+}
+
+/** The user's saved script by id, else by its PDF's content hash. */
+export async function findSavedScript(
+  userId: string,
+  { id, contentHash }: { id?: string | null; contentHash?: string | null },
+): Promise<SavedScript | null> {
+  if (!id && !contentHash) return null;
+  const scripts = await listScripts(userId);
+  return (
+    (id && scripts.find((script) => script.id === id)) ||
+    (contentHash && scripts.find((script) => script.content_hash === contentHash)) ||
+    null
+  );
+}
+
 export async function updateScript(
   id: string,
   patch: Partial<

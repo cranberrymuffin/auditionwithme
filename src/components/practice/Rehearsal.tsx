@@ -12,10 +12,12 @@ import type { ReaderAudioPregen } from "../../hooks/useReaderAudioPregen";
 import RehearsalLineList from "./RehearsalLineList";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 import Modal from "../Modal";
+import RehearsalSetup from "./RehearsalSetup";
 
 type PlaybackState = "waiting" | "playing" | "ready" | "paused" | "error";
 type LineMode = "full" | "hidden";
-type StartPhase = "idle" | "preparing" | "countdown" | "active";
+// idle: step 4 (RehearsalSetup), the camera and lines getting ready.
+type StartPhase = "idle" | "countdown" | "active";
 const COUNTDOWN_START = 3;
 // iOS needs a moment to settle its shared audio session once the recorder
 // engages simultaneous mic capture + audio-graph mixing — audio started too
@@ -23,13 +25,8 @@ const COUNTDOWN_START = 3;
 // (AudioContext.state reports "running" throughout). Delaying the very
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
-// If the opening lines still aren't pre-generated after this long (a busy
-// account, a slow network), offer to start anyway — those lines then fetch
-// live during the take instead of keeping the actor waiting here. Only for
-// paths that skip VoiceCasting, which otherwise does this wait itself.
-const START_ANYWAY_AFTER_MS = 20_000;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, languageCode, fileName, scriptId, pregen, awaitPregen, onRecordingActiveChange }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -37,22 +34,22 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   characterVolumes: Record<string, number>;
   deliveryTags: (string | null)[];
   onBack: () => void;
+  /** Back to an earlier setup step (1-based), from step 4's step bars. */
+  onGoToStep?: (step: number) => void;
   /** Whether a take is recording or saving, for guards outside (browser
    * Back) that confirmExit can't reach. */
   onRecordingActiveChange?: (active: boolean) => void;
   languageCode: string;
   fileName: string;
-  scriptId: string | null;
+  scriptId: string;
+  /** The script's saved row exists, so a take can be kept with it. */
+  scriptSaved: boolean;
   /** Reader-audio pre-generation (useReaderAudioPregen), run by Practice
-   * from VoiceCasting's "Start rehearsal" on, and through the take. */
+   * from step 4 on, and through the take. */
   pregen: ReaderAudioPregen;
-  /** Gate Start on pre-generation here — only when VoiceCasting was skipped
-   * (monologues, "Practice as X"); otherwise it already waited there. */
-  awaitPregen: boolean;
 }) {
   const navigate = useNavigate();
   const {
-    user,
     status: recorderStatus,
     stream: cameraStream,
     error: recorderError,
@@ -62,7 +59,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     pause: pauseRecording,
     resume: resumeRecording,
     finish: finishRecording,
-  } = useSelfTapeSession(scriptId, selectedRole);
+  } = useSelfTapeSession(scriptSaved ? scriptId : null, selectedRole);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [playbackState, setPlaybackState] = useState<PlaybackState>("waiting");
@@ -134,14 +131,15 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   }, [setPlayhead, currentStepIndex, startPhase]);
   const pregenRef = useRef(pregen);
   pregenRef.current = pregen;
-  const [startAnywayOffered, setStartAnywayOffered] = useState(false);
+
+  // Step 4 sets up the camera and mic as it opens, so the actor can check
+  // their framing before Start (and Start needn't wait on a permission
+  // prompt). Released if they leave the step, when Rehearsal unmounts.
+  const requestCameraRef = useRef(requestCamera);
+  requestCameraRef.current = requestCamera;
   useEffect(() => {
-    if (!awaitPregen || pregen.canStart || startAnywayOffered) return;
-    const timer = setTimeout(() => setStartAnywayOffered(true), START_ANYWAY_AFTER_MS);
-    return () => clearTimeout(timer);
-  }, [awaitPregen, pregen.canStart, startAnywayOffered]);
-  const pregenReady = !awaitPregen || pregen.canStart;
-  const canStart = pregenReady || startAnywayOffered || pregen.failed > 0;
+    if (willRecord) void requestCameraRef.current();
+  }, [willRecord]);
 
   const beginRehearsal = useCallback((record: boolean) => {
     setRecordTake(record);
@@ -151,17 +149,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     // seconds later, after the countdown, well outside the user gesture that
     // autoplay policies require.
     unlock();
-    if (!willRecord) {
-      setCountdown(COUNTDOWN_START);
-      setStartPhase("countdown");
-      return;
-    }
-    setStartPhase("preparing");
-    void requestCamera().then(() => {
-      setCountdown(COUNTDOWN_START);
-      setStartPhase("countdown");
-    });
-  }, [unlock, willRecord, requestCamera]);
+    setCountdown(COUNTDOWN_START);
+    setStartPhase("countdown");
+  }, [unlock]);
 
   useEffect(() => {
     if (startPhase !== "countdown") return;
@@ -183,9 +173,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     recordingReadyAtRef.current = Date.now() + RECORDING_SETTLE_MS;
   }, [recording, startPhase, startRecording, getTapStream, getAudioContext]);
 
-  // Keep the script from scrolling behind the start overlay.
+  // Keep the script from scrolling behind the countdown.
   useEffect(() => {
-    if (startPhase === "active") return;
+    if (startPhase !== "countdown") return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -480,6 +470,24 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   }, [isRecordingActive]);
 
   if (!currentStep) return null;
+  if (startPhase === "idle") {
+    return (
+      <RehearsalSetup
+        scriptName={fileName}
+        onGoToStep={onGoToStep}
+        pregen={pregen}
+        willRecord={willRecord}
+        cameraStatus={recorderStatus}
+        cameraStream={cameraStream}
+        cameraError={recorderError}
+        onRetryCamera={() => void requestCamera()}
+        scriptSaved={scriptSaved}
+        onStart={() => beginRehearsal(willRecord)}
+        onPracticeRun={willRecord ? () => beginRehearsal(false) : undefined}
+        onBack={onBack}
+      />
+    );
+  }
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
   const status = complete
     ? { title: "Rehearsal complete", detail: "Saving your take…", kind: "complete" }
@@ -519,7 +527,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
       <div className="rehearsal-workspace">
-        {willRecord && startPhase !== "idle" && scriptId && (
+        {willRecord && scriptSaved && (
           <SelfTapeRecorder
             status={recorderStatus}
             stream={cameraStream}
@@ -551,67 +559,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
           />
         </section>
 
-        {startPhase !== "active" && (
+        {startPhase === "countdown" && (
           <div className="rehearsal-start-overlay">
-            {startPhase === "idle" && (
-              <div className="rehearsal-start-choice" role="dialog" aria-modal="true" aria-labelledby="rehearsal-start-title">
-                <h2 id="rehearsal-start-title">Ready to rehearse?</h2>
-                <p>
-                  {willRecord
-                    ? "Record a self-tape while you run the scene, or run your lines first without recording."
-                    : "Sit back and listen to the full scene."}
-                </p>
-                {awaitPregen && (pregen.waitingForDirection || (!pregen.done && pregen.total > 0)) && (
-                  <div className="rehearsal-pregen" role="status">
-                    <span>
-                      {pregen.waitingForDirection
-                        ? "Directing your scene partner…"
-                        : `Preparing your scene partner’s lines · ${pregen.ready} of ${pregen.total}`}
-                    </span>
-                    <i aria-hidden="true">
-                      <b style={{ width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%` }} />
-                    </i>
-                  </div>
-                )}
-                <div className="rehearsal-start-actions">
-                  <button
-                    type="button"
-                    className="rehearsal-start-primary"
-                    onClick={() => beginRehearsal(willRecord)}
-                    disabled={(willRecord && (!scriptId || !user)) || !canStart}
-                    autoFocus
-                  >
-                    {willRecord ? "Start recording" : "Start"}
-                    {!pregenReady && canStart && " anyway"}
-                  </button>
-                  {willRecord && (
-                    <button
-                      type="button"
-                      onClick={() => beginRehearsal(false)}
-                      disabled={!scriptId || !user || !canStart}
-                    >
-                      Just run lines
-                    </button>
-                  )}
-                </div>
-                {awaitPregen && pregen.failed > 0 && (
-                  <span>Some lines couldn’t be pre-loaded; they’ll load as you go.</span>
-                )}
-                {willRecord && !user && <span>Sign in to rehearse.</span>}
-                <button type="button" className="rehearsal-start-back" onClick={onBack}>
-                  ← Back to setup
-                </button>
-              </div>
-            )}
-            {startPhase === "preparing" && (
-              <div className="rehearsal-start-choice" role="status">
-                <h2>Setting up your camera…</h2>
-                <p>Allow camera and microphone access to continue.</p>
-              </div>
-            )}
-            {startPhase === "countdown" && (
-              <div className="rehearsal-countdown" key={countdown} role="timer" aria-live="assertive">{countdown}</div>
-            )}
+            <div className="rehearsal-countdown" key={countdown} role="timer" aria-live="assertive">{countdown}</div>
           </div>
         )}
 

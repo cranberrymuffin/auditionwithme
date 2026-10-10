@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Step } from "../../types";
 import {
-  describeVoice,
   dialogueTurnsLabel,
   displayCharacterName,
   humanizeVoiceLabel,
@@ -14,7 +13,6 @@ import {
   clampCharacterVolume,
   MAX_CHARACTER_VOLUME,
 } from "../../lib/characterVolume";
-import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import SetupStep from "./SetupStep";
 import SetupActions from "./SetupActions";
 import CastGrid, { CastCard } from "./CastGrid";
@@ -27,13 +25,6 @@ const filterLabel = (key: FilterKey) =>
   key === "gender" ? "Voice type" : humanizeVoiceLabel(key);
 // How long a filter that changed because of another one stays highlighted.
 const CHANGED_HIGHLIGHT_MS = 1600;
-// If the opening lines still aren't pre-generated after this long (a busy
-// account, a slow network), offer to start anyway — those lines then fetch
-// live during the take instead of keeping the actor waiting here.
-const START_ANYWAY_AFTER_MS = 20_000;
-// Share of the scene partner's lines pre-generated before Start rehearsal
-// opens up on the preparing screen (the opening lines must be ready too).
-const READY_TO_START_SHARE = 0.25;
 
 const displayCharacter = displayCharacterName;
 
@@ -46,10 +37,7 @@ export default function VoiceCasting({
   onVolumeChange,
   languageCode,
   onPick,
-  preparing,
-  pregen,
   onStart,
-  onStartAnyway,
   onGoToStep,
   scriptName,
 }: {
@@ -62,14 +50,8 @@ export default function VoiceCasting({
   /** Speaker → level (missing = unity), fixed once the take starts. */
   characterVolumes: Record<string, number>;
   onVolumeChange: (speaker: string, volume: number) => void;
-  /** Start was clicked and the scene partner's lines are being prepared;
-   * Practice moves on to Rehearsal once the opening ones are ready. */
-  preparing: boolean;
-  pregen: ReaderAudioPregenState;
-  /** Begin preparing with the current voices. */
+  /** On to step 4 with the current voices. */
   onStart: () => void;
-  /** Skip the rest of the wait and go straight to Rehearsal. */
-  onStartAnyway: () => void;
   /** Back to an earlier step (1-based), from the header's step bars. */
   onGoToStep: (step: number) => void;
   /** The script's name, shown in the step row. */
@@ -83,32 +65,12 @@ export default function VoiceCasting({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // Filters that just changed because of a pick in another one.
   const [changedFilters, setChangedFilters] = useState<FilterKey[]>([]);
-  const [startAnywayOffered, setStartAnywayOffered] = useState(false);
-  const preparingHeadingRef = useRef<HTMLHeadingElement | null>(null);
-  const readyToStart =
-    pregen.done ||
-    (pregen.canStart &&
-      pregen.total > 0 &&
-      pregen.ready / pregen.total >= READY_TO_START_SHARE);
-  const canStartNow =
-    readyToStart || startAnywayOffered || pregen.failed > 0;
-
-  useEffect(() => {
-    if (!preparing) {
-      setStartAnywayOffered(false);
-      return;
-    }
-    // The voice controls are gone while preparing: silence any preview still
-    // playing and move focus off the vanished Start button.
+  const toggleAdvanced = (open: boolean) => {
+    // The card that's playing is about to go.
     stop();
     setPreviewing(null);
-    preparingHeadingRef.current?.focus();
-    const timer = setTimeout(
-      () => setStartAnywayOffered(true),
-      START_ANYWAY_AFTER_MS,
-    );
-    return () => clearTimeout(timer);
-  }, [preparing, stop]);
+    setAdvancedOpen(open);
+  };
 
   useEffect(() => {
     if (!changedFilters.length) return;
@@ -281,86 +243,16 @@ export default function VoiceCasting({
     >
       <div className="role-intro">
         <h1>Your scene partners</h1>
-        {!preparing && (
-          <span>Tap a card to hear who’s reading each part.</span>
-        )}
+        <span>Tap a card to hear who’s reading each part.</span>
       </div>
-      {preparing ? (
-        <div className="voice-selector-panel preparing-panel">
-          <header>
-            <p>Cast locked in</p>
-            <h2 ref={preparingHeadingRef} tabIndex={-1}>
-              Preparing your scene partners
-            </h2>
-          </header>
-          <ul className="preparing-cast" aria-label="Your cast">
-            {speakers.map((speaker) => {
-              const voice = voices.find(
-                (candidate) => candidate.id === characterVoices[speaker],
-              );
-              const descriptor = voice ? describeVoice(voice) : "";
-              return (
-                <li key={speaker}>
-                  <span>{displayCharacter(speaker)}</span>
-                  <strong>
-                    {voice ? voiceDisplayName(voice.name) : "Default voice"}
-                    {descriptor && <small> · {descriptor}</small>}
-                  </strong>
-                </li>
-              );
-            })}
-          </ul>
-          {/* The progress bar is the start button: disabled until enough
-              lines are ready, unless it's been a while or some failed, when
-              it offers Start anyway. */}
-          <button
-            type="button"
-            className={`preparing-progress ${canStartNow ? "is-ready" : ""}`}
-            disabled={!canStartNow}
-            onClick={onStartAnyway}
-          >
-            <i
-              aria-hidden="true"
-              style={{
-                width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : 0}%`,
-              }}
-            />
-            <span role="status">
-              {pregen.waitingForDirection || pregen.total === 0
-                ? "Directing the scene…"
-                : `${
-                    readyToStart
-                      ? "Start rehearsal"
-                      : canStartNow
-                        ? "Start anyway"
-                        : "Preparing your scene partner’s lines"
-                  } · ${pregen.ready} of ${pregen.total}`}
-            </span>
-          </button>
-          <div className="preparing-note">
-            <p>
-              {pregen.failed > 0
-                ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
-                : readyToStart
-                  ? "The rest keep loading while you rehearse."
-                  : "You can start once enough lines are ready."}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <>
+      <>
           {/* Under the title, open or not; the options take the cards'
               place while open. */}
           <Accordion
             id="voice-advanced"
             className="voice-advanced-accordion"
             open={advancedOpen}
-            onOpenChange={(open) => {
-              // The card that's playing is about to go.
-              stop();
-              setPreviewing(null);
-              setAdvancedOpen(open);
-            }}
+            onOpenChange={toggleAdvanced}
             showLabel="Customize voices"
             hideLabel="Done customizing"
           >
@@ -467,6 +359,15 @@ export default function VoiceCasting({
                 Each choice switches to the closest real voice; anything that
                 changes along with it is highlighted.
               </p>
+              {/* Picks are kept as they're made: Save just closes, like
+                  Done customizing. */}
+              <button
+                type="button"
+                className="voice-advanced-save"
+                onClick={() => toggleAdvanced(false)}
+              >
+                Save
+              </button>
             </div>
           </Accordion>
 
@@ -478,18 +379,20 @@ export default function VoiceCasting({
             />
           )}
 
-          <SetupActions
-            onBack={() => {
-              stop();
-              onGoToStep(2);
-            }}
-            nextLabel="Start rehearsal"
-            nextDisabled={!currentVoice}
-            nextHint="No voice is available for this script’s language yet."
-            onNext={onStart}
-          />
+          {/* While customizing, Save is the way out: one primary at a time. */}
+          {!advancedOpen && (
+            <SetupActions
+              onBack={() => {
+                stop();
+                onGoToStep(2);
+              }}
+              nextLabel="Get ready"
+              nextDisabled={!currentVoice}
+              nextHint="No voice is available for this script’s language yet."
+              onNext={onStart}
+            />
+          )}
         </>
-      )}
     </SetupStep>
   );
 }
