@@ -904,6 +904,16 @@ function PracticeFlow({ file }: { file: File | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
   }, [wizardStep, historyStep]);
 
+  /** The header's step bars: back to an earlier setup step (1-based).
+   * Through history when the entries are there (so Back/Forward stay in
+   * step: setup steps are always reached in order), else directly. */
+  const goToStep = (step: number) => {
+    const back = wizardStep - (step - 1);
+    if (back <= 0) return;
+    if ((location.state?.practiceIndex ?? 0) >= back) navigate(-back);
+    else showEarlierStep(step - 1);
+  };
+
   /** In-app Back: through history when there's an earlier step entry (so
    * browser Back/Forward stay in step), else `fallback`. */
   const stepBack = (fallback: () => void) => {
@@ -1031,7 +1041,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         fileName={scriptName}
         initialSelected={roleDraft}
         onChoose={chooseRole}
-        onBack={() => stepBack(() => navigate(replayScript ? "/account" : "/"))}
+        onGoToStep={goToStep}
       />
     );
   }
@@ -1061,13 +1071,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         onStartAnyway={startReading}
         languageCode={scriptLanguage.code}
         languageName={scriptLanguage.name}
-        onBack={() =>
-          stepBack(() => {
-            setPreparing(false);
-            setSelectedRole(null);
-            setVoicesConfirmed(false);
-          })
-        }
+        onGoToStep={goToStep}
       />
     );
   }

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { BrandMark } from "../SiteNav";
 import DocumentPreview from "../DocumentPreview";
 import ScriptName from "../ScriptName";
 import StepHeader from "./StepHeader";
+import SetupHeader from "./SetupHeader";
 
 export default function ParsingScreen({
   file,
@@ -62,11 +61,7 @@ export default function ParsingScreen({
 
   return (
     <main className="processing-page" aria-live="polite" aria-busy={!done}>
-      <header className="workflow-header">
-        <Link to="/" aria-label="Audition With Me home">
-          <BrandMark />
-        </Link>
-      </header>
+      <SetupHeader step={1} />
 
       <section
         className={`processing-layout ${done ? "processing-layout--single" : ""}`}

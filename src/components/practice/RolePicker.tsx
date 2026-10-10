@@ -1,9 +1,8 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
-import { BrandMark } from "../SiteNav";
 import StepHeader from "./StepHeader";
+import SetupHeader from "./SetupHeader";
 
 export default function RolePicker({
   characters,
@@ -11,15 +10,15 @@ export default function RolePicker({
   fileName,
   initialSelected,
   onChoose,
-  onBack,
+  onGoToStep,
 }: {
   characters: string[];
   steps: Step[];
   fileName: string;
   initialSelected: string | null;
   onChoose: (role: string) => void;
-  /** Back to step 1, the uploaded script. */
-  onBack: () => void;
+  /** Back to an earlier step (1-based), from the header's step bars. */
+  onGoToStep: (step: number) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(initialSelected);
   const roleRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -32,36 +31,23 @@ export default function RolePicker({
 
   return (
     <main className="role-page">
-      <header className="setup-header">
-        <Link to="/" aria-label="Audition With Me home">
-          <BrandMark />
-        </Link>
-        <div className="setup-progress">
-          <span>Step 2 of 4 · Cast yourself</span>
-          <div aria-hidden="true">
-            <i />
-            <i className="is-active" />
-            <i />
-            <i />
-          </div>
-        </div>
-      </header>
+      <SetupHeader step={2} onGoToStep={onGoToStep} />
 
       <section className="role-content">
         <StepHeader step={2} title="Cast yourself" scriptName={fileName} />
 
-        <button type="button" className="setup-back" onClick={onBack}>
-          <span aria-hidden="true">←</span> Back
-        </button>
         <div className="role-intro">
           <p>
             {characters.length} {characters.length === 1 ? "role" : "roles"}{" "}
             detected
           </p>
           <h1>Choose your role</h1>
-          <span>
-            Choose the character you’re rehearsing. We’ll read the other parts.
-          </span>
+          <div className="role-secondary">
+            <span>Not rehearsing a role?</span>
+            <button onClick={() => onChoose("")}>
+              Listen to the full scene
+            </button>
+          </div>
         </div>
 
         <div
@@ -124,11 +110,6 @@ export default function RolePicker({
               </button>
             );
           })}
-        </div>
-
-        <div className="role-secondary">
-          <span>Not rehearsing a role?</span>
-          <button onClick={() => onChoose("")}>Listen to the full scene</button>
         </div>
         <div className="role-actions">
           <button

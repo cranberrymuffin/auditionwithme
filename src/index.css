@@ -2024,7 +2024,9 @@ header .flow-back:hover {
   font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
-  transition: color 0.15s ease, transform 0.15s ease;
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 .feedback-gate-star:hover {
   transform: scale(1.08);
@@ -2344,17 +2346,6 @@ header .flow-back:hover {
     #101b2a;
   color: #f8f1e6;
 }
-.workflow-header {
-  display: grid;
-  height: 72px;
-  grid-template-columns: 1fr minmax(0, auto) 1fr;
-  align-items: center;
-  padding: 0 clamp(22px, 4vw, 64px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
-}
-.workflow-header .text-hero-ink {
-  color: #f8f1e6;
-}
 .processing-layout {
   width: min(1280px, 100%);
   min-height: calc(100vh - 72px);
@@ -2432,7 +2423,8 @@ header .flow-back:hover {
   padding: 0;
   border: 0;
   outline: none;
-  background: linear-gradient(to top, #ef9a78 max(1px, 0.04em), transparent 0) 0 0 / 100% 1lh;
+  background: linear-gradient(to top, #ef9a78 max(1px, 0.04em), transparent 0) 0
+    0 / 100% 1lh;
   resize: none;
   overflow: hidden;
 }
@@ -2781,10 +2773,6 @@ header .flow-back:hover {
   .processing-page {
     overflow: auto;
   }
-  .workflow-header {
-    grid-template-columns: 1fr auto;
-    padding: 0 20px;
-  }
   .processing-layout {
     height: auto;
     min-height: calc(100dvh - 72px);
@@ -2870,9 +2858,7 @@ header .flow-back:hover {
   min-width: 0;
   max-width: 470px;
 }
-/* The practice setup steps' Back (top left of the content) and step 1's
-   Replace script: plain text buttons. */
-.setup-back,
+/* Step 1's Replace script: a plain text button. */
 .replace-script {
   display: block;
   min-height: 44px;
@@ -2880,16 +2866,8 @@ header .flow-back:hover {
   font-size: 0.875rem;
   font-weight: 500;
 }
-.setup-back:hover,
 .replace-script:hover {
   color: #f8f1e6;
-}
-.setup-back {
-  margin-bottom: clamp(25px, 4vh, 42px);
-}
-.setup-back span {
-  margin-right: 8px;
-  color: #ef9a78;
 }
 .replace-script {
   margin-top: 6px;
@@ -3289,7 +3267,11 @@ header .flow-back:hover {
 .preparing-progress i {
   position: absolute;
   inset: 0 auto 0 0;
-  background: linear-gradient(135deg, rgba(244, 165, 131, 0.32), rgba(233, 132, 100, 0.32));
+  background: linear-gradient(
+    135deg,
+    rgba(244, 165, 131, 0.32),
+    rgba(233, 132, 100, 0.32)
+  );
   transition: width 0.3s ease;
 }
 .preparing-progress span {
@@ -3351,9 +3333,6 @@ header .flow-back:hover {
   .voice-setup-intro {
     max-width: 650px;
   }
-  .setup-back {
-    margin-bottom: 18px;
-  }
   .voice-setup-intro h1 {
     font-size: clamp(2.5rem, 10vw, 3.25rem);
   }
@@ -3385,9 +3364,6 @@ header .flow-back:hover {
   .voice-setup-layout {
     padding-top: 24px;
     padding-bottom: 24px;
-  }
-  .setup-back {
-    margin-bottom: 15px;
   }
   .voice-setup-intro h1 {
     font-size: 3.25rem;
@@ -3474,30 +3450,46 @@ header .flow-back:hover {
 .setup-header .text-hero-ink {
   color: #f8f1e6;
 }
-.setup-progress {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  color: rgba(248, 241, 230, 0.78);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-.setup-progress > div {
+/* StepProgress: one equal-width bar per practice step. A done step's bar
+   is a button with a 44px-tall hit area around the 4px bar. */
+.setup-progress ol {
   display: flex;
   gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
-.setup-progress i {
+.step-bar-button,
+.step-bar-slot {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 2px;
+}
+.step-bar-button {
+  cursor: pointer;
+  border-radius: 4px;
+}
+.step-bar {
+  display: block;
   width: 28px;
   height: 4px;
   border: 1px solid rgba(248, 241, 230, 0.24);
   border-radius: 3px;
   background: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
-.setup-progress i:first-child {
+.step-bar.is-done {
   border-color: rgba(248, 241, 230, 0.64);
   background: rgba(248, 241, 230, 0.64);
 }
-.setup-progress i.is-active {
+.step-bar-button:hover .step-bar.is-done {
+  border-color: #f8f1e6;
+  background: #f8f1e6;
+}
+.step-bar.is-active {
   border-color: #ef9a78;
   background: #ef9a78;
 }
@@ -3666,15 +3658,12 @@ header .flow-back:hover {
   -webkit-line-clamp: 2;
 }
 .role-secondary {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
   margin-top: 24px;
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.875rem;
 }
 .role-secondary button {
-  min-height: 44px;
+  padding: 5px;
   color: rgba(248, 241, 230, 0.9);
   font-size: 0.875rem;
   font-weight: 600;
@@ -3772,13 +3761,7 @@ header .flow-back:hover {
     gap: 14px;
     padding: 0 18px;
   }
-  .setup-progress span {
-    display: none;
-  }
-  .setup-progress {
-    gap: 0;
-  }
-  .setup-progress i {
+  .step-bar {
     width: 16px;
   }
   .role-content {
@@ -3803,11 +3786,6 @@ header .flow-back:hover {
   .role-option {
     min-height: 132px;
     padding: 20px;
-  }
-  .role-secondary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0;
   }
   .role-continue {
     min-height: 52px;
@@ -4063,8 +4041,13 @@ header .flow-back:hover {
   animation: rehearsal-live-dot-blink 1s ease-in-out infinite;
 }
 @keyframes rehearsal-live-dot-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
 }
 .rehearsal-line-copy em {
   display: block;
@@ -4475,7 +4458,8 @@ header .flow-back:hover {
   opacity: 0.6;
 }
 @keyframes self-tape-rec-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {

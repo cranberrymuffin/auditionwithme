@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import {
   describeVoice,
@@ -14,8 +13,8 @@ import {
   MAX_CHARACTER_VOLUME,
 } from "../../lib/characterVolume";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
-import { BrandMark } from "../SiteNav";
 import StepHeader from "./StepHeader";
+import SetupHeader from "./SetupHeader";
 import { useToast } from "../../lib/toast";
 
 type FilterKey = "accent" | "gender" | "age" | "tone";
@@ -43,7 +42,7 @@ export default function VoiceCasting({
   pregen,
   onStart,
   onStartAnyway,
-  onBack,
+  onGoToStep,
   scriptName,
 }: {
   speakers: string[];
@@ -64,7 +63,8 @@ export default function VoiceCasting({
   onStart: () => void;
   /** Skip the rest of the wait and go straight to Rehearsal. */
   onStartAnyway: () => void;
-  onBack: () => void;
+  /** Back to an earlier step (1-based), from the header's step bars. */
+  onGoToStep: (step: number) => void;
   /** The script's name, shown in the step row. */
   scriptName: string;
 }) {
@@ -218,34 +218,16 @@ export default function VoiceCasting({
 
   return (
     <main className="voice-setup-page">
-      <header className="setup-header">
-        <Link to="/" aria-label="Audition With Me home">
-          <BrandMark />
-        </Link>
-        <div className="setup-progress">
-          <span>
-            Step 3 of 4 · Direct your scene partners
-          </span>
-          <div aria-hidden="true">
-            <i />
-            <i />
-            <i className="is-active" />
-            <i />
-          </div>
-        </div>
-      </header>
+      <SetupHeader
+        step={3}
+        onGoToStep={(step) => {
+          stop();
+          onGoToStep(step);
+        }}
+      />
 
       <section className="voice-setup-layout">
         <div className="voice-setup-intro">
-          <button
-            className="setup-back"
-            onClick={() => {
-              stop();
-              onBack();
-            }}
-          >
-            <span>←</span> Back
-          </button>
           <StepHeader step={3} title="Direct your scene partners" scriptName={scriptName} />
           <h1>Choose your scene partner</h1>
           <div className="voice-setup-description">
