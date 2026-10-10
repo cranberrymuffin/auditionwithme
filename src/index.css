@@ -3098,6 +3098,35 @@ header .flow-back:hover {
 .rehearsal-setup-devices li.is-complete > span {
   color: #f4a583;
 }
+.rehearsal-setup-devices li.is-failed > span,
+.rehearsal-setup-devices li.is-failed small {
+  color: #ff8a80;
+}
+/* Step 4's camera/mic trouble: what's wrong, how to fix it, and a retry. */
+.device-problem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 138, 128, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 138, 128, 0.08);
+}
+.device-problem[role="status"] {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+}
+.device-problem p {
+  flex: 1;
+  margin: 0;
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.device-problem .speaker-test {
+  flex: none;
+}
 .rehearsal-setup-devices strong {
   color: #f8f1e6;
   font-weight: 600;

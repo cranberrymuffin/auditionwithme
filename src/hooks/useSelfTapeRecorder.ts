@@ -70,6 +70,26 @@ export function isIpad(): boolean {
  * releases the camera. Permission failures land in `error` rather than
  * throwing.
  */
+/** What went wrong opening the camera and mic, and how the actor fixes it.
+ * A blocked site never gets a permission prompt again, so retrying alone
+ * can't help there: they have to allow it in the browser first. */
+export function cameraErrorMessage(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Your browser is blocking the camera and microphone for this site. Click the camera or site-settings icon in the address bar, allow both, then try again.";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "We couldn't find a camera and microphone. Connect them, then try again.";
+    case "NotReadableError":
+    case "AbortError":
+      return "Your camera or microphone is in use by another app. Close it (Zoom, FaceTime, another tab), then try again.";
+    default:
+      return "We couldn't access your camera and microphone. Check your browser permissions, then try again.";
+  }
+}
+
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -119,9 +139,7 @@ export function useSelfTapeRecorder() {
     } catch (err) {
       console.error("Self-tape camera unavailable:", err);
       setStatus("error");
-      setError(
-        "We couldn't access your camera. Check your browser permissions and try again.",
-      );
+      setError(cameraErrorMessage(err));
       return;
     }
     const videoTrack = media.getVideoTracks()[0];

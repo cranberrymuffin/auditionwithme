@@ -22,6 +22,9 @@ const READY_TO_START_SHARE = 0.25;
 // 0–1) that lights them all: ordinary speaking sits around 0.05–0.15.
 const MIC_METER_BARS = 5;
 const MIC_FULL_SCALE = 0.2;
+// The browser's camera/mic prompt is easy to miss (or dismiss): after this
+// long still waiting on it, point the actor at it.
+const PERMISSION_NUDGE_AFTER_MS = 5_000;
 
 /** Strips Chrome's "Default - " prefix from the default output's label. */
 const speakerName = (label: string) => label.replace(/^Default - /, "");
@@ -222,17 +225,26 @@ export default function RehearsalSetup({
     playTestChime(checkAudio);
   };
 
+  const [permissionSlow, setPermissionSlow] = useState(false);
+  useEffect(() => {
+    setPermissionSlow(false);
+    if (!willRecord || cameraStream || cameraStatus === "error") return;
+    const timer = setTimeout(() => setPermissionSlow(true), PERMISSION_NUDGE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [willRecord, cameraStream, cameraStatus]);
+
   const videoTrack = cameraStream?.getVideoTracks()[0];
   const audioTrack = cameraStream?.getAudioTracks()[0];
   const deviceStatus = (track: MediaStreamTrack | undefined) =>
     track
       ? { done: true, text: track.label || "Connected" }
       : cameraStatus === "error"
-        ? { done: false, text: "Not available" }
+        ? { done: false, failed: true, text: "Not available" }
         : { done: false, text: "Waiting for access…" };
   const devices: {
     name: string;
     done: boolean;
+    failed?: boolean;
     text: string;
     aside?: ReactNode;
   }[] = [
@@ -302,7 +314,7 @@ export default function RehearsalSetup({
             ) : (
               <div className="self-tape-placeholder">
                 {cameraStatus === "error"
-                  ? cameraError
+                  ? "Camera not available"
                   : "Waiting for camera access…"}
               </div>
             )}
@@ -318,9 +330,13 @@ export default function RehearsalSetup({
         {devices.map((device) => (
           <li
             key={device.name}
-            className={device.done ? "is-complete" : undefined}
+            className={
+              device.done ? "is-complete" : device.failed ? "is-failed" : undefined
+            }
           >
-            <span aria-hidden="true">{device.done ? "✓" : "○"}</span>
+            <span aria-hidden="true">
+              {device.done ? "✓" : device.failed ? "✕" : "○"}
+            </span>
             <strong>{device.name}</strong>
             <small title={device.text}>{device.text}</small>
             {device.aside}
@@ -328,13 +344,23 @@ export default function RehearsalSetup({
         ))}
       </ul>
       {willRecord && cameraStatus === "error" && (
-        <button
-          type="button"
-          className="script-accordion-toggle"
-          onClick={onRetryCamera}
-        >
-          Try camera again
-        </button>
+        <div className="device-problem" role="alert">
+          <p>{cameraError}</p>
+          <button type="button" className="speaker-test" onClick={onRetryCamera}>
+            Try again
+          </button>
+        </div>
+      )}
+      {willRecord && permissionSlow && (
+        <div className="device-problem" role="status">
+          <p>
+            Look for your browser’s permission prompt near the address bar and
+            choose Allow for the camera and microphone.
+          </p>
+          <button type="button" className="speaker-test" onClick={onRetryCamera}>
+            Ask again
+          </button>
+        </div>
       )}
 
       {/* The progress bar is the start button: disabled until enough lines
