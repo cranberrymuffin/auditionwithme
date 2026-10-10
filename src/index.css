@@ -1672,6 +1672,62 @@ header .flow-back:hover {
   font-size: 1rem;
   line-height: 1.5;
 }
+.storage-meter {
+  max-width: 520px;
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(248, 241, 230, 0.16);
+  border-radius: 12px;
+  background: rgba(12, 23, 36, 0.32);
+}
+.storage-meter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+.storage-meter-label {
+  color: rgba(248, 241, 230, 0.76);
+}
+.storage-meter-free {
+  color: #f8f1e6;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.storage-meter-track {
+  display: block;
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(248, 241, 230, 0.14);
+}
+.storage-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  transition: width 0.3s ease;
+}
+.storage-meter-detail {
+  margin: 8px 0 0;
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.storage-meter--low {
+  border-color: rgba(255, 170, 120, 0.55);
+}
+.storage-meter--low .storage-meter-fill {
+  background: #ff8a5c;
+}
+.storage-meter-warning {
+  margin: 8px 0 0;
+  color: #ffc4a3;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
 .account-upload-button {
   display: inline-flex;
   min-height: 44px;

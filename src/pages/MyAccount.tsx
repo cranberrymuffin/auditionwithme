@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import StorageMeter from "../components/StorageMeter";
 import { useAuth } from "../contexts/AuthContext";
 import { forgetSelfTapeUrl, getSelfTapeUrl } from "../lib/selfTapeUrl";
 import {
@@ -303,6 +304,12 @@ export default function MyAccount() {
             Your scripts and self-tapes. They’re saved on this device only,
             so download any take you want to keep.
           </p>
+          {user && !loading && (
+            <StorageMeter
+              userId={user.id}
+              refreshKey={`${scripts.length}:${selfTapes.length}`}
+            />
+          )}
           {scripts.length > 0 && (
             <button
               type="button"

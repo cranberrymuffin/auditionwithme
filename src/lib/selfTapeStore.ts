@@ -82,6 +82,15 @@ export async function listTapes(userId: string): Promise<SelfTape[]> {
     .map(toSelfTape);
 }
 
+/** Each of this user's tapes' size in bytes. blob.size is known without
+ * reading the video itself, so this stays cheap however long the takes. */
+export async function listTapeSizes(userId: string): Promise<number[]> {
+  const all = await withStore<TapeRecord[]>(SELF_TAPES_STORE, "readonly", (store) =>
+    store.getAll(),
+  );
+  return all.filter((record) => record.userId === userId).map((record) => record.blob.size);
+}
+
 export async function getTapeBlob(id: string): Promise<Blob | null> {
   const record = await withStore<TapeRecord | undefined>(
     SELF_TAPES_STORE,
