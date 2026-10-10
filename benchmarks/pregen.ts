@@ -126,6 +126,38 @@ check("a legacy single-word director tag is sent as a delivery tag", () => {
   assert.equal(line.performance, undefined);
 });
 
+check("a coached line is just its take and voice: no direction, emotion, or context", () => {
+  const tags: (string | null)[] = [null, "[flatly] Out.", null, null, null, null];
+  const line = buildReaderLine(steps, 1, voices, tags, { BEN: 0.5 }, { 1: "take-1" })!;
+  assert.deepEqual(line, { text: "Out.", voiceId: "voice-ben", coachTakeId: "take-1" });
+});
+
+check("coaching a line changes only that line's key, and a redo changes it again", () => {
+  const coachedKeys = (coachTakes: Record<number, string>) =>
+    readerLineIndices(steps, "ANNA").map((index) =>
+      cacheKey(buildReaderLine(steps, index, voices, [], {}, coachTakes)!, "natural"),
+    );
+  const before = keysFor("ANNA", voices, []);
+  const coached = coachedKeys({ 4: "take-1" });
+  assert.equal(coached[0], before[0]);
+  assert.notEqual(coached[1], before[1]);
+  assert.equal(coached[2], before[2]);
+  assert.notEqual(coachedKeys({ 4: "take-2" })[1], coached[1]);
+});
+
+check("recasting a coached character re-voices the same take (a new key)", () => {
+  const key = (characterVoices: Record<string, string>) =>
+    cacheKey(buildReaderLine(steps, 1, characterVoices, [], {}, { 1: "take-1" })!, "natural");
+  assert.notEqual(key({ ...voices, BEN: "voice-ben-2" }), key(voices));
+});
+
+check("a coached line keeps the script's beat before it", () => {
+  const beatSteps: Step[] = [step("ANNA", "Well?"), step("BEN", "No.", "(beat)")];
+  const cue = buildReaderCue(beatSteps, 1, voices, [], {}, { 1: "take-1" })!;
+  assert.equal(cue.beatMs, SHORT_BEAT_MS);
+  assert.equal(cue.line.coachTakeId, "take-1");
+});
+
 check("prosody context skips unspoken steps", () => {
   const line = buildReaderLine(steps, 4, voices, [])!;
   assert.equal(line.previousText, "Out where?");

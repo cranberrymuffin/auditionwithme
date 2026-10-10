@@ -1,8 +1,9 @@
 // How much of this browser's on-device storage the app is using, and how
-// much is left. Scripts, self-tapes, and reader audio all live in IndexedDB
+// much is left. Scripts, self-tapes, reader audio, and coached takes all live in IndexedDB
 // (see localDb.ts), so the browser's per-origin quota is the real ceiling on
 // how much more an actor can save — not anything on our side.
 import {
+  COACH_TAKES_STORE,
   READER_AUDIO_STORE,
   SCRIPT_PDFS_STORE,
   SCRIPTS_STORE,
@@ -11,8 +12,8 @@ import {
 } from "./localDb";
 
 export type StorageUsage = {
-  /** Bytes of this user's own scripts, script PDFs, reader audio, and
-   * self-tapes — what the actor would think of as "my stuff". */
+  /** Bytes of this user's own scripts, script PDFs, reader audio, coached
+   * takes, and self-tapes — what the actor would think of as "my stuff". */
   auditionBytes: number;
   /** Room left in the origin's quota. The browser's usage figure also
    * counts the app's own offline copy (the PWA precache and image cache),
@@ -40,14 +41,15 @@ export async function getStorageUsage(userId: string): Promise<StorageUsage | nu
 
 /** Sums the bytes this user's records hold. Blob and File sizes are known
  * without reading their contents, and reader audio stores its size on the
- * record, so this never pulls a video or PDF into memory. */
+ * record (as do coached takes), so this never pulls a video or PDF into memory. */
 async function getAuditionBytes(userId: string): Promise<number> {
   const getAll = <T>(storeName: string) =>
     withStore<T[]>(storeName, "readonly", (store) => store.getAll());
-  const [scripts, pdfs, audio, tapes] = await Promise.all([
+  const [scripts, pdfs, audio, coached, tapes] = await Promise.all([
     getAll<{ id: string; userId: string }>(SCRIPTS_STORE),
     getAll<{ scriptId: string; file: File }>(SCRIPT_PDFS_STORE),
     getAll<{ scriptId: string; size: number }>(READER_AUDIO_STORE),
+    getAll<{ scriptId: string; size: number }>(COACH_TAKES_STORE),
     getAll<{ userId: string; blob: Blob }>(SELF_TAPES_STORE),
   ]);
   const mine = scripts.filter((script) => script.userId === userId);
@@ -58,7 +60,7 @@ async function getAuditionBytes(userId: string): Promise<number> {
   const pdfBytes = pdfs
     .filter((record) => scriptIds.has(record.scriptId))
     .reduce((sum, record) => sum + record.file.size, 0);
-  const audioBytes = audio
+  const audioBytes = [...audio, ...coached]
     .filter((record) => scriptIds.has(record.scriptId))
     .reduce((sum, record) => sum + record.size, 0);
   const tapeBytes = tapes

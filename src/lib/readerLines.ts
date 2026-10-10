@@ -48,7 +48,10 @@ export type ReaderCue = { line: TtsLine; beatMs: number };
  * "(beat)"-style cue before the line, else the director's leading
  * "[short pause]" / "[long pause]" — is split off here so it never reaches
  * the TTS text or the cache key. The speaker's emotion setting goes on the
- * request only when it's off natural, so default reads keep their keys.
+ * request only when it's off natural, so default reads keep their keys. A
+ * line the actor coached (step index → take id in `coachTakes`) is their
+ * recording re-voiced instead: just the take and the voice, keeping only the
+ * beat before it.
  */
 export function buildReaderCue(
   steps: Step[],
@@ -56,9 +59,11 @@ export function buildReaderCue(
   characterVoices: Record<string, string>,
   deliveryTags: (string | null)[],
   characterEmotions: Record<string, number> = {},
+  coachTakes: Record<number, string> = {},
 ): ReaderCue | null {
   const step = steps[index];
   if (!step?.verbalLine.trim()) return null;
+  const voiceId = characterVoices[normalizeSpeaker(step.speaker)];
   const before = [...steps.slice(0, index)].reverse().find((item) => item.verbalLine.trim());
   const after = steps.slice(index + 1).find((item) => item.verbalLine.trim());
   const parenthetical = deliveryTagFromContent(step.content);
@@ -72,18 +77,23 @@ export function buildReaderCue(
       : undefined;
   const legacyTag = directed && directed !== step.verbalLine && !performance ? directed : undefined;
   const beat = beatFromContent(step.content) ?? directedBeat;
+  const beatMs = beat ? BEAT_MS[beat] : 0;
+  const coachTakeId = coachTakes[index];
+  if (coachTakeId) {
+    return { line: { text: step.verbalLine, voiceId, coachTakeId }, beatMs };
+  }
   const emotion = clampCharacterEmotion(characterEmotions[normalizeSpeaker(step.speaker)]);
   return {
     line: {
       text: step.verbalLine,
-      voiceId: characterVoices[normalizeSpeaker(step.speaker)],
+      voiceId,
       previousText: before?.verbalLine,
       nextText: after?.verbalLine,
       deliveryTag: parenthetical ?? legacyTag,
       performance,
       ...(emotion ? { emotion } : {}),
     },
-    beatMs: beat ? BEAT_MS[beat] : 0,
+    beatMs,
   };
 }
 
@@ -95,6 +105,10 @@ export function buildReaderLine(
   characterVoices: Record<string, string>,
   deliveryTags: (string | null)[],
   characterEmotions: Record<string, number> = {},
+  coachTakes: Record<number, string> = {},
 ): TtsLine | null {
-  return buildReaderCue(steps, index, characterVoices, deliveryTags, characterEmotions)?.line ?? null;
+  return (
+    buildReaderCue(steps, index, characterVoices, deliveryTags, characterEmotions, coachTakes)
+      ?.line ?? null
+  );
 }

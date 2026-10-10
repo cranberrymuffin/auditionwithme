@@ -27,7 +27,7 @@ const COUNTDOWN_START = 3;
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, characterEmotions, characterPaces, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, characterEmotions, characterPaces, coachTakes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -36,6 +36,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   /** Speaker → emotion and pace set beside volume (lib/characterDelivery.ts). */
   characterEmotions: Record<string, number>;
   characterPaces: Record<string, number>;
+  /** Step index → the actor's coached take of that line (coachTakeStore.ts). */
+  coachTakes: Record<number, string>;
   deliveryTags: (string | null)[];
   onBack: () => void;
   /** Back to an earlier setup step (1-based), from step 4's step bars. */
@@ -92,8 +94,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   // and its cache key — match what was generated before Start. The cue also
   // carries the line's intentional beat, held before it plays.
   const readerCue = useCallback(
-    (index: number): ReaderCue | null => buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions),
-    [steps, characterVoices, characterEmotions],
+    (index: number): ReaderCue | null =>
+      buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions, coachTakes),
+    [steps, characterVoices, characterEmotions, coachTakes],
   );
   // Fixed for the take: set on the voice setup screen, never mid-scene.
   const volumeFor = useCallback(

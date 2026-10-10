@@ -3,6 +3,8 @@ import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
 import { cacheKey, type TtsIntensity, type TtsLine } from "../lib/ttsCacheKey";
 import { loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
+import { loadCoachTakeBlob } from "../lib/coachTakeStore";
+import { toBase64, toPcm16kMono } from "../lib/pcm";
 import { clampCharacterVolume } from "../lib/characterVolume";
 
 export { cacheKey } from "../lib/ttsCacheKey";
@@ -100,6 +102,9 @@ export function trackPregenFetch(key: string, promise: Promise<Blob>): boolean {
 // "is speaking…" with no way to tell what happened. Aborting after 15s turns
 // that silent hang into an ordinary failure the retry/fallback logic already handles.
 const FETCH_TIMEOUT_MS = 15_000;
+// Speech-to-speech works through the whole take (and cleans its background
+// noise) before answering, so a coached line gets longer.
+const COACHED_FETCH_TIMEOUT_MS = 30_000;
 
 /** Extra request options for callers other than playback — today only
  * pre-generation, which tags its requests and watches account concurrency. */
@@ -120,28 +125,54 @@ export type TtsFetchOptions = {
   signal?: AbortSignal;
 };
 
+/** The route and body for `line`: text-to-speech, or — for a coached line —
+ * its on-device recording, sent for speech-to-speech. */
+async function lineRequest(
+  line: TtsLine,
+  intensity: TtsIntensity,
+): Promise<{ path: string; body: string; timeoutMs: number }> {
+  if (line.coachTakeId) {
+    const take = await loadCoachTakeBlob(line.coachTakeId);
+    if (!take) throw new Error("That coached line’s recording isn’t on this device any more");
+    return {
+      path: "/api/sts",
+      body: JSON.stringify({
+        voiceId: line.voiceId,
+        audio: toBase64(await toPcm16kMono(take)),
+      }),
+      timeoutMs: COACHED_FETCH_TIMEOUT_MS,
+    };
+  }
+  return {
+    path: "/api/tts",
+    body: JSON.stringify({
+      text: line.text,
+      voiceId: line.voiceId,
+      previousText: line.previousText,
+      nextText: line.nextText,
+      deliveryTag: line.deliveryTag,
+      performance: line.performance,
+      emotion: line.emotion,
+      intensity,
+    }),
+    timeoutMs: FETCH_TIMEOUT_MS,
+  };
+}
+
 async function fetchTtsBlob(
   line: TtsLine,
   intensity: TtsIntensity,
   opts?: TtsFetchOptions,
 ): Promise<Blob> {
+  const { path, body, timeoutMs } = await lineRequest(line, intensity);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
-    res = await apiFetch("/api/tts", {
+    res = await apiFetch(path, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...opts?.headers },
-      body: JSON.stringify({
-        text: line.text,
-        voiceId: line.voiceId,
-        previousText: line.previousText,
-        nextText: line.nextText,
-        deliveryTag: line.deliveryTag,
-        performance: line.performance,
-        emotion: line.emotion,
-        intensity,
-      }),
+      body,
       signal: controller.signal,
     });
   } catch (err) {
@@ -603,6 +634,18 @@ export function useTtsPlayer(options?: {
     [stop, ensureTap, ensureAudioElement],
   );
 
+  /**
+   * The line's audio, from the cache or generated (and stored, like any line
+   * play() fetches) — without playing it, or falling back to the browser
+   * voice if it fails: rejects instead. For callers that need to know a line
+   * really rendered before they play it (the coaching screen).
+   */
+  const load = useCallback(
+    (line: TtsLine, intensity: TtsIntensity = "natural") =>
+      getBlob(line, intensity, { ...optionsRef.current, waiting: false }),
+    [],
+  );
+
   /** Adjusts the rate of whatever is currently playing (and nothing else). */
   const setPlaybackRate = useCallback((speed: number) => {
     if (audioRef.current) audioRef.current.playbackRate = speed;
@@ -634,6 +677,7 @@ export function useTtsPlayer(options?: {
   return {
     play,
     prefetch,
+    load,
     stop,
     setPlaybackRate,
     setVolume,

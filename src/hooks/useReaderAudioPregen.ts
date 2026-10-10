@@ -81,6 +81,7 @@ export function useReaderAudioPregen({
   selectedRole,
   characterVoices,
   characterEmotions,
+  coachTakes,
   deliveryTags,
   intensity,
   scriptId,
@@ -91,6 +92,8 @@ export function useReaderAudioPregen({
   characterVoices: Record<string, string>;
   /** Speaker → emotion setting (lib/characterDelivery.ts); part of the key. */
   characterEmotions: Record<string, number>;
+  /** Step index → coached take id (coachTakeStore.ts); part of the key. */
+  coachTakes: Record<number, string>;
   /** null until the AI director answers (or forever if it failed). */
   deliveryTags: (string | null)[] | null;
   intensity: TtsIntensity;
@@ -112,10 +115,10 @@ export function useReaderAudioPregen({
     const tags = deliveryTags ?? (tagsWaitExpired ? [] : null);
     if (!enabled || tags === null) return null;
     return readerLineIndices(steps, selectedRole).flatMap((index) => {
-      const line = buildReaderLine(steps, index, characterVoices, tags, characterEmotions);
+      const line = buildReaderLine(steps, index, characterVoices, tags, characterEmotions, coachTakes);
       return line ? [{ index, line, key: cacheKey(line, intensity) }] : [];
     });
-  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, deliveryTags, tagsWaitExpired, intensity]);
+  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, coachTakes, deliveryTags, tagsWaitExpired, intensity]);
   // Restart only when the set of keys actually changes, not on every new
   // array identity (e.g. a re-render that rebuilt equal tags).
   const signature = lines ? JSON.stringify(lines.map((item) => item.key)) : null;

@@ -6097,3 +6097,164 @@ header .flow-back:hover {
     transition: none;
   }
 }
+
+/* Step 3's offer of the optional coaching screen (CoachScenePartners). */
+.coach-offer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+.coach-offer > div {
+  flex: 1;
+  min-width: 0;
+}
+.coach-offer strong {
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+}
+.coach-offer p {
+  margin: 4px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.coach-offer .btn-secondary {
+  flex: none;
+}
+@media (max-width: 520px) {
+  .coach-offer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* The coaching screen: the scene as a script, the active partner line open
+   with its Record controls. */
+.coach-privacy,
+.coach-progress {
+  margin: 10px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.coach-progress {
+  color: #f4a583;
+  font-weight: 600;
+}
+.coach-script {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.coach-line {
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+.coach-line--yours {
+  padding: 10px 14px;
+  opacity: 0.55;
+}
+.coach-line.is-active {
+  border-color: rgba(244, 165, 131, 0.6);
+  background: rgba(244, 165, 131, 0.06);
+}
+.coach-line-select {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.coach-line-select:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.05);
+}
+.coach-line-select:disabled {
+  cursor: default;
+}
+.coach-line-select:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
+.coach-speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.coach-text {
+  display: block;
+  margin-top: 2px;
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.coach-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(244, 165, 131, 0.16);
+  color: #f4a583;
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+.coach-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.coach-record {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.coach-record:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.coach-record:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 3px;
+}
+.coach-record.is-recording {
+  border-color: rgba(255, 138, 128, 0.7);
+  background: rgba(255, 138, 128, 0.16);
+  color: #ff8a80;
+  font-variant-numeric: tabular-nums;
+}
+.coach-status {
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+}
+.coach-error {
+  width: 100%;
+  margin: 0;
+  color: #ff8a80;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}

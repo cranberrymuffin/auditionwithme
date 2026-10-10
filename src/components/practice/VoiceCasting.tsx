@@ -51,6 +51,8 @@ export default function VoiceCasting({
   languageCode,
   onPick,
   onStart,
+  onCoach,
+  coachedCount,
   onGoToStep,
   scriptName,
 }: {
@@ -71,6 +73,10 @@ export default function VoiceCasting({
   onPaceChange: (speaker: string, pace: number) => void;
   /** On to step 4 with the current voices. */
   onStart: () => void;
+  /** Opens the optional coaching screen (CoachScenePartners.tsx). */
+  onCoach: () => void;
+  /** Scene partner lines the actor has coached so far. */
+  coachedCount: number;
   /** Back to an earlier step (1-based), from the header's step bars. */
   onGoToStep: (step: number) => void;
   /** The script's name, shown in the step row. */
@@ -475,6 +481,30 @@ export default function VoiceCasting({
               label="Scene partners"
               renderCard={playCard}
             />
+          )}
+
+          {!advancedOpen && (
+            <div className="coach-offer">
+              <div>
+                <strong>Coach your scene partners</strong>
+                <p>
+                  {coachedCount > 0
+                    ? `${coachedCount} ${coachedCount === 1 ? "line" : "lines"} coached. They’ll read them the way you did.`
+                    : "Optional: read their lines your way, and they’ll deliver them the way you did."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!currentVoice}
+                onClick={() => {
+                  stop();
+                  onCoach();
+                }}
+              >
+                {coachedCount > 0 ? "Edit coaching" : "Coach lines"}
+              </button>
+            </div>
           )}
 
           {/* While customizing, Save is the way out: one primary at a time. */}

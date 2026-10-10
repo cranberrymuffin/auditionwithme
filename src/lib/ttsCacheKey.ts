@@ -18,6 +18,11 @@ export type TtsLine = {
   /** The character's emotion setting (lib/characterDelivery.ts), -1 … 1;
    * missing or 0 is the natural read. */
   emotion?: number;
+  /** A coached line (coachTakeStore.ts): the actor's own recorded read,
+   * re-voiced by speech-to-speech (api/sts.ts) instead of synthesized from
+   * text. The take carries the whole performance, so a coached line has no
+   * direction, emotion or context. */
+  coachTakeId?: string;
 };
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
@@ -44,4 +49,7 @@ export const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     // Appended only off natural, so lines read at the default keep the key
     // they were already stored under.
     ...(line.emotion ? [line.emotion] : []),
+    // Likewise only on coached lines. An object, so it can't be mistaken for
+    // the emotion before it.
+    ...(line.coachTakeId ? [{ coach: line.coachTakeId }] : []),
   ]);

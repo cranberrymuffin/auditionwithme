@@ -5,6 +5,7 @@ import { normalizeSpeaker, type Voice } from "../lib/script";
 import ParsingScreen from "../components/practice/ParsingScreen";
 import RolePicker from "../components/practice/RolePicker";
 import VoiceCasting from "../components/practice/VoiceCasting";
+import CoachScenePartners from "../components/practice/CoachScenePartners";
 import Rehearsal from "../components/practice/Rehearsal";
 import StageShell from "../components/practice/StageShell";
 import { extractPdfLayout, loadPdf, type LayoutLineTuple } from "../lib/pdf";
@@ -25,6 +26,8 @@ import { DIRECTOR_VERSION } from "../lib/director";
 import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
+import { coachTakeMap, loadCoachTakes } from "../lib/coachTakeStore";
+import { readerLineIndices } from "../lib/readerLines";
 import { loadUpload, peekUpload } from "../lib/pendingUpload";
 import {
   hasScriptPdf,
@@ -230,6 +233,11 @@ function PracticeFlow({
   const [characterPaces, setCharacterPaces] = useState<
     Record<string, number>
   >({});
+  // Step index → the actor's coached take of that scene partner line
+  // (CoachScenePartners.tsx), played in place of its AI read.
+  const [coachTakes, setCoachTakes] = useState<Record<number, string>>({});
+  // The coaching screen is open, over step 3.
+  const [coaching, setCoaching] = useState(false);
   // This script's id from the moment it's uploaded (a replay's own), so
   // everything kept on-device for it — reader audio included — is filed
   // under it from the start. The saved row with this id only exists once
@@ -638,6 +646,21 @@ function PracticeFlow({
     }).catch((err) => console.error("Failed to save delivery tags:", err));
   }, [user, scriptId, scriptSaved, deliveryTags, replayScript]);
 
+  // Coached takes kept on-device from earlier sessions. Only those whose
+  // line still reads as recorded apply (a re-parse can change the lines).
+  useEffect(() => {
+    if (!steps.length) return;
+    let active = true;
+    void loadCoachTakes(scriptId)
+      .then((records) => {
+        if (active) setCoachTakes(coachTakeMap(records, steps));
+      })
+      .catch((err) => console.warn("Couldn't load coached takes:", err));
+    return () => {
+      active = false;
+    };
+  }, [scriptId, steps]);
+
   // Full voice catalog, so the user can override auto-assigned voices
   useEffect(() => {
     let cancelled = false;
@@ -802,6 +825,7 @@ function PracticeFlow({
     selectedRole: selectedRole ?? "",
     characterVoices,
     characterEmotions,
+    coachTakes,
     deliveryTags,
     // Pinned, as in Rehearsal — part of the cache key.
     intensity: "natural",
@@ -857,6 +881,7 @@ function PracticeFlow({
   const hasUploadStep = !hasPresetRole;
 
   const chooseRole = (role: string) => {
+    setCoaching(false);
     chosenRoleRef.current = role;
     setRoleDraft(role || null);
     setSelectedRole(role);
@@ -934,6 +959,7 @@ function PracticeFlow({
   };
 
   const showEarlierStep = (target: number) => {
+    setCoaching(false);
     if (target <= 1) {
       setSelectedRole(null);
       setVoicesConfirmed(false);
@@ -1188,6 +1214,30 @@ function PracticeFlow({
     !voicesConfirmed &&
     voiceableSpeakers.length > 0
   ) {
+    if (coaching) {
+      return (
+        <CoachScenePartners
+          scriptName={scriptName}
+          steps={steps}
+          selectedRole={selectedRole}
+          scriptId={scriptId}
+          characterVoices={characterVoices}
+          characterVolumes={characterVolumes}
+          characterPaces={characterPaces}
+          coachTakes={coachTakes}
+          onTakeChange={(stepIndex, takeId) =>
+            setCoachTakes((prev) => {
+              const next = { ...prev };
+              if (takeId) next[stepIndex] = takeId;
+              else delete next[stepIndex];
+              return next;
+            })
+          }
+          onDone={() => setCoaching(false)}
+          onGoToStep={goToStep}
+        />
+      );
+    }
     return (
       <VoiceCasting
         scriptName={scriptName}
@@ -1211,6 +1261,10 @@ function PracticeFlow({
           setCharacterPaces((prev) => ({ ...prev, [speaker]: pace }))
         }
         onStart={startReading}
+        onCoach={() => setCoaching(true)}
+        coachedCount={
+          readerLineIndices(steps, selectedRole).filter((index) => coachTakes[index]).length
+        }
         languageCode={scriptLanguage.code}
         onGoToStep={goToStep}
       />
@@ -1225,6 +1279,7 @@ function PracticeFlow({
       characterVolumes={characterVolumes}
       characterEmotions={characterEmotions}
       characterPaces={characterPaces}
+      coachTakes={coachTakes}
       deliveryTags={deliveryTags ?? []}
       onBack={() =>
         stepBack(() => {
