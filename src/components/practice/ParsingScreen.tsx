@@ -28,12 +28,20 @@ export default function ParsingScreen({
   const name = file?.name ?? title ?? "Your script";
   // To step 2, at the right end of the row while the script is folded away.
   const nextButton = onContinue && (
-    <button type="button" className="script-accordion-toggle script-accordion-next" onClick={onContinue}>
+    <button
+      type="button"
+      className="script-accordion-toggle script-accordion-next"
+      onClick={onContinue}
+    >
       Cast scene
     </button>
   );
   const replaceButton = (
-    <button type="button" className="replace-script" onClick={() => replaceInputRef.current?.click()}>
+    <button
+      type="button"
+      className="replace-script"
+      onClick={() => replaceInputRef.current?.click()}
+    >
       Replace script
     </button>
   );
@@ -57,21 +65,21 @@ export default function ParsingScreen({
         </div>
       </header>
 
-      <section className={`processing-layout ${done ? "processing-layout--single" : ""}`}>
+      <section
+        className={`processing-layout ${done ? "processing-layout--single" : ""}`}
+      >
         <div className="processing-status">
           <p className="processing-label">Step 1 of 4 · Rehearsal setup</p>
-          <h1>{done ? "Your script is ready" : "Preparing your rehearsal"}</h1>
+          <h1>
+            {done ? "Your rehearsal is set up" : "Preparing your rehearsal"}
+          </h1>
           <p className="processing-explanation">
             {done ? (
-              <>
-                We’ve read the characters, dialogue, and scene directions in
-                <strong> {name}</strong>. Pick who you’re playing next.
-              </>
+              <>Pick who you’re playing next.</>
             ) : (
               <>
                 We’re identifying characters, dialogue, and scene directions in
-                <strong> {name}</strong>. This usually takes under a
-                minute.
+                <strong> {name}</strong>. This usually takes under a minute.
               </>
             )}
           </p>
@@ -89,12 +97,23 @@ export default function ParsingScreen({
                 </button>
                 {scriptOpen ? (
                   <>
-                    <span className="script-accordion-dot" aria-hidden="true">·</span>
+                    <span className="script-accordion-dot" aria-hidden="true">
+                      ·
+                    </span>
                     {replaceButton}
                     {onContinue && (
                       <>
-                        <span className="script-accordion-dot" aria-hidden="true">·</span>
-                        <button type="button" className="script-accordion-toggle" onClick={onContinue}>
+                        <span
+                          className="script-accordion-dot"
+                          aria-hidden="true"
+                        >
+                          ·
+                        </span>
+                        <button
+                          type="button"
+                          className="script-accordion-toggle"
+                          onClick={onContinue}
+                        >
                           Cast scene
                         </button>
                       </>
@@ -106,7 +125,11 @@ export default function ParsingScreen({
               </div>
               {scriptOpen && (
                 <div id="uploaded-script">
-                  <DocumentPreview src={previewUrl} fileName={file.name} fileSize={file.size} />
+                  <DocumentPreview
+                    src={previewUrl}
+                    fileName={file.name}
+                    fileSize={file.size}
+                  />
                 </div>
               )}
             </div>
