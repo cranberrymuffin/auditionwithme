@@ -21,6 +21,7 @@ import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 import { loadUpload, peekUpload } from "../lib/pendingUpload";
+import { hasScriptPdf, loadScriptPdf, saveScriptPdf } from "../lib/scriptPdfStore";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
@@ -77,27 +78,36 @@ export default function Practice() {
   return <PracticeSession key={location.state?.session ?? "none"} />;
 }
 
-/** Finds the uploaded PDF (by the id Home put in history state) before the
- * flow mounts: this tab's copy at once, or IndexedDB's after a reload. */
+/** Finds the script's PDF before the flow mounts: a fresh upload (by the id
+ * Home put in history state) from this tab at once or IndexedDB after a
+ * reload, or a saved script's own stored PDF when it's reopened from My
+ * Auditions. */
 function PracticeSession() {
   const location = useLocation();
   const [uploadId] = useState<string | null>(() => location.state?.uploadId ?? null);
-  const [upload, setUpload] = useState<{ file: File | null } | null>(() =>
-    !uploadId ? { file: null } : (() => {
+  const [savedScriptId] = useState<string | null>(() => location.state?.replayScript?.id ?? null);
+  const [upload, setUpload] = useState<{ file: File | null } | null>(() => {
+    if (uploadId) {
       const file = peekUpload(uploadId);
       return file ? { file } : null;
-    })(),
-  );
+    }
+    return savedScriptId ? null : { file: null };
+  });
   useEffect(() => {
-    if (upload || !uploadId) return;
+    if (upload) return;
     let active = true;
-    void loadUpload(uploadId).then((file) => {
+    const load = uploadId
+      ? loadUpload(uploadId)
+      : savedScriptId
+        ? loadScriptPdf(savedScriptId).catch(() => null)
+        : Promise.resolve(null);
+    void load.then((file) => {
       if (active) setUpload({ file });
     });
     return () => {
       active = false;
     };
-  }, [upload, uploadId]);
+  }, [upload, uploadId, savedScriptId]);
 
   if (!upload) return <div className="cinematic-page" aria-busy="true" />;
   return <PracticeFlow file={upload.file} />;
@@ -694,6 +704,20 @@ function PracticeFlow({ file }: { file: File | null }) {
   useEffect(() => {
     if (preparing && pregen.canStart) startReadingRef.current();
   }, [preparing, pregen.canStart]);
+
+  // Keeps this script's PDF with it, so reopening it from My Auditions can
+  // still show it (See script). Once the record exists; skipped if it's
+  // already stored (a re-upload of a script that has one).
+  useEffect(() => {
+    if (!user || !scriptId || !file) return;
+    let active = true;
+    void hasScriptPdf(scriptId)
+      .then((stored) => (stored || !active ? undefined : saveScriptPdf(scriptId, file)))
+      .catch((err) => console.warn("Couldn't keep the script's PDF:", err));
+    return () => {
+      active = false;
+    };
+  }, [user, scriptId, file]);
 
   // Step 1 (upload) revisited: the parse is already applied, so this only
   // shows the finished upload screen again until Continue (or Forward).

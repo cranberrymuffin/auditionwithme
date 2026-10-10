@@ -3,6 +3,7 @@
 // (api/parse-script.ts), but the result is only ever persisted in IndexedDB.
 import { SCRIPTS_STORE, withStore, withStoreReadModifyWrite } from "./localDb";
 import { deleteReaderAudioForScript } from "./readerAudioStore";
+import { deleteScriptPdf } from "./scriptPdfStore";
 import type { SavedScript, Step } from "../types";
 
 type ScriptRecord = {
@@ -127,5 +128,11 @@ export async function deleteScript(id: string): Promise<void> {
     await deleteReaderAudioForScript(id);
   } catch (err) {
     console.warn("Couldn't delete the script's stored reader audio:", err);
+  }
+  // Likewise its PDF (scriptPdfStore.ts).
+  try {
+    await deleteScriptPdf(id);
+  } catch (err) {
+    console.warn("Couldn't delete the script's stored PDF:", err);
   }
 }
