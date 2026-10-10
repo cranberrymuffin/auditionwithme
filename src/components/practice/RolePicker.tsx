@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
-import { Wordmark } from "../SiteNav";
+import { BrandMark } from "../SiteNav";
 import StepHeader from "./StepHeader";
 
 export default function RolePicker({
@@ -25,31 +25,54 @@ export default function RolePicker({
   const roleRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const linesFor = (name: string) =>
-    steps.filter((step) => normalizeSpeaker(step.speaker) === name && step.verbalLine.trim());
+    steps.filter(
+      (step) =>
+        normalizeSpeaker(step.speaker) === name && step.verbalLine.trim(),
+    );
 
   return (
     <main className="role-page">
       <header className="setup-header">
-        <Link to="/" aria-label="Audition With Me home"><Wordmark /></Link>
+        <Link to="/" aria-label="Audition With Me home">
+          <BrandMark />
+        </Link>
         <div className="setup-progress">
           <span>Step 2 of 4 · Cast yourself</span>
-          <div aria-hidden="true"><i /><i className="is-active" /><i /><i /></div>
+          <div aria-hidden="true">
+            <i />
+            <i className="is-active" />
+            <i />
+            <i />
+          </div>
         </div>
       </header>
 
       <section className="role-content">
-        <button type="button" className="setup-back" onClick={onBack}><span aria-hidden="true">←</span> Back</button>
         <StepHeader step={2} title="Cast yourself" scriptName={fileName} />
+
+        <button type="button" className="setup-back" onClick={onBack}>
+          <span aria-hidden="true">←</span> Back
+        </button>
         <div className="role-intro">
-          <p>{characters.length} {characters.length === 1 ? "role" : "roles"} detected</p>
+          <p>
+            {characters.length} {characters.length === 1 ? "role" : "roles"}{" "}
+            detected
+          </p>
           <h1>Choose your role</h1>
-          <span>Choose the character you’re rehearsing. We’ll read the other parts.</span>
+          <span>
+            Choose the character you’re rehearsing. We’ll read the other parts.
+          </span>
         </div>
 
-        <div className="role-grid" role="radiogroup" aria-label="Choose your role">
+        <div
+          className="role-grid"
+          role="radiogroup"
+          aria-label="Choose your role"
+        >
           {characters.map((character, index) => {
             const lines = linesFor(character);
-            const excerpt = lines[0]?.verbalLine ?? "No spoken dialogue detected.";
+            const excerpt =
+              lines[0]?.verbalLine ?? "No spoken dialogue detected.";
             const isSelected = selected === character;
             return (
               <button
@@ -57,23 +80,46 @@ export default function RolePicker({
                 type="button"
                 role="radio"
                 aria-checked={isSelected}
-                ref={(element) => { roleRefs.current[index] = element; }}
+                ref={(element) => {
+                  roleRefs.current[index] = element;
+                }}
                 className={`role-option ${isSelected ? "is-selected" : ""}`}
                 onClick={() => setSelected(character)}
                 onKeyDown={(event) => {
-                  if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
+                  if (
+                    ![
+                      "ArrowRight",
+                      "ArrowDown",
+                      "ArrowLeft",
+                      "ArrowUp",
+                    ].includes(event.key)
+                  )
+                    return;
                   event.preventDefault();
-                  const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
-                  const next = (index + direction + characters.length) % characters.length;
+                  const direction =
+                    event.key === "ArrowRight" || event.key === "ArrowDown"
+                      ? 1
+                      : -1;
+                  const next =
+                    (index + direction + characters.length) % characters.length;
                   setSelected(characters[next]);
                   roleRefs.current[next]?.focus();
                 }}
               >
-                <span className="role-radio" aria-hidden="true">{isSelected ? "✓" : ""}</span>
+                <span className="role-radio" aria-hidden="true">
+                  {isSelected ? "✓" : ""}
+                </span>
                 <span className="role-option-copy">
                   <strong>{character}</strong>
-                  <small>{lines.length} {lines.length === 1 ? "dialogue turn" : "dialogue turns"}</small>
-                  <q>{excerpt.length > 120 ? `${excerpt.slice(0, 120)}…` : excerpt}</q>
+                  <small>
+                    {lines.length}{" "}
+                    {lines.length === 1 ? "dialogue turn" : "dialogue turns"}
+                  </small>
+                  <q>
+                    {excerpt.length > 120
+                      ? `${excerpt.slice(0, 120)}…`
+                      : excerpt}
+                  </q>
                 </span>
               </button>
             );
@@ -85,8 +131,15 @@ export default function RolePicker({
           <button onClick={() => onChoose("")}>Listen to the full scene</button>
         </div>
         <div className="role-actions">
-          <button className="role-continue" disabled={!selected} onClick={() => selected && onChoose(selected)}>
-            {selected ? `Continue as ${displayCharacterName(selected)}` : "Choose a role to continue"}<span>→</span>
+          <button
+            className="role-continue"
+            disabled={!selected}
+            onClick={() => selected && onChoose(selected)}
+          >
+            {selected
+              ? `Continue as ${displayCharacterName(selected)}`
+              : "Choose a role to continue"}
+            <span>→</span>
           </button>
         </div>
       </section>

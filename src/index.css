@@ -364,14 +364,6 @@ header .flow-back:hover {
   line-height: var(--leading-ui);
   letter-spacing: 0.01em;
 }
-.site-nav .display-title {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.site-nav .script-accent {
-  min-width: max-content;
-  font-size: 1.1rem;
-}
 .site-nav-link {
   position: relative;
   transition: color 0.2s ease;
@@ -2233,6 +2225,13 @@ header .flow-back:hover {
 }
 
 /* Editorial display caps — high-contrast serif, tastefully tracked */
+/* BrandMark: the clapper icon in each header's corner. */
+.brand-mark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
 .display-title {
   font-family: var(--font-display);
   font-weight: 600;
@@ -2331,9 +2330,6 @@ header .flow-back:hover {
     min-height: 38px;
     padding-inline: 12px;
     font-size: 0.75rem;
-  }
-  .site-nav .script-accent {
-    font-size: 1rem;
   }
 }
 
@@ -3775,9 +3771,6 @@ header .flow-back:hover {
     grid-template-columns: 1fr auto auto;
     gap: 14px;
     padding: 0 18px;
-  }
-  .setup-header .script-accent {
-    display: none;
   }
   .setup-progress span {
     display: none;

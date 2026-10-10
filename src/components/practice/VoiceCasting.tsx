@@ -14,7 +14,7 @@ import {
   MAX_CHARACTER_VOLUME,
 } from "../../lib/characterVolume";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
-import { Wordmark } from "../SiteNav";
+import { BrandMark } from "../SiteNav";
 import StepHeader from "./StepHeader";
 import { useToast } from "../../lib/toast";
 
@@ -220,7 +220,7 @@ export default function VoiceCasting({
     <main className="voice-setup-page">
       <header className="setup-header">
         <Link to="/" aria-label="Audition With Me home">
-          <Wordmark />
+          <BrandMark />
         </Link>
         <div className="setup-progress">
           <span>

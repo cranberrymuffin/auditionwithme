@@ -5,19 +5,10 @@ import { useEntitlement } from "../hooks/useEntitlement";
 import { supabase } from "../lib/supabase";
 import { IS_BETA_TESTING } from "../lib/beta";
 
-export function Wordmark({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`inline-flex items-baseline gap-1.5 text-hero-ink ${className}`}
-    >
-      <span className="display-title text-[1.05rem] tracking-[0.08em]">
-        Audition
-      </span>
-      <span className="script-accent text-[1.3rem] leading-none text-coral-500">
-        with me
-      </span>
-    </span>
-  );
+/** The brand in every header's corner: the clapper app icon, the same
+ * one in the browser tab. Decorative — its link carries the label. */
+export function BrandMark() {
+  return <img className="brand-mark" src="/icons/apple-touch-icon.png" alt="" width={36} height={36} />;
 }
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
@@ -208,7 +199,7 @@ export default function SiteNav() {
   return (
     <nav className="site-nav" aria-label="Main">
       <Link to="/" aria-label="AuditionWithMe home">
-        <Wordmark />
+        <BrandMark />
       </Link>
 
       <div className="site-nav-links">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wordmark } from "../SiteNav";
+import { BrandMark } from "../SiteNav";
 import DocumentPreview from "../DocumentPreview";
 import ScriptName from "../ScriptName";
 import StepHeader from "./StepHeader";
@@ -64,7 +64,7 @@ export default function ParsingScreen({
     <main className="processing-page" aria-live="polite" aria-busy={!done}>
       <header className="workflow-header">
         <Link to="/" aria-label="Audition With Me home">
-          <Wordmark />
+          <BrandMark />
         </Link>
       </header>
 
