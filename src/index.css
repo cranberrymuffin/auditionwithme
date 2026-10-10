@@ -3083,6 +3083,7 @@ header .flow-back:hover {
 .preparing-progress {
   position: relative;
   display: flex;
+  width: 100%;
   min-height: 50px;
   align-items: center;
   justify-content: center;
@@ -3110,6 +3111,31 @@ header .flow-back:hover {
 .preparing-progress span {
   position: relative;
 }
+/* Enough lines ready: the bar becomes Start rehearsal. */
+.preparing-progress:disabled {
+  cursor: default;
+}
+/* Clickable: the fill turns the app's solid coral, cream text reading over
+   both the filled and unfilled parts. */
+.preparing-progress.is-ready {
+  border-color: rgba(255, 205, 183, 0.64);
+  color: #f8f1e6;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(16, 26, 40, 0.55);
+}
+.preparing-progress.is-ready i {
+  background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
+}
+.preparing-progress.is-ready:hover {
+  background: rgba(244, 165, 131, 0.16);
+}
+.preparing-progress.is-ready:hover i {
+  filter: brightness(1.05);
+}
+.preparing-progress.is-ready:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
 .preparing-note {
   display: flex;
   flex-wrap: wrap;
@@ -3123,18 +3149,6 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.6);
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-.preparing-note button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid rgba(255, 205, 183, 0.58);
-  border-radius: 7px;
-  color: #f4a583;
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.preparing-note button:hover {
-  background: rgba(244, 165, 131, 0.1);
 }
 @media (prefers-reduced-motion: reduce) {
   .preparing-progress i {

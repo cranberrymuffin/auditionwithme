@@ -30,6 +30,9 @@ const CHANGED_HIGHLIGHT_MS = 1600;
 // account, a slow network), offer to start anyway — those lines then fetch
 // live during the take instead of keeping the actor waiting here.
 const START_ANYWAY_AFTER_MS = 20_000;
+// Share of the scene partner's lines pre-generated before Start rehearsal
+// opens up on the preparing screen (the opening lines must be ready too).
+const READY_TO_START_SHARE = 0.25;
 
 const displayCharacter = (name: string) =>
   name
@@ -84,6 +87,13 @@ export default function VoiceCasting({
   const [changedFilters, setChangedFilters] = useState<FilterKey[]>([]);
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
   const preparingHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const readyToStart =
+    pregen.done ||
+    (pregen.canStart &&
+      pregen.total > 0 &&
+      pregen.ready / pregen.total >= READY_TO_START_SHARE);
+  const canStartNow =
+    readyToStart || startAnywayOffered || pregen.failed > 0;
 
   useEffect(() => {
     if (!preparing) {
@@ -140,6 +150,18 @@ export default function VoiceCasting({
     }
   });
   const initialVoiceId = initialVoicesRef.current[activeSpeaker];
+  // Likewise each speaker's starting volume.
+  const initialVolumesRef = useRef<Record<string, number>>({});
+  speakers.forEach((speaker) => {
+    if (!(speaker in initialVolumesRef.current)) {
+      initialVolumesRef.current[speaker] = clampCharacterVolume(
+        characterVolumes[speaker],
+      );
+    }
+  });
+  const initialVolume = initialVolumesRef.current[activeSpeaker];
+  const voiceChanged = !!initialVoiceId && initialVoiceId !== currentVoice?.id;
+  const volumeChanged = volume !== initialVolume;
 
   const pickVoice = (voiceId: string) => {
     stop();
@@ -283,7 +305,15 @@ export default function VoiceCasting({
               );
             })}
           </ul>
-          <div className="preparing-progress">
+          {/* The progress bar is the start button: disabled until enough
+              lines are ready, unless it's been a while or some failed, when
+              it offers Start anyway. */}
+          <button
+            type="button"
+            className={`preparing-progress ${canStartNow ? "is-ready" : ""}`}
+            disabled={!canStartNow}
+            onClick={onStartAnyway}
+          >
             <i
               aria-hidden="true"
               style={{
@@ -293,20 +323,23 @@ export default function VoiceCasting({
             <span role="status">
               {pregen.waitingForDirection || pregen.total === 0
                 ? "Directing the scene…"
-                : `Preparing your scene partner’s lines · ${pregen.ready} of ${pregen.total}`}
+                : `${
+                    readyToStart
+                      ? "Start rehearsal"
+                      : canStartNow
+                        ? "Start anyway"
+                        : "Preparing your scene partner’s lines"
+                  } · ${pregen.ready} of ${pregen.total}`}
             </span>
-          </div>
+          </button>
           <div className="preparing-note">
             <p>
               {pregen.failed > 0
                 ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
-                : "Rehearsal opens as soon as the first lines are ready."}
+                : readyToStart
+                  ? "The rest keep loading while you rehearse."
+                  : "You can start once enough lines are ready."}
             </p>
-            {(startAnywayOffered || pregen.failed > 0) && (
-              <button type="button" onClick={onStartAnyway}>
-                Start anyway
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -371,10 +404,11 @@ export default function VoiceCasting({
                   <strong>Refine voice</strong>
                 </div>
                 <button
-                  disabled={
-                    !initialVoiceId || initialVoiceId === currentVoice?.id
-                  }
-                  onClick={() => pickVoice(initialVoiceId)}
+                  disabled={!voiceChanged && !volumeChanged}
+                  onClick={() => {
+                    if (volumeChanged) changeVolume(initialVolume);
+                    if (voiceChanged) pickVoice(initialVoiceId);
+                  }}
                 >
                   Restore default
                 </button>
@@ -431,15 +465,19 @@ export default function VoiceCasting({
             />
           )}
 
-          <SetupActions
-            onBack={() => {
-              stop();
-              onGoToStep(2);
-            }}
-            nextLabel="Start rehearsal"
-            nextDisabled={!currentVoice}
-            onNext={onStart}
-          />
+          {/* Hidden while advanced options are open: close them to leave
+              the step. */}
+          {!advancedOpen && (
+            <SetupActions
+              onBack={() => {
+                stop();
+                onGoToStep(2);
+              }}
+              nextLabel="Start rehearsal"
+              nextDisabled={!currentVoice}
+              onNext={onStart}
+            />
+          )}
         </>
       )}
     </SetupStep>

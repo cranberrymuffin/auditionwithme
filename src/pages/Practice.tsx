@@ -722,14 +722,6 @@ function PracticeFlow({ file }: { file: File | null }) {
     scriptId,
   });
 
-  // Opening lines ready: move on to Rehearsal by themselves. The hook stays
-  // enabled across the switch with the same lines, so generation carries on.
-  const startReadingRef = useRef(startReading);
-  startReadingRef.current = startReading;
-  useEffect(() => {
-    if (preparing && pregen.canStart) startReadingRef.current();
-  }, [preparing, pregen.canStart]);
-
   // The name shown for this script everywhere in the flow: a rename, else
   // the saved title, else the uploaded file's name.
   const scriptName =
@@ -875,7 +867,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       return true;
     }
     if (wizardStep === 2) {
-      // Same as Start: prepare, and Rehearsal opens once lines are ready.
+      // Same as Start: prepare; Start rehearsal opens once lines are ready.
       if (!preparing) beginPreparing();
       return true;
     }
