@@ -225,7 +225,8 @@ function PracticeFlow({ file }: { file: File | null }) {
       create: async (id, fields) =>
         saveScript(userId, {
           id,
-          title: (file?.name ?? "Untitled script").replace(/\.pdf$/i, ""),
+          // The PDF's own name, extension and all, until the actor renames it.
+          title: file?.name ?? "Untitled script",
           ...fields,
           contentHash: await getContentHash(),
         }),
