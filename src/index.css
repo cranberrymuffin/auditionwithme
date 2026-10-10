@@ -2928,20 +2928,6 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.72);
   font-size: 0.875rem;
 }
-.selected-voice > select {
-  width: 100%;
-  margin-top: 14px;
-  padding: 10px 30px 10px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 7px;
-  outline: none;
-  background: #142236;
-  color: #f8f1e6;
-  font-size: 0.8125rem;
-}
-.selected-voice > select:focus {
-  border-color: #ef9a78;
-}
 .voice-volume {
   display: flex;
   align-items: center;
@@ -3062,6 +3048,65 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.82);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+.voice-advanced {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.voice-advanced summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: rgba(248, 241, 230, 0.85);
+  font-size: 0.875rem;
+  font-weight: 600;
+  list-style: none;
+}
+.voice-advanced summary::-webkit-details-marker {
+  display: none;
+}
+.voice-advanced summary small {
+  color: #f3a17e;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.voice-advanced summary span {
+  margin-left: auto;
+  color: #ef9a78;
+  font-size: 1.1rem;
+  transition: transform 0.2s ease;
+}
+.voice-advanced[open] summary span {
+  transform: rotate(45deg);
+}
+.voice-advanced[open] {
+  padding-bottom: 16px;
+}
+.voice-advanced .voice-filter-bar {
+  margin-top: 18px;
+}
+.voice-advanced-voice {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.8125rem;
+}
+.voice-advanced-voice select {
+  width: 100%;
+  padding: 10px 30px 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  outline: none;
+  background: #142236;
+  color: #f8f1e6;
+  font-size: 0.8125rem;
+}
+.voice-advanced-voice select:focus {
+  border-color: #ef9a78;
 }
 .start-rehearsal {
   display: flex;
@@ -3274,15 +3319,14 @@ header .flow-back:hover {
     padding-top: 14px;
     padding-bottom: 14px;
   }
-  .selected-voice > select,
   .voice-preview-button {
     margin-top: 9px;
   }
   .selected-voice q {
     display: none;
   }
-  .voice-filter-bar {
-    margin-top: 14px;
+  .voice-advanced {
+    margin-top: 12px;
   }
   .start-rehearsal {
     margin-top: 14px;

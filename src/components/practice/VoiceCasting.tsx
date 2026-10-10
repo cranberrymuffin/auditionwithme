@@ -112,7 +112,8 @@ export default function VoiceCasting({
   const filteredVoices = languageVoices.filter((voice) =>
     (Object.keys(filters) as FilterKey[]).every((key) => !filters[key] || voice[key] === filters[key])
   );
-  const hasFilters = Object.values(filters).some(Boolean);
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const hasFilters = activeFilterCount > 0;
 
   const applyFilters = (nextFilters: Record<FilterKey, string>) => {
     stop();
@@ -134,6 +135,22 @@ export default function VoiceCasting({
     onVolumeChange(activeSpeaker, next);
     if (previewing) setVolume(next);
   };
+  // The first voice each character is given (auto-casting, or the cast saved
+  // from a past rehearsal) is the recommendation; anything picked under
+  // Advanced options after that is the actor's own.
+  const recommendedRef = useRef<Record<string, string>>({});
+  speakers.forEach((speaker) => {
+    if (!recommendedRef.current[speaker] && characterVoices[speaker]) {
+      recommendedRef.current[speaker] = characterVoices[speaker];
+    }
+  });
+  const isRecommended =
+    !currentVoice || !recommendedRef.current[activeSpeaker] || recommendedRef.current[activeSpeaker] === currentVoice.id;
+  // What's changed under the closed Advanced options, so it isn't hidden.
+  const advancedNote = [
+    activeFilterCount > 0 && `${activeFilterCount} ${activeFilterCount === 1 ? "filter" : "filters"} on`,
+    Math.round(volume * 100) !== 100 && `Volume ${Math.round(volume * 100)}%`,
+  ].filter(Boolean).join(" · ");
   const visibleVoices = currentVoice && !filteredVoices.some((voice) => voice.id === currentVoice.id)
     ? [currentVoice, ...filteredVoices]
     : filteredVoices;
@@ -241,49 +258,34 @@ export default function VoiceCasting({
               )}
 
               <header className="voice-panel-heading">
-                <div><p>Choose a voice for</p><h2>{displayCharacter(activeSpeaker)}</h2></div>
-                <span>{dialogue.length} {dialogue.length === 1 ? "dialogue turn" : "dialogue turns"}</span>
+                <div><p>{isRecommended ? "Recommended voice for" : "Your voice for"}</p><h2>{displayCharacter(activeSpeaker)}</h2></div>
               </header>
 
-              <div className="voice-filter-bar">
-                <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
-                <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
-              </div>
-              <div className="voice-setup-filters">
-                {(["accent", "gender", "age", "tone"] as FilterKey[]).map((key) => (
-                  <label key={key}>
-                    <span>{key === "gender" ? "Voice type" : humanizeVoiceLabel(key)}</span>
-                    <select
-                      value={filters[key]}
-                      onChange={(event) => applyFilters({ ...filters, [key]: event.target.value })}
-                    >
-                      <option value="">Any ({facetTotal(key)})</option>
-                      {facetOptions(key).map(({ value, count }) => (
-                        <option key={value} value={value} disabled={count === 0}>
-                          {humanizeVoiceLabel(value)} ({count})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-
-              {filteredVoices.length === 0 && (
-                <p className="voice-filter-empty" role="status">
-                  No additional voices match this combination. Your selected voice is unchanged.
-                </p>
-              )}
-
               <div className="selected-voice">
-                <div className="selected-voice-heading"><span>Selected voice</span><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
+                <div className="selected-voice-heading"><strong>{currentVoice ? voiceDisplayName(currentVoice.name) : "Loading voices…"}</strong></div>
                 {currentVoice && <p>{describeVoice(currentVoice)}</p>}
-                <select
-                  aria-label={`Selected voice for ${activeSpeaker}`}
-                  value={currentVoice?.id ?? ""}
-                  onChange={(event) => onPick(activeSpeaker, event.target.value)}
-                >
-                  {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
-                </select>
+                <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
+                  <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
+                  {previewing ? "Pause preview" : "Preview voice"}
+                </button>
+                <q>{previewLine}</q>
+              </div>
+
+              <details className="voice-advanced">
+                <summary>
+                  Advanced options
+                  {advancedNote && <small>{advancedNote}</small>}
+                  <span aria-hidden="true">+</span>
+                </summary>
+                <label className="voice-advanced-voice">
+                  <span>Voice</span>
+                  <select
+                    value={currentVoice?.id ?? ""}
+                    onChange={(event) => onPick(activeSpeaker, event.target.value)}
+                  >
+                    {visibleVoices.map((voice) => <option key={voice.id} value={voice.id}>{voiceDisplayName(voice.name)} — {describeVoice(voice)}</option>)}
+                  </select>
+                </label>
                 <label className="voice-volume">
                   <span>Volume</span>
                   <input
@@ -298,12 +300,35 @@ export default function VoiceCasting({
                   />
                   <output>{Math.round(volume * 100)}%</output>
                 </label>
-                <button className={`voice-preview-button ${previewing ? "is-playing" : ""}`} disabled={!currentVoice} onClick={preview}>
-                  <span aria-hidden="true">{previewing ? "Ⅱ" : "▶"}</span>
-                  {previewing ? "Pause preview" : "Preview voice"}
-                </button>
-                <q>{previewLine}</q>
-              </div>
+                <div className="voice-filter-bar">
+                  <div><strong>Refine voice filter</strong><span>{filteredVoices.length} compatible {filteredVoices.length === 1 ? "voice" : "voices"}</span></div>
+                  <button disabled={!hasFilters} onClick={() => applyFilters({ accent: "", gender: "", age: "", tone: "" })}>Reset</button>
+                </div>
+                <div className="voice-setup-filters">
+                  {(["accent", "gender", "age", "tone"] as FilterKey[]).map((key) => (
+                    <label key={key}>
+                      <span>{key === "gender" ? "Voice type" : humanizeVoiceLabel(key)}</span>
+                      <select
+                        value={filters[key]}
+                        onChange={(event) => applyFilters({ ...filters, [key]: event.target.value })}
+                      >
+                        <option value="">Any ({facetTotal(key)})</option>
+                        {facetOptions(key).map(({ value, count }) => (
+                          <option key={value} value={value} disabled={count === 0}>
+                            {humanizeVoiceLabel(value)} ({count})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+
+                {filteredVoices.length === 0 && (
+                  <p className="voice-filter-empty" role="status">
+                    No additional voices match this combination. Your selected voice is unchanged.
+                  </p>
+                )}
+              </details>
 
               <button className="start-rehearsal" disabled={!currentVoice} onClick={onStart}>
                 Start rehearsal <span>→</span>
