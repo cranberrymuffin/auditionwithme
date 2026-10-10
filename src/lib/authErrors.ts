@@ -1,7 +1,8 @@
 // Supabase auth errors come back as backend wording ("Invalid login
 // credentials", "Legacy API keys are disabled") — fine for logs, not for an
 // actor at a login form. This maps every code the email/password flows we use
-// (sign up, resend, sign in, reset email, update password) can return to plain
+// (sign up, resend, sign in, reset email, update password, change email or
+// password from account settings) can return to plain
 // language and falls back to a generic message instead of leaking the rest.
 // MFA, SSO/SAML, OAuth, phone and admin codes aren't listed: we never call
 // those APIs. Codes are from @supabase/auth-js lib/error-codes.
@@ -11,7 +12,9 @@ type AuthErrorLike =
   | null
   | undefined;
 
-export function friendlyAuthError(error: AuthErrorLike, action: "log in" | "sign up" | "reset" | "update"): string {
+type AuthAction = "log in" | "sign up" | "reset" | "update" | "change email" | "change password";
+
+export function friendlyAuthError(error: AuthErrorLike, action: AuthAction): string {
   const message = (error?.message ?? "").toLowerCase();
   const code = error?.code ?? "";
 
@@ -23,7 +26,9 @@ export function friendlyAuthError(error: AuthErrorLike, action: "log in" | "sign
     return "Confirm your email first — open the link we sent you, then log in.";
   }
   if (code === "user_already_exists" || code === "email_exists" || message.includes("already registered")) {
-    return "An account with this email already exists. Log in instead.";
+    return action === "change email"
+      ? "Another account already uses that email."
+      : "An account with this email already exists. Log in instead.";
   }
   if (code === "user_banned") {
     return "This account has been suspended. Contact support if you think that’s a mistake.";
@@ -104,6 +109,9 @@ export function friendlyAuthError(error: AuthErrorLike, action: "log in" | "sign
     message.includes("session missing") ||
     message.includes("expired")
   ) {
+    if (action === "change email" || action === "change password") {
+      return "Your session has expired. Log in again, then try once more.";
+    }
     return action === "update"
       ? "Your reset link has expired. Request a new one to set your password."
       : "That link has expired. Request a new one below.";
@@ -119,6 +127,13 @@ export function friendlyAuthError(error: AuthErrorLike, action: "log in" | "sign
 
   // validation_failed, bad_json, unexpected_failure, hook_payload_*, conflict
   // and anything newer than this SDK fall through to the generic message.
-  const verb = action === "reset" ? "send the reset email" : action === "update" ? "update your password" : action;
+  const verb =
+    action === "reset"
+      ? "send the reset email"
+      : action === "update" || action === "change password"
+        ? "update your password"
+        : action === "change email"
+          ? "change your email"
+          : action;
   return `We couldn’t ${verb} just now. Please try again in a moment.`;
 }

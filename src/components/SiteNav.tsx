@@ -107,6 +107,7 @@ export default function SiteNav() {
 
   const isAccountAreaActive =
     location.pathname === "/account" ||
+    location.pathname === "/account/settings" ||
     (showSubscriptionLink &&
       (location.pathname === "/pricing" || location.pathname === "/billing"));
 
@@ -162,12 +163,22 @@ export default function SiteNav() {
           )}
           <NavLink
             to="/account"
+            end
             className={({ isActive }) =>
               `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
             }
             onClick={() => setAccountMenuOpen(false)}
           >
             My auditions
+          </NavLink>
+          <NavLink
+            to="/account/settings"
+            className={({ isActive }) =>
+              `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
+            }
+            onClick={() => setAccountMenuOpen(false)}
+          >
+            Account settings
           </NavLink>
         </div>
       )}
@@ -263,12 +274,22 @@ export default function SiteNav() {
               )}
               <NavLink
                 to="/account"
+                end
                 className={({ isActive }) =>
                   `${navLinkClass({ isActive })} site-nav-drawer-sublink`
                 }
                 onClick={closeMenu}
               >
                 My auditions
+              </NavLink>
+              <NavLink
+                to="/account/settings"
+                className={({ isActive }) =>
+                  `${navLinkClass({ isActive })} site-nav-drawer-sublink`
+                }
+                onClick={closeMenu}
+              >
+                Account settings
               </NavLink>
               <button
                 type="button"

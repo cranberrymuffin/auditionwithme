@@ -9,6 +9,7 @@ import Billing from "./pages/Billing";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import MyAccount from "./pages/MyAccount";
+import AccountSettings from "./pages/AccountSettings";
 import NotFound from "./pages/NotFound";
 import ResetPassword, { ForgotPassword } from "./pages/ResetPassword";
 import RequireAuth from "./components/RequireAuth";
@@ -44,6 +45,14 @@ function App() {
               element={
                 <RequireAuth>
                   <MyAccount />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/account/settings"
+              element={
+                <RequireAuth>
+                  <AccountSettings />
                 </RequireAuth>
               }
             />

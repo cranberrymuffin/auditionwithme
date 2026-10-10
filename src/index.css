@@ -1749,6 +1749,83 @@ header .flow-back:hover {
   font-size: 1.1rem;
   line-height: 1;
 }
+/* Account settings: email, password and delete, each its own auth-card */
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 32px;
+}
+.settings-card {
+  width: 100%;
+  max-width: 560px;
+}
+.settings-card > header h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.settings-card > header {
+  margin-bottom: 18px;
+}
+.settings-copy {
+  margin: 6px 0 0;
+  color: rgba(248, 241, 230, 0.76);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-copy strong {
+  color: #f8f1e6;
+}
+.settings-notice {
+  margin: -6px 0 16px;
+  color: #b9e3c6;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.settings-reset {
+  margin: 18px 0 0;
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-text-button {
+  padding: 0;
+  color: #f3a17e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.settings-text-button:hover:not(:disabled) {
+  color: #f8f1e6;
+}
+.settings-text-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.settings-card--danger {
+  border-color: rgba(255, 107, 97, 0.35);
+}
+.auth-card > button.settings-danger-button {
+  border: 1px solid rgba(255, 107, 97, 0.6);
+  background: rgba(255, 59, 48, 0.12);
+  box-shadow: none;
+  color: #ff9a92;
+}
+.auth-card > button.settings-danger-button:hover:not(:disabled) {
+  background: rgba(255, 59, 48, 0.2);
+  filter: none;
+}
+@media (max-width: 520px) {
+  .settings-sections {
+    margin-top: 24px;
+  }
+}
 .account-empty {
   display: flex;
   flex-direction: column;
