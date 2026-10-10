@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
-import { normalizeSpeaker, type Voice } from "../../lib/script";
+import { normalizeSpeaker } from "../../lib/script";
 import { buildReaderCue, type ReaderCue } from "../../lib/readerLines";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
 import { useScribeTracking } from "../../hooks/useScribeTracking";
@@ -25,7 +25,7 @@ const COUNTDOWN_START = 3;
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
 
-export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, cast, languageCode, fileName, scriptId, pregen, onRecordingActiveChange }: {
+export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, pregen, onRecordingActiveChange }: {
   steps: Step[];
   selectedRole: string;
   characterVoices: Record<string, string>;
@@ -35,8 +35,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   onBack: () => void;
   /** Back to an earlier setup step (1-based), from step 4's step bars. */
   onGoToStep?: (step: number) => void;
-  /** The scene partners and their voices, listed on step 4. */
-  cast: { speaker: string; voice: Voice | null }[];
   /** Whether a take is recording or saving, for guards outside (browser
    * Back) that confirmExit can't reach. */
   onRecordingActiveChange?: (active: boolean) => void;
@@ -419,7 +417,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       <RehearsalSetup
         scriptName={fileName}
         onGoToStep={onGoToStep}
-        cast={cast}
         pregen={pregen}
         willRecord={willRecord}
         cameraStatus={recorderStatus}

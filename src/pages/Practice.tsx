@@ -1107,10 +1107,6 @@ function PracticeFlow({ file }: { file: File | null }) {
         })
       }
       onGoToStep={goToStep}
-      cast={voiceableSpeakers.map((speaker) => ({
-        speaker,
-        voice: voices.find((voice) => voice.id === characterVoices[speaker]) ?? null,
-      }))}
       languageCode={scriptLanguage.code}
       fileName={scriptName}
       scriptId={scriptId}

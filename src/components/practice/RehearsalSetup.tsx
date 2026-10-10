@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
-import {
-  describeVoice,
-  displayCharacterName,
-  voiceDisplayName,
-  type Voice,
-} from "../../lib/script";
 import { isIpad } from "../../hooks/useSelfTapeRecorder";
 import SetupStep from "./SetupStep";
 
@@ -36,7 +30,6 @@ const READY_TO_START_SHARE = 0.25;
 export default function RehearsalSetup({
   scriptName,
   onGoToStep,
-  cast,
   pregen,
   willRecord,
   cameraStatus,
@@ -50,8 +43,6 @@ export default function RehearsalSetup({
   scriptName: string;
   /** Back to an earlier step (1-based), from the header's step bars. */
   onGoToStep?: (step: number) => void;
-  /** The scene partners and the voices cast for them on step 3. */
-  cast: { speaker: string; voice: Voice | null }[];
   pregen: ReaderAudioPregenState;
   /** Reading a role: there's a self-tape, so a camera to set up. */
   willRecord: boolean;
