@@ -1,5 +1,7 @@
 // The four practice steps' names, as the header's bars announce them.
-const STEPS = ["Rehearsal setup", "Cast yourself", "Direct your scene partners", "Rehearsal"];
+// One name per step, used everywhere the step is named.
+export const STEP_NAMES = ["Script", "Your role", "Scene partners", "Rehearse"];
+const STEPS = STEP_NAMES;
 
 /**
  * The bars in a practice setup step's header, one per step and all the

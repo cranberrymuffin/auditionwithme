@@ -3,6 +3,7 @@ import type { Step } from "../../types";
 import {
   describeVoice,
   dialogueTurnsLabel,
+  displayCharacterName,
   humanizeVoiceLabel,
   spokenLines,
   voiceDisplayName,
@@ -34,10 +35,7 @@ const START_ANYWAY_AFTER_MS = 20_000;
 // opens up on the preparing screen (the opening lines must be ready too).
 const READY_TO_START_SHARE = 0.25;
 
-const displayCharacter = (name: string) =>
-  name
-    .toLocaleLowerCase()
-    .replace(/(^|[\s'-])\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+const displayCharacter = displayCharacterName;
 
 export default function VoiceCasting({
   speakers,
@@ -132,6 +130,10 @@ export default function VoiceCasting({
 
   const previewLineFor = (speaker: string) =>
     spokenLines(steps, speaker)[0]?.verbalLine ?? `Hello, I'm ${speaker}.`;
+  // The voice actually cast for a speaker — none while casting's still
+  // running. (voiceFor below falls back so the controls always have one.)
+  const castVoice = (speaker: string) =>
+    voices.find((voice) => voice.id === characterVoices[speaker]);
   const voiceFor = (speaker: string) =>
     voices.find((voice) => voice.id === characterVoices[speaker]) ??
     languageVoices[0];
@@ -207,7 +209,7 @@ export default function VoiceCasting({
           value,
           changes,
           label: changes.length
-            ? `${name} · changes ${changes.map((other) => filterLabel(other).toLowerCase()).join(", ")}`
+            ? `${name} (also changes ${changes.map((other) => filterLabel(other).toLowerCase()).join(" and ")})`
             : name,
         };
       })
@@ -258,10 +260,11 @@ export default function VoiceCasting({
         active={playing}
         className="role-option--play"
         mark={playMark(playing)}
-        name={speaker}
-        detail={dialogueTurnsLabel(spokenLines(steps, speaker).length)}
+        name={displayCharacter(speaker)}
+        detail={`${castVoice(speaker) ? `Voice: ${voiceDisplayName(castVoice(speaker)!.name)}` : "Choosing a voice…"} · ${dialogueTurnsLabel(spokenLines(steps, speaker).length)}`}
+        aria-label={castVoice(speaker) ? `Play ${displayCharacter(speaker)}'s voice, ${voiceDisplayName(castVoice(speaker)!.name)}` : `${displayCharacter(speaker)}: choosing a voice`}
         quote={previewLineFor(speaker)}
-        disabled={!voiceFor(speaker)}
+        disabled={!castVoice(speaker)}
         onClick={() => preview(speaker)}
       />
     );
@@ -270,7 +273,6 @@ export default function VoiceCasting({
   return (
     <SetupStep
       step={3}
-      title="Direct your scene partners"
       scriptName={scriptName}
       onGoToStep={(step) => {
         stop();
@@ -278,7 +280,10 @@ export default function VoiceCasting({
       }}
     >
       <div className="role-intro">
-        <h1>Your readers</h1>
+        <h1>Your scene partners</h1>
+        {!preparing && (
+          <span>Tap a card to hear who’s reading each part.</span>
+        )}
       </div>
       {preparing ? (
         <div className="voice-selector-panel preparing-panel">
@@ -356,8 +361,8 @@ export default function VoiceCasting({
               setPreviewing(null);
               setAdvancedOpen(open);
             }}
-            showLabel="Show advanced options"
-            hideLabel="Hide advanced options"
+            showLabel="Customize voices"
+            hideLabel="Done customizing"
           >
             <div className="voice-advanced-panel">
               {speakers.length > 1 && (
@@ -423,9 +428,13 @@ export default function VoiceCasting({
                   value={volume}
                   onChange={(event) => changeVolume(Number(event.target.value))}
                   aria-label={`Volume for ${displayCharacter(activeSpeaker)}`}
-                  aria-valuetext={`${Math.round(volume * 100)}%`}
+                  aria-valuetext={`${Math.round(volume * 100)}%${volume === 1 ? ", normal" : ""}`}
+                  list="voice-volume-marks"
                 />
-                <output>{Math.round(volume * 100)}%</output>
+                <datalist id="voice-volume-marks">
+                  <option value="1" label="Normal" />
+                </datalist>
+                <output>{volume === 1 ? "Normal" : `${Math.round(volume * 100)}%`}</output>
               </label>
               <div className="voice-setup-filters">
                 {FILTER_KEYS.map((key) => (
@@ -454,6 +463,10 @@ export default function VoiceCasting({
                   </label>
                 ))}
               </div>
+              <p className="voice-filter-note">
+                Each choice switches to the closest real voice; anything that
+                changes along with it is highlighted.
+              </p>
             </div>
           </Accordion>
 
@@ -465,19 +478,16 @@ export default function VoiceCasting({
             />
           )}
 
-          {/* Hidden while advanced options are open: close them to leave
-              the step. */}
-          {!advancedOpen && (
-            <SetupActions
-              onBack={() => {
-                stop();
-                onGoToStep(2);
-              }}
-              nextLabel="Start rehearsal"
-              nextDisabled={!currentVoice}
-              onNext={onStart}
-            />
-          )}
+          <SetupActions
+            onBack={() => {
+              stop();
+              onGoToStep(2);
+            }}
+            nextLabel="Start rehearsal"
+            nextDisabled={!currentVoice}
+            nextHint="No voice is available for this script’s language yet."
+            onNext={onStart}
+          />
         </>
       )}
     </SetupStep>

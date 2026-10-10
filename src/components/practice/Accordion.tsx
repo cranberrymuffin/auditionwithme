@@ -31,7 +31,7 @@ export default function Accordion({
       <div className="script-accordion-actions">
         <button
           type="button"
-          className="script-accordion-toggle"
+          className="btn-secondary"
           aria-expanded={open}
           aria-controls={id}
           onClick={() => onOpenChange(!open)}

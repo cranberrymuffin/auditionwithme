@@ -2613,6 +2613,8 @@ header .flow-back:hover {
 .processing-status h1 {
   max-width: 580px;
   margin: 0;
+  /* Even line lengths, so "for" never ends up alone above a long name. */
+  text-wrap: balance;
   font-family: var(--font-display);
   font-size: clamp(3.5rem, 5.2vw, 4.5rem);
   font-weight: 500;
@@ -2688,7 +2690,7 @@ header .flow-back:hover {
 .script-name.script-name-input::placeholder {
   font: inherit;
   letter-spacing: inherit;
-  color: rgba(248, 241, 230, 0.4);
+  color: rgba(248, 241, 230, 0.55);
   opacity: 1;
 }
 .script-name.script-name-input::selection {
@@ -2795,8 +2797,8 @@ header .flow-back:hover {
 .processing-preview {
   min-width: 0;
 }
-/* See script: the read script, folded under the explanation. Open, Replace
-   script sits beside Hide script and the PDF below. */
+/* A fold-away section (step 3's voice settings): its toggle row, then
+   the content while open. */
 .script-accordion {
   margin-top: 6px;
 }
@@ -2805,37 +2807,112 @@ header .flow-back:hover {
   align-items: center;
   gap: 10px;
 }
-.script-accordion-dot {
-  color: rgba(248, 241, 230, 0.45);
+/* Step 3's Customize voices: centered under the title. */
+.voice-advanced-accordion {
+  margin-top: 18px;
 }
-.script-accordion-toggle {
-  min-height: 44px;
-  color: #f5ad8d;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.script-accordion-toggle:hover {
-  color: #f8f1e6;
-}
-/* Beside Hide script, not pushed to the far end. */
-.script-accordion-actions .replace-script {
-  margin-top: 0;
-  margin-left: 0;
-}
-.script-accordion-next {
-  margin-left: auto;
-}
-.script-accordion .document-panel {
-  margin-top: 8px;
-}
-/* Step 3's Show/Hide advanced options: centered under the title. */
 .voice-advanced-accordion .script-accordion-actions {
   justify-content: center;
+  margin-bottom: 18px;
 }
-.voice-advanced-accordion .script-accordion-toggle:hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
+#uploaded-script > .document-panel {
+  margin-top: 10px;
 }
+/* See script: what we read, or the original PDF. */
+.script-view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(8, 18, 30, 0.4);
+}
+.script-view-tabs button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.script-view-tabs button[aria-selected="true"] {
+  background: rgba(239, 154, 120, 0.16);
+  color: #f5ad8d;
+}
+.script-lines-preview {
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  margin: 10px 0 0;
+  padding: 18px clamp(16px, 3vw, 28px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(8, 18, 30, 0.45);
+  list-style: none;
+}
+.script-lines-preview li + li {
+  margin-top: 14px;
+}
+.script-lines-preview p {
+  margin: 0;
+}
+.script-lines-scene {
+  margin: 10px 0 10px !important;
+  padding-top: 12px;
+  border-top: 1px solid rgba(239, 154, 120, 0.3);
+  color: #f5ad8d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.script-lines-preview li:first-child .script-lines-scene {
+  margin-top: 0 !important;
+  padding-top: 0;
+  border-top: 0;
+}
+.script-lines-action {
+  margin-bottom: 6px !important;
+  color: rgba(248, 241, 230, 0.66);
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.45;
+}
+.script-lines-speaker {
+  color: rgba(248, 241, 230, 0.72);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.script-lines-speech {
+  margin-top: 2px !important;
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+.script-lines-speech em {
+  color: rgba(248, 241, 230, 0.66);
+  font-family: var(--font-display);
+}
+.processing-rename-hint {
+  margin: 16px 0 0;
+  color: rgba(248, 241, 230, 0.68);
+  font-size: 0.8125rem;
+}
+.processing-actions .replace-script {
+  margin: 0;
+}
+.processing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+/* Step 3's Show/Hide advanced options: centered under the title. */
+
+
 /* Script read: no preview, so the status takes a single centered column. */
 .processing-layout--single {
   grid-template-columns: minmax(0, 640px);
@@ -2878,7 +2955,7 @@ header .flow-back:hover {
   justify-content: space-between;
   gap: 18px;
   margin: 13px 2px 0;
-  color: rgba(248, 241, 230, 0.56);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.75rem;
 }
 .document-panel > p strong {
@@ -3120,9 +3197,8 @@ header .flow-back:hover {
   color: #f8f1e6;
 }
 .replace-script {
-  margin-top: 6px;
+  margin-top: 12px;
   margin-left: auto;
-  color: #f5ad8d;
 }
 .voice-selector-panel {
   min-width: 0;
@@ -3194,18 +3270,26 @@ header .flow-back:hover {
   font-weight: 600;
 }
 .voice-filter-bar span {
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.75rem;
 }
 .voice-filter-bar button {
-  min-height: 36px;
-  color: #f3a17e;
-  font-size: 0.75rem;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.8125rem;
   font-weight: 600;
+}
+.voice-filter-bar button:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.14);
 }
 .voice-filter-bar button:disabled {
   cursor: default;
-  color: rgba(248, 241, 230, 0.3);
+  background: rgba(248, 241, 230, 0.04);
+  color: rgba(248, 241, 230, 0.45);
 }
 .voice-setup-filters {
   display: grid;
@@ -3260,6 +3344,12 @@ header .flow-back:hover {
 .voice-advanced-panel {
   padding: 4px 0 16px;
 }
+.voice-filter-note {
+  margin: 10px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
 /* Under the filters: the card's play button and quote, to hear the voice
    just picked. Laid out like the card's. */
 .voice-advanced-preview {
@@ -3294,6 +3384,9 @@ header .flow-back:hover {
 }
 .voice-advanced-voice select:focus {
   border-color: #ef9a78;
+}
+.preparing-panel {
+  margin-top: 24px;
 }
 .preparing-panel > header p {
   margin: 0 0 3px;
@@ -3374,22 +3467,23 @@ header .flow-back:hover {
 .preparing-progress:disabled {
   cursor: default;
 }
-/* Clickable: the fill turns the app's solid coral, cream text reading over
-   both the filled and unfilled parts. */
+/* Clickable: the whole button turns the app's solid coral with dark text,
+   like every other primary action; how many lines are ready narrows to a
+   strip along its bottom edge. */
 .preparing-progress.is-ready {
   border-color: rgba(255, 205, 183, 0.64);
-  color: #f8f1e6;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-size: 0.9375rem;
   font-weight: 700;
-  text-shadow: 0 1px 2px rgba(16, 26, 40, 0.55);
 }
 .preparing-progress.is-ready i {
-  background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
+  inset: auto auto 0 0;
+  height: 3px;
+  background: rgba(16, 26, 40, 0.4);
 }
 .preparing-progress.is-ready:hover {
-  background: rgba(244, 165, 131, 0.16);
-}
-.preparing-progress.is-ready:hover i {
-  filter: brightness(1.05);
+  filter: brightness(1.04);
 }
 .preparing-progress.is-ready:focus-visible {
   outline: 2px solid #f4a583;
@@ -3572,36 +3666,22 @@ header .flow-back:hover {
   font-size: clamp(1.0625rem, 1.3vw, 1.125rem);
   line-height: 1.55;
 }
-/* Two rows at most, split evenly and laid like bricks: the second row
-   sits half a card in. Past two cards a row, the rows scroll sideways. */
+/* Two cards to a row, wrapping as the cast needs; an odd last card sits
+   centered. Nothing scrolls sideways. */
 .role-grid {
   --role-gap: 18px;
-  container-type: inline-size;
-  overflow-x: auto;
-  /* Room for a card's hover lift and shadow, which the scroller would clip. */
-  margin: 26px 0 0;
-  padding: 6px 0 0;
-}
-.role-rows {
-  display: grid;
-  gap: var(--role-gap);
-  width: max-content;
-  margin: 0 auto;
-}
-.role-row {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--role-gap);
+  margin: 26px 0 0;
 }
-.role-row + .role-row {
-  margin-left: calc((100cqw - var(--role-gap)) / 4 + var(--role-gap) / 2);
+.role-grid > .role-option {
+  flex: 0 1 calc((100% - var(--role-gap)) / 2);
+  min-width: 0;
 }
-.role-row .role-option {
-  width: calc((100cqw - var(--role-gap)) / 2);
-  flex: none;
-}
-/* A lone role takes the whole column. */
-.role-row:only-child .role-option:only-child {
-  width: 100cqw;
+.role-grid.is-single > .role-option {
+  flex-basis: 100%;
 }
 .role-option {
   position: relative;
@@ -3700,28 +3780,103 @@ header .flow-back:hover {
   -webkit-line-clamp: 2;
 }
 .role-secondary {
-  color: rgba(248, 241, 230, 0.62);
+  margin-top: 18px;
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.875rem;
 }
-.role-secondary button {
-  padding: 5px;
-  color: rgba(248, 241, 230, 0.9);
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: rgba(239, 154, 120, 0.58);
-  text-underline-offset: 4px;
-}
-.role-secondary button:hover {
-  color: #f3a17e;
+.role-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 /* Same row as step 1's: Back on the left, the next step on the right. */
 .role-actions {
-  margin-top: 14px;
+  flex-wrap: wrap;
+  margin-top: 22px;
 }
-.script-accordion-toggle:disabled {
+/* Secondary actions (Back, See script, Customize voices…): a soft tonal
+   fill instead of an outline — clearly a button, but compact and quiet
+   beside the step's one coral primary. */
+.btn-secondary {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(248, 241, 230, 0.14);
+}
+.btn-secondary:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
+.btn-secondary:disabled {
   cursor: not-allowed;
-  color: rgba(248, 241, 230, 0.42);
+  opacity: 0.5;
+}
+/* Each setup step's one primary action. */
+.setup-next {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-left: auto;
+  padding: 0 22px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #101a28;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  transition:
+    filter 0.2s ease,
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.setup-next:hover:not(:disabled) {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+.setup-next:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 3px;
+}
+.setup-next:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.45;
+}
+.setup-next-hint {
+  width: 100%;
+  margin: 8px 0 0;
+  color: rgba(248, 241, 230, 0.7);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+@media (max-width: 760px) {
+  /* Thumb reach: the primary action spans the row's width. */
+  .role-actions .setup-next {
+    flex: 1 1 auto;
+  }
+  .processing-actions .setup-next {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -3744,22 +3899,12 @@ header .flow-back:hover {
     margin-top: 12px;
     font-size: 1rem;
   }
-  /* Phones: one column that grows downward, no sideways scroll. */
+  /* Phones: one column that grows downward. */
   .role-grid {
     --role-gap: 14px;
-    overflow-x: visible;
   }
-  .role-rows {
-    width: auto;
-  }
-  .role-row {
-    flex-direction: column;
-  }
-  .role-row + .role-row {
-    margin-left: 0;
-  }
-  .role-row .role-option {
-    width: auto;
+  .role-grid > .role-option {
+    flex-basis: 100%;
   }
   .role-option {
     min-height: 132px;

@@ -967,6 +967,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
+        steps={pendingParse.steps}
         onContinue={() => {
           finalizeParse(pendingParse);
           setPendingParse(null);
@@ -982,6 +983,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
+        steps={steps}
         onContinue={() => setReviewingUpload(false)}
       />
     );

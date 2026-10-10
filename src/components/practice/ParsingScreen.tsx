@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import type { Step } from "../../types";
 import DocumentPreview from "../DocumentPreview";
 import ScriptName from "../ScriptName";
 import SetupStep from "./SetupStep";
-import Accordion from "./Accordion";
+import ScriptLinesPreview from "./ScriptLinesPreview";
+import { normalizeSpeaker, splitStepContent } from "../../lib/script";
 
 export default function ParsingScreen({
   file,
@@ -11,6 +13,7 @@ export default function ParsingScreen({
   phase,
   onContinue,
   onReplace,
+  steps,
 }: {
   /** The uploaded PDF; null for a script saved earlier and reopened from
    * My Auditions, which has no PDF on hand — it shows without a preview. */
@@ -24,28 +27,38 @@ export default function ParsingScreen({
   onContinue?: () => void;
   /** A new PDF picked with Replace script, to parse in place of this one. */
   onReplace: (file: File) => void;
+  /** The parsed script, once read — shown under See script. */
+  steps?: Step[];
 }) {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const [scriptOpen, setScriptOpen] = useState(false);
+  // See script's two views: what the app read, or the PDF itself.
+  const [scriptView, setScriptView] = useState<"read" | "pdf">("read");
   // While the name is being edited, the actions below step aside.
   const [editingName, setEditingName] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const done = phase === "done";
   const name = title ?? file?.name ?? "Your script";
-  // To step 2, at the right end of the row while the script is folded away.
+  // On to step 2: the step's one primary action.
   const nextButton = onContinue && (
-    <button
-      type="button"
-      className="script-accordion-toggle script-accordion-next"
-      onClick={onContinue}
-    >
-      Cast scene
+    <button type="button" className="setup-next" onClick={onContinue}>
+      Choose your role <span aria-hidden="true">→</span>
     </button>
   );
+  const parsedSteps = steps ?? [];
+  const characterCount = new Set(
+    parsedSteps.map((step) => normalizeSpeaker(step.speaker)).filter(Boolean),
+  ).size;
+  const lineCount = parsedSteps.filter((step) => step.verbalLine.trim()).length;
+  const sceneCount = parsedSteps.filter(
+    (step) => splitStepContent(step).sceneHeading,
+  ).length;
+  const hasPdf = Boolean(file && previewUrl);
+  const view = hasPdf ? scriptView : "read";
   const replaceButton = (
     <button
       type="button"
-      className="replace-script"
+      className="btn-secondary replace-script"
       onClick={() => replaceInputRef.current?.click()}
     >
       Replace script
@@ -62,7 +75,6 @@ export default function ParsingScreen({
   return (
     <SetupStep
       step={1}
-      title="Rehearsal setup"
       scriptName={name}
       aria-live="polite"
       aria-busy={!done}
@@ -83,7 +95,7 @@ export default function ParsingScreen({
         )
       }
     >
-      <h1>
+      <h1 className={done && name.length > 26 ? "is-long-name" : undefined}>
         {done ? (
           <>
             Your rehearsal is set up for{" "}
@@ -99,13 +111,20 @@ export default function ParsingScreen({
           "Preparing your rehearsal"
         )}
       </h1>
+      {done && onRename && !editingName && (
+        <p className="processing-rename-hint">Tap the name to rename it.</p>
+      )}
       <p className="processing-explanation">
         {done ? (
-          <>
-            {scriptOpen && (
-              <>We’ve read the characters, dialogue, and scene directions.</>
-            )}
-          </>
+          parsedSteps.length > 0 && (
+            <>
+              We read {characterCount}{" "}
+              {characterCount === 1 ? "character" : "characters"} and{" "}
+              {lineCount} {lineCount === 1 ? "line" : "lines"}
+              {sceneCount > 1 && <> across {sceneCount} scenes</>}. Check
+              them under See script.
+            </>
+          )
         ) : (
           <>
             We’re identifying characters, dialogue, and scene directions in
@@ -113,53 +132,61 @@ export default function ParsingScreen({
           </>
         )}
       </p>
-      {editingName ? null : done && file && previewUrl ? (
-        <Accordion
-          id="uploaded-script"
-          open={scriptOpen}
-          onOpenChange={setScriptOpen}
-          showLabel="See script"
-          hideLabel="Hide script"
-          actions={
-            scriptOpen ? (
-              <>
-                <span className="script-accordion-dot" aria-hidden="true">
-                  ·
-                </span>
-                {replaceButton}
-                {onContinue && (
-                  <>
-                    <span className="script-accordion-dot" aria-hidden="true">
-                      ·
-                    </span>
-                    <button
-                      type="button"
-                      className="script-accordion-toggle"
-                      onClick={onContinue}
-                    >
-                      Cast scene
-                    </button>
-                  </>
-                )}
-              </>
-            ) : (
-              nextButton
-            )
-          }
-        >
-          <DocumentPreview
-            src={previewUrl}
-            fileName={file.name}
-            fileSize={file.size}
-          />
-        </Accordion>
-      ) : done ? (
-        // Reopened from My Auditions: no PDF on hand to show.
-        <div className="script-accordion-actions">
-          {replaceButton}
-          {nextButton}
-        </div>
-      ) : null}
+      {done && !editingName && (
+        <>
+          <div className="processing-actions">
+            {(parsedSteps.length > 0 || hasPdf) && (
+              <button
+                type="button"
+                className="btn-secondary"
+                aria-expanded={scriptOpen}
+                aria-controls="uploaded-script"
+                onClick={() => setScriptOpen((open) => !open)}
+              >
+                {scriptOpen ? "Hide script" : "See script"}
+              </button>
+            )}
+            {replaceButton}
+            {nextButton}
+          </div>
+          {scriptOpen && (
+            <div id="uploaded-script">
+              {hasPdf && parsedSteps.length > 0 && (
+                <div className="script-view-tabs" role="tablist" aria-label="Script view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === "read"}
+                    onClick={() => setScriptView("read")}
+                  >
+                    What we read
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={view === "pdf"}
+                    onClick={() => setScriptView("pdf")}
+                  >
+                    Original PDF
+                  </button>
+                </div>
+              )}
+              {view === "read" && parsedSteps.length > 0 ? (
+                <ScriptLinesPreview steps={parsedSteps} />
+              ) : (
+                file &&
+                previewUrl && (
+                  <DocumentPreview
+                    src={previewUrl}
+                    fileName={file.name}
+                    fileSize={file.size}
+                  />
+                )
+              )}
+            </div>
+          )}
+        </>
+      )}
       <input
         ref={replaceInputRef}
         type="file"
