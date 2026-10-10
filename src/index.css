@@ -2088,15 +2088,30 @@ header .flow-back:hover {
   flex-direction: column;
   gap: 16px;
 }
+.feedback-gate-rating {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.feedback-gate-rating-label {
+  color: rgba(248, 241, 230, 0.75);
+  font-size: 0.875rem;
+}
 .feedback-gate-stars {
   display: flex;
-  gap: 6px;
+  gap: 2px;
 }
 .feedback-gate-star {
+  /* A full 44px touch target around each star. */
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 8px;
   padding: 0;
   border: none;
   background: none;
-  color: rgba(248, 241, 230, 0.3);
+  color: rgba(248, 241, 230, 0.45);
   font-size: 1.75rem;
   line-height: 1;
   cursor: pointer;
@@ -2106,6 +2121,10 @@ header .flow-back:hover {
 }
 .feedback-gate-star:hover {
   transform: scale(1.08);
+}
+.feedback-gate-star:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 0;
 }
 .feedback-gate-star.is-filled {
   color: var(--color-coral-500);
@@ -2123,6 +2142,18 @@ header .flow-back:hover {
 .feedback-gate-textarea:focus {
   outline: none;
   border-color: rgba(255, 205, 183, 0.55);
+}
+.feedback-gate-textarea.is-invalid {
+  border-color: #ff8a80;
+}
+.feedback-gate-textarea::placeholder {
+  color: rgba(248, 241, 230, 0.55);
+}
+.feedback-gate-problem {
+  margin: -8px 0 0;
+  color: #ffb3a7;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 .feedback-gate-submit {
   min-height: 50px;

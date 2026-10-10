@@ -23,6 +23,8 @@ export default function FeedbackGate() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // Shown in the form, by the field it's about — and gone once that's fixed.
+  const [problem, setProblem] = useState<"rating" | "comment" | null>(null);
 
   const loadPending = useCallback(async () => {
     if (!user) {
@@ -72,13 +74,14 @@ export default function FeedbackGate() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (rating === 0) {
-      toast("Pick a star rating before continuing.");
+      setProblem("rating");
       return;
     }
     if (rating < 5 && !comment.trim()) {
-      toast("Let us know what happened before continuing.");
+      setProblem("comment");
       return;
     }
+    setProblem(null);
     setSubmitting(true);
     try {
       await submitFeedback(pending.id, rating, comment.trim() || null);
@@ -91,7 +94,7 @@ export default function FeedbackGate() {
     setSubmitting(false);
     setRating(0);
     setComment("");
-    toast("Thanks for the feedback!", "info");
+    toast("Thanks for the feedback!", "success");
     void loadPending();
   };
 
@@ -120,38 +123,64 @@ export default function FeedbackGate() {
         </div>
       )}
       <form className="feedback-gate-form" onSubmit={handleSubmit}>
-        <div
-          className="feedback-gate-stars"
-          role="radiogroup"
-          aria-label="Rating"
-        >
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={rating === value}
-              aria-label={`${value} star${value === 1 ? "" : "s"}`}
-              className={`feedback-gate-star ${
-                value <= rating ? "is-filled" : ""
-              }`}
-              onClick={() => setRating(value)}
-            >
-              ★
-            </button>
-          ))}
+        <div className="feedback-gate-rating">
+          <div
+            className="feedback-gate-stars"
+            role="radiogroup"
+            aria-label="Rating"
+            aria-describedby={problem === "rating" ? "feedback-gate-problem" : undefined}
+          >
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={rating === value}
+                aria-label={`${value} star${value === 1 ? "" : "s"}`}
+                className={`feedback-gate-star ${
+                  value <= rating ? "is-filled" : ""
+                }`}
+                data-autofocus={value === 1 ? true : undefined}
+                onClick={() => {
+                  setRating(value);
+                  if (problem === "rating" || value === 5) setProblem(null);
+                }}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+          <span className="feedback-gate-rating-label" aria-hidden="true">
+            {["Tap to rate", "Didn’t work", "Rough", "Okay", "Good", "Great"][rating]}
+          </span>
         </div>
+        <label className="sr-only" htmlFor="feedback-gate-comment">
+          {rating > 0 && rating < 5 ? "What happened? (required)" : "Comments (optional)"}
+        </label>
         <textarea
-          className="feedback-gate-textarea"
+          id="feedback-gate-comment"
+          className={`feedback-gate-textarea ${problem === "comment" ? "is-invalid" : ""}`}
           value={comment}
-          onChange={(event) => setComment(event.target.value)}
+          onChange={(event) => {
+            setComment(event.target.value);
+            if (problem === "comment" && event.target.value.trim()) setProblem(null);
+          }}
           placeholder={
             rating > 0 && rating < 5
-              ? "What happened?"
-              : "Anything that worked well, felt off, or broke outright?"
+              ? "What could have gone better? (required)"
+              : "Anything that worked well, felt off, or broke outright? (optional)"
           }
+          aria-invalid={problem === "comment"}
+          aria-describedby={problem === "comment" ? "feedback-gate-problem" : undefined}
           rows={4}
         />
+        {problem && (
+          <p id="feedback-gate-problem" className="feedback-gate-problem" role="alert">
+            {problem === "rating"
+              ? "Pick a star rating to continue."
+              : "Tell us a little about what could have gone better — even a few words helps."}
+          </p>
+        )}
         <button
           type="submit"
           className="feedback-gate-submit"
