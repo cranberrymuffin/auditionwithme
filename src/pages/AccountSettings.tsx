@@ -54,8 +54,8 @@ export default function AccountSettings() {
       />
       <SiteNav />
 
-      <section className="account-main">
-        <header className="account-header">
+      <section className="account-main settings-main">
+        <header className="account-header settings-header">
           <h1>Account settings</h1>
           {email && <p className="account-email">{email}</p>}
         </header>
