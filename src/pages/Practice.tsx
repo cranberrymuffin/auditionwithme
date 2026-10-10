@@ -70,21 +70,25 @@ export default function Practice() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const file: File | null = location.state?.file ?? null;
+  // Read once: each wizard step below gets its own history entry, and the
+  // router hands back a fresh copy of this state on every Back — reading it
+  // live would make the file and replayScript look new and re-run setup.
+  const [entryState] = useState(() => location.state);
+  const file: File | null = entryState?.file ?? null;
   // Issued once by Home.tsx's start-rehearsal call; reused read-only by every
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
-  const rehearsalGrant: string | null = location.state?.rehearsalGrant ?? null;
+  const rehearsalGrant: string | null = entryState?.rehearsalGrant ?? null;
   const replayScript: ReplayScript | null =
-    location.state?.replayScript ?? null;
+    entryState?.replayScript ?? null;
   // Home.tsx already hashed this upload for its saved-script lookup.
-  const uploadContentHash: string | null = location.state?.contentHash ?? null;
+  const uploadContentHash: string | null = entryState?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
   // with a previously-confirmed cast, skipping RolePicker/VoiceCasting.
   // Undefined (not just falsy — "" is a valid role, "listen to the full
   // scene") means "no preset", i.e. the ordinary/Recast flow through both
   // screens.
-  const presetRoleRaw: unknown = location.state?.selectedRole;
+  const presetRoleRaw: unknown = entryState?.selectedRole;
   const hasPresetRole = typeof presetRoleRaw === "string";
   const presetRole = hasPresetRole ? (presetRoleRaw as string) : "";
 
@@ -648,6 +652,65 @@ export default function Practice() {
     if (preparing && pregen.canStart) startReadingRef.current();
   }, [preparing, pregen.canStart]);
 
+  // Wizard step on screen: 1 RolePicker, 2 VoiceCasting, 3 Rehearsal (0 =
+  // parsing or any screen before a role can be picked). Mirrors the render
+  // order below.
+  const wizardStep =
+    loading || pendingParse || error || languageChoice || steps.length === 0
+      ? 0
+      : selectedRole === null
+        ? characters.length > 0 ? 1 : 0
+        : !voicesConfirmed && voiceableSpeakers.length > 0
+          ? 2
+          : 3;
+
+  // Each step gets its own history entry, so the browser's Back (and a
+  // phone's back swipe) steps back through the wizard instead of leaving
+  // /practice. The first step reached here is the base: Back from it leaves
+  // the page as before.
+  const historyStep: number | undefined = location.state?.practiceStep;
+  const baseStepRef = useRef<number | null>(null);
+  const wizardStepRef = useRef(wizardStep);
+  wizardStepRef.current = wizardStep;
+  const locationStateRef = useRef(location.state);
+  locationStateRef.current = location.state;
+
+  useEffect(() => {
+    if (wizardStep === 0) return;
+    const state = locationStateRef.current;
+    const withStep = { ...state, practiceStep: wizardStep };
+    if (baseStepRef.current === null) {
+      baseStepRef.current = wizardStep;
+      navigate(location.pathname, { replace: true, state: withStep });
+      return;
+    }
+    const recorded = state?.practiceStep ?? baseStepRef.current;
+    if (wizardStep > recorded) navigate(location.pathname, { state: withStep });
+    else if (wizardStep < recorded) navigate(location.pathname, { replace: true, state: withStep });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on step changes
+  }, [wizardStep]);
+
+  // History moved back to an earlier step: show it.
+  useEffect(() => {
+    if (historyStep === undefined || historyStep >= wizardStepRef.current) return;
+    if (historyStep <= 1) {
+      setPreparing(false);
+      setSelectedRole(null);
+      setVoicesConfirmed(false);
+    } else {
+      setVoicesConfirmed(false);
+    }
+  }, [historyStep]);
+
+  /** In-app Back: through history when there's a step entry to return to
+   * (so browser Back/Forward stay in step), else straight to `fallback`. */
+  const stepBack = (fallback: () => void) => {
+    const base = baseStepRef.current;
+    const recorded = location.state?.practiceStep;
+    if (base !== null && recorded !== undefined && recorded > base) navigate(-1);
+    else fallback();
+  };
+
   if (loading) return <ParsingScreen file={file!} phase={processingPhase} />;
   if (pendingParse) {
     return (
@@ -787,11 +850,13 @@ export default function Practice() {
         onStartAnyway={startReading}
         languageCode={scriptLanguage.code}
         languageName={scriptLanguage.name}
-        onBack={() => {
-          setPreparing(false);
-          setSelectedRole(null);
-          setVoicesConfirmed(false);
-        }}
+        onBack={() =>
+          stepBack(() => {
+            setPreparing(false);
+            setSelectedRole(null);
+            setVoicesConfirmed(false);
+          })
+        }
       />
     );
   }
@@ -803,13 +868,15 @@ export default function Practice() {
       characterVoices={characterVoices}
       characterVolumes={characterVolumes}
       deliveryTags={deliveryTags ?? []}
-      onBack={() => {
-        if (voiceableSpeakers.length > 0) {
-          setVoicesConfirmed(false);
-        } else {
-          setSelectedRole(null);
-        }
-      }}
+      onBack={() =>
+        stepBack(() => {
+          if (voiceableSpeakers.length > 0) {
+            setVoicesConfirmed(false);
+          } else {
+            setSelectedRole(null);
+          }
+        })
+      }
       languageCode={scriptLanguage.code}
       fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
       scriptId={scriptId}
