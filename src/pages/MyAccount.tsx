@@ -161,6 +161,7 @@ export default function MyAccount() {
   };
 
   const deleteTape = async (tape: SelfTape) => {
+    if (!window.confirm("Delete this self-tape? This can't be undone.")) return;
     try {
       await deleteTapeRecord(tape.id);
     } catch (err) {
@@ -280,6 +281,24 @@ export default function MyAccount() {
     if (expandedTape) ensureTapeUrl(expandedTape);
   }, [expandedTape, ensureTapeUrl]);
 
+  // Escape closes the take viewer — unless the feedback form is up over it,
+  // which owns the keyboard until it's answered.
+  const tapeCloseRef = useRef<HTMLButtonElement | null>(null);
+  const closeExpandedRef = useRef(closeExpanded);
+  closeExpandedRef.current = closeExpanded;
+  useEffect(() => {
+    if (!expandedTapeId) return;
+    // Don't pull focus out of the feedback form if it's already up.
+    if (!document.getElementById("feedback-gate-title")) tapeCloseRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.getElementById("feedback-gate-title")) return;
+      closeExpandedRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [expandedTapeId]);
+
   return (
     <main className="account-page">
       <Seo
@@ -295,10 +314,31 @@ export default function MyAccount() {
           <h1>My Auditions</h1>
           {user?.email && <p className="account-email">{user.email}</p>}
           <p className="account-subtitle">
-            Scripts you've uploaded on this device before. Jump back into
-            practice now!
+            Your scripts and self-tapes. They’re saved on this device only,
+            so download any take you want to keep.
           </p>
+          {scripts.length > 0 && (
+            <button
+              type="button"
+              className="account-upload-button"
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <span aria-hidden="true">+</span> Upload a script
+            </button>
+          )}
         </header>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            // Cleared so picking the same file again still fires.
+            event.target.value = "";
+            if (file) void startRehearsal(file);
+          }}
+        />
 
         {loading ? (
           <p className="account-empty">Loading your scripts…</p>
@@ -308,18 +348,6 @@ export default function MyAccount() {
             <button type="button" onClick={() => uploadInputRef.current?.click()}>
               Upload a script <span>→</span>
             </button>
-            <input
-              ref={uploadInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                // Cleared so picking the same file again still fires.
-                event.target.value = "";
-                if (file) void startRehearsal(file);
-              }}
-            />
           </div>
         ) : (
           <ul className="account-scripts">
@@ -356,7 +384,7 @@ export default function MyAccount() {
                         }
                         onClick={() => practice(script)}
                       >
-                        {script.roles_read.length > 0 ? "Recast" : "Practice →"}
+                        {script.roles_read.length > 0 ? "Change role or voices" : "Practice →"}
                       </button>
                       <button
                         type="button"
@@ -382,7 +410,7 @@ export default function MyAccount() {
                   {script.roles_read.length > 0 && (
                     <div className="account-script-actions">
                       <label className="account-script-role-picker">
-                        <span>Read as</span>
+                        <span>Rehearse as</span>
                         <select
                           aria-label="Choose which role to practice as"
                           value={selectedRoleForScript}
@@ -405,7 +433,7 @@ export default function MyAccount() {
                         className="account-script-btn account-script-btn--solid"
                         onClick={() => practiceAsRole(script, selectedRoleForScript)}
                       >
-                        Go →
+                        Rehearse →
                       </button>
                     </div>
                   )}
@@ -435,9 +463,13 @@ export default function MyAccount() {
         <div className="tape-modal-overlay" onClick={closeExpanded}>
           <div
             className="tape-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Self-tape"
             onClick={(event) => event.stopPropagation()}
           >
             <button
+              ref={tapeCloseRef}
               type="button"
               className="tape-modal-close"
               onClick={closeExpanded}
@@ -512,6 +544,7 @@ function SelfTapeTile({
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [visible, setVisible] = useState(false);
+  const [duration, setDuration] = useState<number | null>(null);
 
   useEffect(() => {
     const node = ref.current;
@@ -536,7 +569,7 @@ function SelfTapeTile({
       type="button"
       className="account-tape-tile"
       onClick={onOpen}
-      aria-label="Open self-tape"
+      aria-label={`Open self-tape${role ? ` as ${displayCharacterName(role)}` : ""}, recorded ${new Date(tape.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
     >
       <span className="account-tape-tile-frame">
         {url ? (
@@ -549,6 +582,8 @@ function SelfTapeTile({
               // preload="metadata" alone leaves the canvas blank in some
               // browsers; seeking forces a frame to actually decode and paint.
               const video = event.currentTarget;
+              // MediaRecorder files can report Infinity until fully read.
+              if (Number.isFinite(video.duration)) setDuration(video.duration);
               video.currentTime = Math.min(0.5, video.duration || 0.5);
             }}
           />
@@ -558,6 +593,11 @@ function SelfTapeTile({
         <span className="account-tape-tile-play" aria-hidden="true">
           ▶
         </span>
+        {duration !== null && (
+          <span className="account-tape-tile-duration">
+            {Math.floor(Math.round(duration) / 60)}:{String(Math.round(duration) % 60).padStart(2, "0")}
+          </span>
+        )}
         {role && (
           <span className="account-tape-tile-role">
             <span className="account-tape-tile-role-dot" aria-hidden="true" />

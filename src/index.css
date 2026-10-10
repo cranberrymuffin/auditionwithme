@@ -1660,6 +1660,27 @@ header .flow-back:hover {
   font-size: 1rem;
   line-height: 1.5;
 }
+.account-upload-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 205, 183, 0.55);
+  border-radius: 9px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #1b120c;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.account-upload-button:hover {
+  filter: brightness(1.05);
+}
+.account-upload-button span {
+  font-size: 1.1rem;
+  line-height: 1;
+}
 .account-empty {
   display: flex;
   flex-direction: column;
@@ -1726,7 +1747,7 @@ header .flow-back:hover {
 .account-script-subtitle {
   display: block;
   margin-top: -11px;
-  color: rgba(248, 241, 230, 0.62);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.8125rem;
 }
 .account-script-actions {
@@ -1749,7 +1770,7 @@ header .flow-back:hover {
   min-width: 160px;
 }
 .account-script-role-picker span {
-  color: rgba(248, 241, 230, 0.62);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.8125rem;
   white-space: nowrap;
 }
@@ -1795,21 +1816,25 @@ header .flow-back:hover {
 .account-script-btn--outline {
   border: 1px solid rgba(248, 241, 230, 0.3);
   background: transparent;
-  color: rgba(248, 241, 230, 0.7);
+  color: rgba(248, 241, 230, 0.85);
 }
 .account-script-btn--outline:hover {
   border-color: #e98464;
   color: #f4a583;
 }
+/* Quiet until hovered: deleting is never the action a row is about. */
 .account-script-btn--danger {
   width: 40px;
   padding: 0;
-  border: 1px solid #eb6a6a;
-  background: #eb6a6a;
-  color: #1b120c;
+  border: 1px solid rgba(248, 241, 230, 0.22);
+  background: transparent;
+  color: rgba(248, 241, 230, 0.7);
 }
-.account-script-btn--danger:hover {
-  filter: brightness(1.08);
+.account-script-btn--danger:hover,
+.account-script-btn--danger:focus-visible {
+  border-color: rgba(255, 107, 97, 0.7);
+  background: rgba(255, 59, 48, 0.1);
+  color: #ff8a80;
 }
 
 .billing-card {
@@ -4760,7 +4785,7 @@ header .flow-back:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 140px;
+  width: 208px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 9px;
@@ -4778,7 +4803,8 @@ header .flow-back:hover {
 .account-tape-tile video {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  /* Tapes are recorded 16:9 — the tile shows the whole frame. */
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   background: #000;
   pointer-events: none;
@@ -4786,7 +4812,7 @@ header .flow-back:hover {
 .account-tape-tile-loading {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   background: #000;
 }
 .account-tape-tile-play {
@@ -4804,6 +4830,18 @@ header .flow-back:hover {
   color: #fff;
   font-size: 0.75rem;
   transform: translate(-50%, -50%);
+}
+.account-tape-tile-duration {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(8, 14, 22, 0.78);
+  color: #f8f1e6;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .account-tape-tile-role {
   position: absolute;
