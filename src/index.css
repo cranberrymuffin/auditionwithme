@@ -2804,8 +2804,12 @@ header .flow-back:hover {
   .processing-status h1 {
     font-size: clamp(2.5rem, 10vw, 3.25rem);
   }
-  .document-panel {
-    width: min(100%, 620px);
+  /* Centered like the status column above, Replace script at its right
+     edge rather than the page's. */
+  .processing-preview {
+    width: 100%;
+    max-width: 620px;
+    justify-self: center;
   }
   .document-frame {
     height: min(62vh, 520px);
