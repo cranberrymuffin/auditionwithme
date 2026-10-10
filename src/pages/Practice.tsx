@@ -162,6 +162,8 @@ function PracticeFlow({ file }: { file: File | null }) {
   // Saved scripts row backing this session, when the user is signed in —
   // casting and delivery tags are written back to it as they settle.
   const [scriptId, setScriptId] = useState<string | null>(null);
+  // Set when the actor renames the script (ScriptName on step 1).
+  const [scriptTitle, setScriptTitle] = useState<string | null>(null);
   // Per-line direction from the AI director (api/casting?action=direct-lines), aligned
   // by index with steps: performance markup on new parses, single-word tags on
   // rows saved before the markup upgrade. null until the pass finishes (or fails silently).
@@ -705,6 +707,19 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (preparing && pregen.canStart) startReadingRef.current();
   }, [preparing, pregen.canStart]);
 
+  // The name shown for this script everywhere in the flow: a rename, else
+  // the saved title, else the uploaded file's name.
+  const scriptName = scriptTitle ?? replayScript?.title ?? file?.name ?? "Rehearsal";
+  // Saved once the script has its record (the parse saves it as it lands,
+  // so a rename made just before still gets there).
+  useEffect(() => {
+    if (!user || !scriptId || scriptTitle === null) return;
+    void updateScript(scriptId, { title: scriptTitle }).catch((err) => {
+      console.error("Failed to rename script:", err);
+      toast("Couldn't rename that script. Please try again.");
+    });
+  }, [user, scriptId, scriptTitle, toast]);
+
   // Keeps this script's PDF with it, so reopening it from My Auditions can
   // still show it (See script). Once the record exists; skipped if it's
   // already stored (a re-upload of a script that has one).
@@ -903,6 +918,8 @@ function PracticeFlow({ file }: { file: File | null }) {
     return (
       <ParsingScreen
         file={file!}
+        title={scriptName}
+        onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
         onContinue={() => {
@@ -916,7 +933,8 @@ function PracticeFlow({ file }: { file: File | null }) {
     return (
       <ParsingScreen
         file={file}
-        title={replayScript?.title}
+        title={scriptName}
+        onRename={setScriptTitle}
         phase="done"
         onReplace={replaceScript}
         onContinue={() => setReviewingUpload(false)}
@@ -1010,7 +1028,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       <RolePicker
         characters={characters}
         steps={steps}
-        fileName={file?.name ?? replayScript?.title ?? "Uploaded script"}
+        fileName={scriptName}
         initialSelected={roleDraft}
         onChoose={chooseRole}
         onBack={() => stepBack(() => navigate(replayScript ? "/account" : "/"))}
@@ -1025,6 +1043,7 @@ function PracticeFlow({ file }: { file: File | null }) {
   ) {
     return (
       <VoiceCasting
+        scriptName={scriptName}
         speakers={voiceableSpeakers}
         steps={steps}
         voices={voices}
@@ -1070,7 +1089,7 @@ function PracticeFlow({ file }: { file: File | null }) {
         })
       }
       languageCode={scriptLanguage.code}
-      fileName={file?.name ?? replayScript?.title ?? "Rehearsal"}
+      fileName={scriptName}
       scriptId={scriptId}
       pregen={pregen}
       awaitPregen={!preparedOnCasting}

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wordmark } from "../SiteNav";
-import DocumentPreview, { formatFileSize } from "../DocumentPreview";
+import DocumentPreview from "../DocumentPreview";
+import ScriptName from "../ScriptName";
+import StepHeader from "./StepHeader";
 
 export default function ParsingScreen({
   file,
   title,
+  onRename,
   phase,
   onContinue,
   onReplace,
@@ -13,8 +16,10 @@ export default function ParsingScreen({
   /** The uploaded PDF; null for a script saved earlier and reopened from
    * My Auditions, which has no PDF on hand — it shows without a preview. */
   file: File | null;
-  /** Shown in place of the file name when there's no file. */
+  /** The script's name: its saved title, else the file name. */
   title?: string;
+  /** Renames the script; makes the name in the heading editable. */
+  onRename?: (next: string) => void;
   phase: "extracting" | "analyzing" | "done";
   /** Present once parsing is finished — advances to role/voice casting. */
   onContinue?: () => void;
@@ -23,9 +28,11 @@ export default function ParsingScreen({
 }) {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const [scriptOpen, setScriptOpen] = useState(false);
+  // While the name is being edited, the actions below step aside.
+  const [editingName, setEditingName] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const done = phase === "done";
-  const name = file?.name ?? title ?? "Your script";
+  const name = title ?? file?.name ?? "Your script";
   // To step 2, at the right end of the row while the script is folded away.
   const nextButton = onContinue && (
     <button
@@ -59,29 +66,30 @@ export default function ParsingScreen({
         <Link to="/" aria-label="Audition With Me home">
           <Wordmark />
         </Link>
-        <div className="workflow-file" title={name}>
-          <span>{name}</span>
-          {file && <small>{formatFileSize(file.size)}</small>}
-        </div>
       </header>
 
       <section
         className={`processing-layout ${done ? "processing-layout--single" : ""}`}
       >
         <div className="processing-status">
-          <p className="processing-label">Step 1 of 4 · Rehearsal setup</p>
+          <StepHeader step={1} title="Rehearsal setup" scriptName={name} />
           <h1>
-            {done ? "Your rehearsal is set up" : "Preparing your rehearsal"}
+            {done ? (
+              <>
+                Your rehearsal is set up for{" "}
+                <span className="processing-script-name">
+                  <ScriptName name={name} onRename={onRename} onEditingChange={setEditingName} />
+                </span>
+              </>
+            ) : (
+              "Preparing your rehearsal"
+            )}
           </h1>
           <p className="processing-explanation">
             {done ? (
               <>
-                Pick who you’re playing next.
-                {/* Only while See script is open, on a line of its own below,
-                    so the sentence above never moves. */}
                 {scriptOpen && (
                   <>
-                    <br />
                     We’ve read the characters, dialogue, and scene directions.
                   </>
                 )}
@@ -93,7 +101,7 @@ export default function ParsingScreen({
               </>
             )}
           </p>
-          {done && file && previewUrl ? (
+          {editingName ? null : done && file && previewUrl ? (
             <div className="script-accordion">
               <div className="script-accordion-actions">
                 <button

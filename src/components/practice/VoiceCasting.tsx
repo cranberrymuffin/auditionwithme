@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import {
   describeVoice,
@@ -15,6 +15,7 @@ import {
 } from "../../lib/characterVolume";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import { Wordmark } from "../SiteNav";
+import StepHeader from "./StepHeader";
 import { useToast } from "../../lib/toast";
 
 type FilterKey = "accent" | "gender" | "age" | "tone";
@@ -43,6 +44,7 @@ export default function VoiceCasting({
   onStart,
   onStartAnyway,
   onBack,
+  scriptName,
 }: {
   speakers: string[];
   steps: Step[];
@@ -63,8 +65,9 @@ export default function VoiceCasting({
   /** Skip the rest of the wait and go straight to Rehearsal. */
   onStartAnyway: () => void;
   onBack: () => void;
+  /** The script's name, shown in the step row. */
+  scriptName: string;
 }) {
-  const navigate = useNavigate();
   const toast = useToast();
   const { play, stop, setVolume } = useTtsPlayer();
   const [activeSpeaker, setActiveSpeaker] = useState(speakers[0] ?? "");
@@ -230,9 +233,6 @@ export default function VoiceCasting({
             <i />
           </div>
         </div>
-        <button onClick={() => navigate("/")} className="setup-header-action">
-          Replace script
-        </button>
       </header>
 
       <section className="voice-setup-layout">
@@ -246,7 +246,7 @@ export default function VoiceCasting({
           >
             <span>←</span> Back
           </button>
-          <p>Step 3 of 4 · Direct your scene partners</p>
+          <StepHeader step={3} title="Direct your scene partners" scriptName={scriptName} />
           <h1>Choose your scene partner</h1>
           <div className="voice-setup-description">
             Select the {speakers.length === 1 ? "voice" : "voices"} that will

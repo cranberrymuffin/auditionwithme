@@ -2359,25 +2359,6 @@ header .flow-back:hover {
 .workflow-header .text-hero-ink {
   color: #f8f1e6;
 }
-.workflow-file {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: center;
-  gap: 9px;
-  color: rgba(248, 241, 230, 0.8);
-  font-size: 0.875rem;
-}
-.workflow-file span {
-  max-width: min(32vw, 350px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workflow-file small {
-  color: rgba(248, 241, 230, 0.5);
-  font-size: 0.75rem;
-}
 .processing-layout {
   width: min(1280px, 100%);
   min-height: calc(100vh - 72px);
@@ -2390,13 +2371,8 @@ header .flow-back:hover {
   padding: clamp(32px, 5vh, 65px) clamp(28px, 6vw, 85px);
 }
 .processing-status {
+  min-width: 0;
   max-width: 580px;
-}
-.processing-label {
-  margin: 0 0 14px;
-  color: #ef9a78;
-  font-size: 0.875rem;
-  font-weight: 500;
 }
 .processing-status h1 {
   max-width: 580px;
@@ -2406,6 +2382,94 @@ header .flow-back:hover {
   font-weight: 500;
   line-height: 1.03;
   letter-spacing: -0.025em;
+}
+/* ScriptName: reads as part of the text around it. At rest, white text
+   with each line underlined in coral (and a hover highlight); while
+   editing, coral text and underline. Underlines are text decorations, so
+   they run under each line's text only, never to the end of the line. */
+.script-name-button,
+.script-name-input {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+.script-name-button {
+  text-decoration: underline #ef9a78;
+  text-decoration-thickness: max(1px, 0.04em);
+  text-underline-offset: 0.14em;
+}
+.script-name-button {
+  margin: 0 -0.08em;
+  padding: 0 0.08em;
+  border-radius: 0.12em;
+  text-align: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.script-name-button:hover {
+  background: rgba(239, 154, 120, 0.12);
+}
+
+/* Editing: the field and an invisible copy of its text share one grid
+   cell; the copy sizes the field, wrapping at the line's width. The field
+   is ruled — a coral line under every line of text, the last included,
+   across its full width. The pencil takes a second column. */
+.script-name-editor {
+  display: inline-grid;
+  max-width: 100%;
+  grid-template-columns: minmax(0, auto) auto;
+  vertical-align: baseline;
+}
+.script-name-sizer,
+.script-name-editor .script-name-input {
+  grid-area: 1 / 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.script-name-sizer {
+  visibility: hidden;
+  pointer-events: none;
+}
+.script-name-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: linear-gradient(to top, #ef9a78 max(1px, 0.04em), transparent 0) 0 0 / 100% 1lh;
+  resize: none;
+  overflow: hidden;
+}
+/* Outranks the site-wide input focus outline and colors. */
+.script-name.script-name-input,
+.script-name.script-name-input:focus,
+.script-name.script-name-input:focus-visible {
+  outline: none;
+  color: #ef9a78;
+  caret-color: #ef9a78;
+}
+.script-name.script-name-input::placeholder {
+  font: inherit;
+  letter-spacing: inherit;
+  color: rgba(248, 241, 230, 0.4);
+  opacity: 1;
+}
+.script-name.script-name-input::selection {
+  background: rgba(239, 154, 120, 0.22);
+  color: #ef9a78;
+}
+/* By the last line of a wrapped name. */
+.script-name-icon {
+  grid-area: 1 / 2;
+  align-self: end;
+  width: 0.42em;
+  height: 0.42em;
+  margin: 0 0 0.2em 0.18em;
+  color: #ef9a78;
+}
+/* Long file names (no spaces, underscores) wrap instead of overflowing. */
+.processing-script-name {
+  overflow-wrap: anywhere;
 }
 .processing-explanation {
   max-width: 560px;
@@ -2725,16 +2789,14 @@ header .flow-back:hover {
     grid-template-columns: 1fr auto;
     padding: 0 20px;
   }
-  .workflow-file {
-    display: none;
-  }
   .processing-layout {
     height: auto;
     min-height: calc(100dvh - 72px);
     /* Phones start every setup step at the top, not mid-screen. */
     align-content: start;
     align-items: start;
-    grid-template-columns: 1fr;
+    /* minmax(0, …): the step row's unwrapped name must not widen the page. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 34px;
     padding: 48px 22px 36px;
   }
@@ -2809,6 +2871,7 @@ header .flow-back:hover {
   padding: clamp(42px, 7vh, 82px) 28px;
 }
 .voice-setup-intro {
+  min-width: 0;
   max-width: 470px;
 }
 /* The practice setup steps' Back (top left of the content) and step 1's
@@ -3284,7 +3347,8 @@ header .flow-back:hover {
     min-height: calc(100dvh - 66px);
     align-content: start;
     align-items: start;
-    grid-template-columns: 1fr;
+    /* minmax(0, …): the step row's unwrapped name must not widen the page. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
     padding: 30px 20px 40px;
   }
@@ -3441,15 +3505,39 @@ header .flow-back:hover {
   border-color: #ef9a78;
   background: #ef9a78;
 }
-.setup-header-action {
-  min-height: 44px;
-  justify-self: end;
-  color: rgba(248, 241, 230, 0.74);
-  font-size: 0.8125rem;
+/* The row atop each practice setup step (StepHeader): the step on the
+   left, the script's name on the right. The name gets whatever room the
+   step leaves and is cut short with "…" rather than overflow the row. */
+.step-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 14px;
+}
+.step-header-label {
+  flex: 0 1 auto;
+  margin: 0;
+  color: #ef9a78;
+  font-size: 0.875rem;
   font-weight: 500;
 }
-.setup-header-action:hover {
-  color: #f8f1e6;
+.step-header-script {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  color: rgba(248, 241, 230, 0.6);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.step-header-script .script-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 .role-content {
   width: min(1040px, 100%);
@@ -3699,10 +3787,6 @@ header .flow-back:hover {
   }
   .setup-progress i {
     width: 16px;
-  }
-  .setup-header-action {
-    display: block;
-    font-size: 0.75rem;
   }
   .role-content {
     padding: 20px 20px 32px;

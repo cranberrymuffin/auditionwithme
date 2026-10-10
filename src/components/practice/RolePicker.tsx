@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { Step } from "../../types";
 import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
 import { Wordmark } from "../SiteNav";
+import StepHeader from "./StepHeader";
 
 export default function RolePicker({
   characters,
@@ -20,7 +21,6 @@ export default function RolePicker({
   /** Back to step 1, the uploaded script. */
   onBack: () => void;
 }) {
-  const navigate = useNavigate();
   const [selected, setSelected] = useState<string | null>(initialSelected);
   const roleRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -35,13 +35,13 @@ export default function RolePicker({
           <span>Step 2 of 4 · Cast yourself</span>
           <div aria-hidden="true"><i /><i className="is-active" /><i /><i /></div>
         </div>
-        <button onClick={() => navigate("/")} className="setup-header-action">Replace script</button>
       </header>
 
       <section className="role-content">
         <button type="button" className="setup-back" onClick={onBack}><span aria-hidden="true">←</span> Back</button>
+        <StepHeader step={2} title="Cast yourself" scriptName={fileName} />
         <div className="role-intro">
-          <p>{fileName} · {characters.length} {characters.length === 1 ? "role" : "roles"} detected</p>
+          <p>{characters.length} {characters.length === 1 ? "role" : "roles"} detected</p>
           <h1>Choose your role</h1>
           <span>Choose the character you’re rehearsing. We’ll read the other parts.</span>
         </div>

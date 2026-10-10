@@ -100,6 +100,7 @@ export async function updateScript(
   patch: Partial<
     Pick<
       ScriptRecord,
+      | "title"
       | "characterVoices"
       | "characterVolumes"
       | "deliveryTags"
