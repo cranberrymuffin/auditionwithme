@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
 import type { Step } from "../../types";
-import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
-import StepHeader from "./StepHeader";
-import SetupHeader from "./SetupHeader";
+import { dialogueTurnsLabel, spokenLines } from "../../lib/script";
+import SetupStep from "./SetupStep";
+import SetupActions from "./SetupActions";
+import CastGrid, { CastCard } from "./CastGrid";
 
 export default function RolePicker({
   characters,
@@ -23,107 +24,70 @@ export default function RolePicker({
   const [selected, setSelected] = useState<string | null>(initialSelected);
   const roleRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const linesFor = (name: string) =>
-    steps.filter(
-      (step) =>
-        normalizeSpeaker(step.speaker) === name && step.verbalLine.trim(),
-    );
-
   return (
-    <main className="role-page">
-      <SetupHeader step={2} onGoToStep={onGoToStep} />
-
-      <section className="role-content">
-        <StepHeader step={2} title="Cast yourself" scriptName={fileName} />
-
-        <div className="role-intro">
-          <p>
-            {characters.length} {characters.length === 1 ? "role" : "roles"}{" "}
-            detected
-          </p>
-          <h1>Choose your role</h1>
-          <div className="role-secondary">
-            <span>Not rehearsing a role?</span>
-            <button onClick={() => onChoose("")}>
-              Listen to the full scene
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="role-grid"
-          role="radiogroup"
-          aria-label="Choose your role"
-        >
-          {characters.map((character, index) => {
-            const lines = linesFor(character);
-            const excerpt =
-              lines[0]?.verbalLine ?? "No spoken dialogue detected.";
-            const isSelected = selected === character;
-            return (
-              <button
-                key={character}
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                ref={(element) => {
-                  roleRefs.current[index] = element;
-                }}
-                className={`role-option ${isSelected ? "is-selected" : ""}`}
-                onClick={() => setSelected(character)}
-                onKeyDown={(event) => {
-                  if (
-                    ![
-                      "ArrowRight",
-                      "ArrowDown",
-                      "ArrowLeft",
-                      "ArrowUp",
-                    ].includes(event.key)
+    <SetupStep
+      step={2}
+      title="Cast yourself"
+      scriptName={fileName}
+      onGoToStep={onGoToStep}
+    >
+      <div className="role-intro">
+        <h1>Choose your role</h1>
+      </div>
+      <CastGrid
+        items={characters}
+        label="Choose your role"
+        role="radiogroup"
+        renderCard={(character, index) => {
+          const lines = spokenLines(steps, character);
+          const isSelected = selected === character;
+          return (
+            <CastCard
+              key={character}
+              role="radio"
+              aria-checked={isSelected}
+              active={isSelected}
+              mark={isSelected ? "✓" : ""}
+              name={character}
+              detail={dialogueTurnsLabel(lines.length)}
+              quote={lines[0]?.verbalLine ?? "No spoken dialogue detected."}
+              buttonRef={(element) => {
+                roleRefs.current[index] = element;
+              }}
+              onClick={() => setSelected(isSelected ? null : character)}
+              onKeyDown={(event) => {
+                if (
+                  !["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(
+                    event.key,
                   )
-                    return;
-                  event.preventDefault();
-                  const direction =
-                    event.key === "ArrowRight" || event.key === "ArrowDown"
-                      ? 1
-                      : -1;
-                  const next =
-                    (index + direction + characters.length) % characters.length;
-                  setSelected(characters[next]);
-                  roleRefs.current[next]?.focus();
-                }}
-              >
-                <span className="role-radio" aria-hidden="true">
-                  {isSelected ? "✓" : ""}
-                </span>
-                <span className="role-option-copy">
-                  <strong>{character}</strong>
-                  <small>
-                    {lines.length}{" "}
-                    {lines.length === 1 ? "dialogue turn" : "dialogue turns"}
-                  </small>
-                  <q>
-                    {excerpt.length > 120
-                      ? `${excerpt.slice(0, 120)}…`
-                      : excerpt}
-                  </q>
-                </span>
-              </button>
-            );
-          })}
+                )
+                  return;
+                event.preventDefault();
+                const direction =
+                  event.key === "ArrowRight" || event.key === "ArrowDown"
+                    ? 1
+                    : -1;
+                const next =
+                  (index + direction + characters.length) % characters.length;
+                setSelected(characters[next]);
+                roleRefs.current[next]?.focus();
+              }}
+            />
+          );
+        }}
+      />
+      <div className="role-intro">
+        <div className="role-secondary">
+          <span>Not rehearsing a role?</span>
+          <button onClick={() => onChoose("")}>Skip</button>
         </div>
-        <div className="role-actions">
-          <button
-            className="role-continue"
-            disabled={!selected}
-            onClick={() => selected && onChoose(selected)}
-          >
-            {selected
-              ? `Continue as ${displayCharacterName(selected)}`
-              : "Choose a role to continue"}
-            <span>→</span>
-          </button>
-        </div>
-      </section>
-    </main>
+      </div>
+      <SetupActions
+        onBack={() => onGoToStep(1)}
+        nextLabel="Direct your scene"
+        nextDisabled={!selected}
+        onNext={() => selected && onChoose(selected)}
+      />
+    </SetupStep>
   );
 }

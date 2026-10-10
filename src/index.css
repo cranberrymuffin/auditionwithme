@@ -2579,10 +2579,19 @@ header .flow-back:hover {
 .script-accordion .document-panel {
   margin-top: 8px;
 }
+/* Step 3's Show/Hide advanced options: centered under the title. */
+.voice-advanced-accordion .script-accordion-actions {
+  justify-content: center;
+}
 /* Script read: no preview, so the status takes a single centered column. */
 .processing-layout--single {
   grid-template-columns: minmax(0, 640px);
   justify-content: center;
+}
+/* The step's column is narrower than the space it sits in: center it. */
+.processing-layout--single .processing-status {
+  width: 100%;
+  justify-self: center;
 }
 .document-panel {
   min-width: 0;
@@ -2776,16 +2785,17 @@ header .flow-back:hover {
   .processing-layout {
     height: auto;
     min-height: calc(100dvh - 72px);
-    /* Phones start every setup step at the top, not mid-screen. */
-    align-content: start;
-    align-items: start;
+    /* Centered under the header, as on desktop. */
+    align-content: center;
     /* minmax(0, …): the step row's unwrapped name must not widen the page. */
     grid-template-columns: minmax(0, 1fr);
     gap: 34px;
     padding: 48px 22px 36px;
   }
   .processing-status {
+    width: 100%;
     max-width: 620px;
+    justify-self: center;
   }
   .processing-status h1 {
     font-size: clamp(2.5rem, 10vw, 3.25rem);
@@ -2831,33 +2841,6 @@ header .flow-back:hover {
 }
 
 /* Editorial voice direction */
-.voice-setup-page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: auto;
-  background: radial-gradient(
-    ellipse 65% 48% at 50% 42%,
-    #1a2a40 0%,
-    #121f30 54%,
-    #0e1927 100%
-  );
-  color: #f8f1e6;
-}
-.voice-setup-layout {
-  width: min(1120px, 100%);
-  min-height: calc(100vh - 72px);
-  min-height: calc(100dvh - 72px);
-  display: grid;
-  grid-template-columns: minmax(330px, 0.72fr) minmax(500px, 1fr);
-  align-items: center;
-  gap: clamp(55px, 8vw, 120px);
-  margin: auto;
-  padding: clamp(42px, 7vh, 82px) 28px;
-}
-.voice-setup-intro {
-  min-width: 0;
-  max-width: 470px;
-}
 /* Step 1's Replace script: a plain text button. */
 .replace-script {
   display: block;
@@ -2873,42 +2856,6 @@ header .flow-back:hover {
   margin-top: 6px;
   margin-left: auto;
   color: #f5ad8d;
-}
-.voice-setup-intro > p {
-  margin: 0 0 13px;
-  color: rgba(248, 241, 230, 0.62);
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-.voice-setup-intro h1 {
-  max-width: 460px;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(3.5rem, 4.5vw, 4rem);
-  font-weight: 500;
-  line-height: 1.04;
-  letter-spacing: -0.025em;
-}
-.voice-setup-description {
-  max-width: 450px;
-  margin-top: 20px;
-  color: rgba(248, 241, 230, 0.8);
-  font-size: clamp(1rem, 1.2vw, 1.125rem);
-  line-height: 1.58;
-}
-.script-language {
-  margin: clamp(25px, 4vh, 40px) 0 0;
-  padding-top: 15px;
-  border-top: 1px solid rgba(255, 255, 255, 0.16);
-}
-.script-language dt {
-  color: rgba(248, 241, 230, 0.58);
-  font-size: 0.8125rem;
-}
-.script-language dd {
-  margin: 5px 0 0;
-  font-size: 1rem;
-  font-weight: 600;
 }
 .voice-selector-panel {
   min-width: 0;
@@ -2945,52 +2892,6 @@ header .flow-back:hover {
   background: rgba(239, 154, 120, 0.14);
   color: #f3a17e;
 }
-.voice-panel-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 18px;
-}
-.voice-panel-heading p {
-  margin: 0 0 3px;
-  color: rgba(248, 241, 230, 0.62);
-  font-size: 0.8125rem;
-}
-.voice-panel-heading h2 {
-  margin: 0;
-  font-size: clamp(1.35rem, 2vw, 1.55rem);
-  font-weight: 600;
-}
-.voice-panel-heading > span {
-  color: rgba(248, 241, 230, 0.6);
-  font-size: 0.8125rem;
-}
-.selected-voice {
-  position: relative;
-  margin-top: 20px;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  background: rgba(8, 18, 30, 0.38);
-}
-.selected-voice-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-}
-.selected-voice-heading span {
-  color: rgba(248, 241, 230, 0.62);
-  font-size: 0.8125rem;
-}
-.selected-voice-heading strong {
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-.selected-voice > p {
-  margin: 5px 0 0;
-  color: rgba(248, 241, 230, 0.72);
-  font-size: 0.875rem;
-}
 .voice-volume {
   display: flex;
   align-items: center;
@@ -3009,39 +2910,6 @@ header .flow-back:hover {
   text-align: right;
   color: #f8f1e6;
   font-variant-numeric: tabular-nums;
-}
-.voice-preview-button {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 9px;
-  margin-top: 14px;
-  padding: 0 15px;
-  border: 1px solid rgba(239, 154, 120, 0.65);
-  border-radius: 7px;
-  color: #f5ad8d;
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-.voice-preview-button span {
-  font-size: 0.7rem;
-}
-.voice-preview-button:hover,
-.voice-preview-button.is-playing {
-  background: rgba(239, 154, 120, 0.12);
-}
-.voice-preview-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-.selected-voice q {
-  display: block;
-  margin-top: 12px;
-  color: rgba(248, 241, 230, 0.72);
-  font-family: var(--font-display);
-  font-size: 0.875rem;
-  font-style: italic;
-  line-height: 1.45;
 }
 .voice-filter-bar {
   display: flex;
@@ -3103,52 +2971,41 @@ header .flow-back:hover {
 .voice-setup-filters select:focus {
   border-color: #ef9a78;
 }
-.voice-filter-empty {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border-radius: 7px;
-  background: rgba(239, 154, 120, 0.1);
-  color: rgba(248, 241, 230, 0.82);
-  font-size: 0.8125rem;
-  line-height: 1.45;
+/* Changed because of a pick in another filter: flashes coral, then fades. */
+.voice-setup-filters .is-changed select {
+  animation: filter-changed 1.6s ease-out;
 }
-.voice-advanced {
-  margin-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-.voice-advanced summary {
-  display: flex;
-  min-height: 44px;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  color: rgba(248, 241, 230, 0.85);
-  font-size: 0.875rem;
-  font-weight: 600;
-  list-style: none;
-}
-.voice-advanced summary::-webkit-details-marker {
-  display: none;
-}
-.voice-advanced summary small {
+.voice-setup-filters .is-changed > span {
   color: #f3a17e;
-  font-size: 0.75rem;
-  font-weight: 500;
 }
-.voice-advanced summary span {
-  margin-left: auto;
-  color: #ef9a78;
-  font-size: 1.1rem;
-  transition: transform 0.2s ease;
+@keyframes filter-changed {
+  from {
+    border-color: #ef9a78;
+    background: rgba(239, 154, 120, 0.18);
+  }
 }
-.voice-advanced[open] summary span {
-  transform: rotate(45deg);
+@media (prefers-reduced-motion: reduce) {
+  .voice-setup-filters .is-changed select {
+    animation: none;
+    border-color: #ef9a78;
+  }
 }
-.voice-advanced[open] {
-  padding-bottom: 16px;
+.voice-advanced-panel {
+  padding: 4px 0 16px;
 }
-.voice-advanced .voice-filter-bar {
+/* Under the filters: the card's play button and quote, to hear the voice
+   just picked. Laid out like the card's. */
+.voice-advanced-preview {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 14px;
+  align-items: center;
+  margin-top: 16px;
+}
+.voice-advanced-preview .role-option-copy q {
+  margin-top: 0;
+}
+.voice-advanced-panel .voice-filter-bar {
   margin-top: 18px;
 }
 .voice-advanced-voice {
@@ -3170,38 +3027,6 @@ header .flow-back:hover {
 }
 .voice-advanced-voice select:focus {
   border-color: #ef9a78;
-}
-.start-rehearsal {
-  display: flex;
-  width: 100%;
-  min-height: 50px;
-  align-items: center;
-  justify-content: center;
-  gap: 11px;
-  margin-top: 22px;
-  border: 1px solid rgba(255, 205, 183, 0.58);
-  border-radius: 9px;
-  background: linear-gradient(135deg, #f4a583, #e98464);
-  box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  color: #101a28;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  transition:
-    transform 0.2s ease,
-    filter 0.2s ease;
-}
-.start-rehearsal:hover {
-  filter: brightness(1.04);
-  transform: translateY(-1px);
-}
-.start-rehearsal:disabled {
-  cursor: not-allowed;
-  border-color: transparent;
-  background: rgba(248, 241, 230, 0.1);
-  box-shadow: none;
-  color: rgba(248, 241, 230, 0.4);
 }
 .preparing-panel > header p {
   margin: 0 0 3px;
@@ -3321,24 +3146,6 @@ header .flow-back:hover {
 }
 
 @media (max-width: 850px) {
-  .voice-setup-layout {
-    min-height: calc(100dvh - 66px);
-    align-content: start;
-    align-items: start;
-    /* minmax(0, …): the step row's unwrapped name must not widen the page. */
-    grid-template-columns: minmax(0, 1fr);
-    gap: 30px;
-    padding: 30px 20px 40px;
-  }
-  .voice-setup-intro {
-    max-width: 650px;
-  }
-  .voice-setup-intro h1 {
-    font-size: clamp(2.5rem, 10vw, 3.25rem);
-  }
-  .script-language {
-    margin-top: 20px;
-  }
   .voice-selector-panel {
     padding: 18px;
   }
@@ -3348,11 +3155,6 @@ header .flow-back:hover {
   .voice-setup-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .voice-panel-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-  }
   .voice-filter-bar > div {
     align-items: flex-start;
     flex-direction: column;
@@ -3361,78 +3163,13 @@ header .flow-back:hover {
 }
 
 @media (max-height: 760px) and (min-width: 851px) {
-  .voice-setup-layout {
-    padding-top: 24px;
-    padding-bottom: 24px;
-  }
-  .voice-setup-intro h1 {
-    font-size: 3.25rem;
-  }
-  .voice-setup-description {
-    margin-top: 13px;
-  }
-  .script-language {
-    margin-top: 16px;
-  }
   .voice-selector-panel {
     padding-top: 18px;
     padding-bottom: 18px;
   }
-  .selected-voice {
-    margin-top: 13px;
-    padding-top: 14px;
-    padding-bottom: 14px;
-  }
-  .voice-preview-button {
-    margin-top: 9px;
-  }
-  .selected-voice q {
-    display: none;
-  }
-  .voice-advanced {
-    margin-top: 12px;
-  }
-  .start-rehearsal {
-    margin-top: 14px;
-  }
 }
 
 /* Editorial role-casting state */
-.role-page {
-  position: relative;
-  min-height: 100vh;
-  min-height: 100dvh;
-  overflow: auto;
-  background: radial-gradient(
-    ellipse 70% 48% at 50% 38%,
-    #1a2a40 0%,
-    #121f30 50%,
-    #0e1927 100%
-  );
-  color: #f8f1e6;
-}
-.role-page::before {
-  content: "";
-  position: fixed;
-  inset: 72px 0 auto;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(239, 154, 120, 0.42),
-    transparent
-  );
-  opacity: 0.55;
-}
-.role-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.11;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
-}
 .setup-header {
   position: sticky;
   top: 0;
@@ -3527,11 +3264,6 @@ header .flow-back:hover {
   white-space: nowrap;
   vertical-align: bottom;
 }
-.role-content {
-  width: min(1040px, 100%);
-  margin: 0 auto;
-  padding: clamp(90px, 13vh, 140px) 28px 48px;
-}
 .role-intro {
   max-width: 680px;
   margin: 0 auto;
@@ -3559,16 +3291,36 @@ header .flow-back:hover {
   font-size: clamp(1.0625rem, 1.3vw, 1.125rem);
   line-height: 1.55;
 }
+/* Two rows at most, split evenly and laid like bricks: the second row
+   sits half a card in. Past two cards a row, the rows scroll sideways. */
 .role-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-  margin: 32px auto 0;
+  --role-gap: 18px;
+  container-type: inline-size;
+  overflow-x: auto;
+  /* Room for a card's hover lift and shadow, which the scroller would clip. */
+  margin: 26px 0 0;
+  padding: 6px 0 0;
 }
-.role-grid .role-option:only-child {
-  width: min(520px, 100%);
-  grid-column: 1/-1;
-  justify-self: center;
+.role-rows {
+  display: grid;
+  gap: var(--role-gap);
+  width: max-content;
+  margin: 0 auto;
+}
+.role-row {
+  display: flex;
+  gap: var(--role-gap);
+}
+.role-row + .role-row {
+  margin-left: calc((100cqw - var(--role-gap)) / 4 + var(--role-gap) / 2);
+}
+.role-row .role-option {
+  width: calc((100cqw - var(--role-gap)) / 2);
+  flex: none;
+}
+/* A lone role takes the whole column. */
+.role-row:only-child .role-option:only-child {
+  width: 100cqw;
 }
 .role-option {
   position: relative;
@@ -3629,6 +3381,15 @@ header .flow-back:hover {
   border-color: #ef9a78;
   background: #ef9a78;
 }
+/* Step 3's play button: outline and icon one color, never filled. */
+.role-option--play .role-radio {
+  border-color: currentColor;
+  color: rgba(248, 241, 230, 0.75);
+}
+.role-option--play.is-selected .role-radio {
+  background: none;
+  color: #ef9a78;
+}
 .role-option-copy {
   min-width: 0;
 }
@@ -3658,7 +3419,6 @@ header .flow-back:hover {
   -webkit-line-clamp: 2;
 }
 .role-secondary {
-  margin-top: 24px;
   color: rgba(248, 241, 230, 0.62);
   font-size: 0.875rem;
 }
@@ -3674,84 +3434,13 @@ header .flow-back:hover {
 .role-secondary button:hover {
   color: #f3a17e;
 }
+/* Same row as step 1's: Back on the left, the next step on the right. */
 .role-actions {
-  display: flex;
-  justify-content: flex-end;
   margin-top: 14px;
 }
-.role-continue {
-  position: relative;
-  display: flex;
-  min-width: 245px;
-  min-height: 52px;
-  align-items: center;
-  justify-content: center;
-  gap: 13px;
-  overflow: hidden;
-  padding: 0 22px;
-  border: 1px solid rgba(255, 205, 183, 0.64);
-  border-radius: 11px;
-  background: linear-gradient(135deg, #f4a583 0%, #ed8f6d 55%, #e47e60 100%);
-  box-shadow:
-    0 10px 24px rgba(6, 13, 22, 0.28),
-    0 5px 16px rgba(228, 126, 96, 0.13),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-    inset 0 -1px 0 rgba(124, 49, 31, 0.12);
-  color: #101a28;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
-}
-.role-continue::after {
-  content: "";
-  position: absolute;
-  inset: 1px 10% auto;
-  height: 1px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.48),
-    transparent
-  );
-}
-.role-continue:not(:disabled):hover {
-  filter: brightness(1.045) saturate(1.04);
-  transform: translateY(-2px);
-  box-shadow:
-    0 14px 28px rgba(6, 13, 22, 0.32),
-    0 7px 20px rgba(228, 126, 96, 0.17),
-    inset 0 1px 0 rgba(255, 255, 255, 0.36),
-    inset 0 -1px 0 rgba(124, 49, 31, 0.1);
-}
-.role-continue:not(:disabled):active {
-  filter: brightness(0.99);
-  transform: translateY(0);
-  box-shadow:
-    0 5px 12px rgba(6, 13, 22, 0.25),
-    inset 0 1px 2px rgba(83, 34, 23, 0.14);
-}
-.role-continue:disabled {
+.script-accordion-toggle:disabled {
   cursor: not-allowed;
-  border-color: rgba(248, 241, 230, 0.08);
-  background: rgba(248, 241, 230, 0.1);
-  box-shadow: none;
   color: rgba(248, 241, 230, 0.42);
-}
-.role-continue:disabled::after {
-  display: none;
-}
-.role-continue span {
-  margin-left: 2px;
-  color: rgba(16, 26, 40, 0.82);
-  font-size: 1.08rem;
-  transition: transform 0.2s ease;
-}
-.role-continue:not(:disabled):hover span {
-  transform: translateX(3px);
 }
 
 @media (max-width: 760px) {
@@ -3764,12 +3453,8 @@ header .flow-back:hover {
   .step-bar {
     width: 16px;
   }
-  .role-content {
-    padding: 20px 20px 32px;
-  }
   .role-intro {
     margin-top: 16px;
-    text-align: left;
   }
   .role-intro h1 {
     font-size: clamp(2.25rem, 11vw, 2.75rem);
@@ -3778,27 +3463,30 @@ header .flow-back:hover {
     margin-top: 12px;
     font-size: 1rem;
   }
+  /* Phones: one column that grows downward, no sideways scroll. */
   .role-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    margin-top: 26px;
+    --role-gap: 14px;
+    overflow-x: visible;
+  }
+  .role-rows {
+    width: auto;
+  }
+  .role-row {
+    flex-direction: column;
+  }
+  .role-row + .role-row {
+    margin-left: 0;
+  }
+  .role-row .role-option {
+    width: auto;
   }
   .role-option {
     min-height: 132px;
     padding: 20px;
   }
-  .role-continue {
-    min-height: 52px;
-    min-width: 0;
-    width: 100%;
-  }
 }
 
 @media (min-width: 761px) and (max-height: 760px) {
-  .role-content {
-    padding-top: 20px;
-    padding-bottom: 24px;
-  }
   .role-intro {
     margin-top: 8px;
   }
@@ -3806,7 +3494,7 @@ header .flow-back:hover {
     font-size: 3.25rem;
   }
   .role-grid {
-    margin-top: 24px;
+    margin-top: 18px;
   }
   .role-option {
     min-height: 126px;
@@ -3816,15 +3504,11 @@ header .flow-back:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .role-option,
-  .role-continue,
-  .role-continue::before,
-  .role-continue span {
+  .role-option {
     transition: none;
   }
   .role-option:hover,
-  .role-option.is-selected,
-  .role-continue:not(:disabled):hover {
+  .role-option.is-selected {
     transform: none;
   }
 }

@@ -1,4 +1,6 @@
 import { apiFetch } from "./api";
+import type { Step } from "../types";
+import { normalizeSpeaker } from "./speaker";
 
 export type Voice = {
   id: string;
@@ -30,6 +32,16 @@ export function displayCharacterName(name: string): string {
 }
 
 export { normalizeSpeaker } from "./speaker";
+
+/** The steps a character speaks a line in, in script order. */
+export function spokenLines(steps: Step[], speaker: string): Step[] {
+  return steps.filter((step) => normalizeSpeaker(step.speaker) === speaker && step.verbalLine.trim());
+}
+
+/** "1 dialogue turn", "16 dialogue turns". */
+export function dialogueTurnsLabel(count: number): string {
+  return `${count} ${count === 1 ? "dialogue turn" : "dialogue turns"}`;
+}
 
 /**
  * Fallback for a line that stalled short of a full countMatchedWords match

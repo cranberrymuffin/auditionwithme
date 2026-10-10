@@ -21,7 +21,11 @@ import { leadingDirections } from "../lib/delivery";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 import { loadUpload, peekUpload } from "../lib/pendingUpload";
-import { hasScriptPdf, loadScriptPdf, saveScriptPdf } from "../lib/scriptPdfStore";
+import {
+  hasScriptPdf,
+  loadScriptPdf,
+  saveScriptPdf,
+} from "../lib/scriptPdfStore";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
 
 // Passed via navigate("/practice", { state: { replayScript } }) from My
@@ -65,7 +69,12 @@ const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
 
 // Each wizard step has its own URL, so Back/Forward, reloads and the
 // address bar all agree on where the actor is (MDN, History API).
-const STEP_PATHS = ["/practice", "/practice/role", "/practice/voices", "/practice/rehearse"];
+const STEP_PATHS = [
+  "/practice",
+  "/practice/role",
+  "/practice/voices",
+  "/practice/rehearse",
+];
 const stepFromPath = (pathname: string) => {
   const index = STEP_PATHS.indexOf(pathname.replace(/\/+$/, ""));
   return index === -1 ? 0 : index;
@@ -84,8 +93,12 @@ export default function Practice() {
  * Auditions. */
 function PracticeSession() {
   const location = useLocation();
-  const [uploadId] = useState<string | null>(() => location.state?.uploadId ?? null);
-  const [savedScriptId] = useState<string | null>(() => location.state?.replayScript?.id ?? null);
+  const [uploadId] = useState<string | null>(
+    () => location.state?.uploadId ?? null,
+  );
+  const [savedScriptId] = useState<string | null>(
+    () => location.state?.replayScript?.id ?? null,
+  );
   const [upload, setUpload] = useState<{ file: File | null } | null>(() => {
     if (uploadId) {
       const file = peekUpload(uploadId);
@@ -114,12 +127,18 @@ function PracticeSession() {
 }
 
 // The steps' names, as the step counters show them.
-const STEP_TITLES = ["Rehearsal setup", "Cast yourself", "Direct your scene partners", "Rehearsal"];
+const STEP_TITLES = [
+  "Rehearsal setup",
+  "Cast yourself",
+  "Direct your scene partners",
+  "Rehearsal",
+];
 
 function PracticeFlow({ file }: { file: File | null }) {
   const startRehearsal = useStartRehearsal();
   // Step 1's Replace script: a new upload, in place of this one.
-  const replaceScript = (next: File) => void startRehearsal(next, { replace: true });
+  const replaceScript = (next: File) =>
+    void startRehearsal(next, { replace: true });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -131,8 +150,7 @@ function PracticeFlow({ file }: { file: File | null }) {
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = entryState?.rehearsalGrant ?? null;
-  const replayScript: ReplayScript | null =
-    entryState?.replayScript ?? null;
+  const replayScript: ReplayScript | null = entryState?.replayScript ?? null;
   // Home.tsx already hashed this upload for its saved-script lookup.
   const uploadContentHash: string | null = entryState?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
@@ -286,7 +304,10 @@ function PracticeFlow({ file }: { file: File | null }) {
       languageCode: replayScript.languageCode,
       languageName: replayScript.languageName,
     });
-    if (replayScript.characterVoices && Object.keys(replayScript.characterVoices).length) {
+    if (
+      replayScript.characterVoices &&
+      Object.keys(replayScript.characterVoices).length
+    ) {
       setCharacterVoices(replayScript.characterVoices);
     }
     if (replayScript.characterVolumes) {
@@ -296,7 +317,10 @@ function PracticeFlow({ file }: { file: File | null }) {
     // the director effect below re-runs with the current prompt (and the
     // persist effect overwrites the row). The scene reads unadorned until
     // the new tags land, exactly as on a fresh parse.
-    if (replayScript.deliveryTags && replayScript.directorVersion === DIRECTOR_VERSION) {
+    if (
+      replayScript.deliveryTags &&
+      replayScript.directorVersion === DIRECTOR_VERSION
+    ) {
       setDeliveryTags(replayScript.deliveryTags);
     }
     if (replayScript.rolesRead) setRolesRead(replayScript.rolesRead);
@@ -511,7 +535,8 @@ function PracticeFlow({ file }: { file: File | null }) {
           tags?: (string | null)[];
           error?: string;
         };
-        if (!response.ok) throw new Error(data.error || "Line direction failed");
+        if (!response.ok)
+          throw new Error(data.error || "Line direction failed");
         if (!cancelled && Array.isArray(data.tags)) setDeliveryTags(data.tags);
       } catch (err) {
         console.error("Line direction error:", err);
@@ -529,12 +554,16 @@ function PracticeFlow({ file }: { file: File | null }) {
   useEffect(() => {
     if (!user || !scriptId || !deliveryTags || persistedTagsRef.current) return;
     persistedTagsRef.current = true;
-    if (replayScript?.deliveryTags && replayScript.directorVersion === DIRECTOR_VERSION) {
+    if (
+      replayScript?.deliveryTags &&
+      replayScript.directorVersion === DIRECTOR_VERSION
+    ) {
       return; // current tags already stored on the row
     }
-    void updateScript(scriptId, { deliveryTags, directorVersion: DIRECTOR_VERSION }).catch((err) =>
-      console.error("Failed to save delivery tags:", err),
-    );
+    void updateScript(scriptId, {
+      deliveryTags,
+      directorVersion: DIRECTOR_VERSION,
+    }).catch((err) => console.error("Failed to save delivery tags:", err));
   }, [user, scriptId, deliveryTags, replayScript]);
 
   // Full voice catalog, so the user can override auto-assigned voices
@@ -642,15 +671,9 @@ function PracticeFlow({ file }: { file: File | null }) {
         }
         grant = lateGrantRef.current = body.grant;
       }
-      const result = await parseScannedPdf(
-        file,
-        grant,
-        undefined,
-        undefined,
-        {
-          preferOriginalLanguage: true,
-        },
-      );
+      const result = await parseScannedPdf(file, grant, undefined, undefined, {
+        preferOriginalLanguage: true,
+      });
       cacheParse(result, false);
       // Same continue-gate as the initial parse — this path takes minutes, so
       // the user may have stepped away; don't jump into casting unprompted.
@@ -709,7 +732,8 @@ function PracticeFlow({ file }: { file: File | null }) {
 
   // The name shown for this script everywhere in the flow: a rename, else
   // the saved title, else the uploaded file's name.
-  const scriptName = scriptTitle ?? replayScript?.title ?? file?.name ?? "Rehearsal";
+  const scriptName =
+    scriptTitle ?? replayScript?.title ?? file?.name ?? "Rehearsal";
   // Saved once the script has its record (the parse saves it as it lands,
   // so a rename made just before still gets there).
   useEffect(() => {
@@ -727,7 +751,9 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (!user || !scriptId || !file) return;
     let active = true;
     void hasScriptPdf(scriptId)
-      .then((stored) => (stored || !active ? undefined : saveScriptPdf(scriptId, file)))
+      .then((stored) =>
+        stored || !active ? undefined : saveScriptPdf(scriptId, file),
+      )
       .catch((err) => console.warn("Couldn't keep the script's PDF:", err));
     return () => {
       active = false;
@@ -763,10 +789,17 @@ function PracticeFlow({ file }: { file: File | null }) {
   // (parsing, its finished preview, or anything before a role can be
   // picked), 1 RolePicker, 2 VoiceCasting, 3 Rehearsal.
   const wizardStep =
-    loading || pendingParse || reviewingUpload || error || languageChoice || steps.length === 0
+    loading ||
+    pendingParse ||
+    reviewingUpload ||
+    error ||
+    languageChoice ||
+    steps.length === 0
       ? 0
       : selectedRole === null
-        ? characters.length > 0 ? 1 : 0
+        ? characters.length > 0
+          ? 1
+          : 0
         : !voicesConfirmed && voiceableSpeakers.length > 0
           ? 2
           : 3;
@@ -870,7 +903,9 @@ function PracticeFlow({ file }: { file: File | null }) {
           wizardStep === 3 &&
           recordingActiveRef.current &&
           !confirmed &&
-          !window.confirm("You have unsaved changes. Are you sure you want to leave?")
+          !window.confirm(
+            "You have unsaved changes. Are you sure you want to leave?",
+          )
         ) {
           // Stay on the take: put its entry back.
           targetStepRef.current = null;
@@ -899,7 +934,8 @@ function PracticeFlow({ file }: { file: File | null }) {
     if (wizardStep === historyStep) return;
     const first = !movedOnceRef.current;
     movedOnceRef.current = true;
-    if (wizardStep > historyStep) goToStepUrl(wizardStep, first && !hasUploadStep);
+    if (wizardStep > historyStep)
+      goToStepUrl(wizardStep, first && !hasUploadStep);
     else goToStepUrl(wizardStep, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
   }, [wizardStep, historyStep]);
@@ -923,7 +959,14 @@ function PracticeFlow({ file }: { file: File | null }) {
     } else fallback();
   };
 
-  if (loading) return <ParsingScreen file={file!} phase={processingPhase} onReplace={replaceScript} />;
+  if (loading)
+    return (
+      <ParsingScreen
+        file={file!}
+        phase={processingPhase}
+        onReplace={replaceScript}
+      />
+    );
   if (pendingParse) {
     return (
       <ParsingScreen
@@ -1070,7 +1113,6 @@ function PracticeFlow({ file }: { file: File | null }) {
         onStart={beginPreparing}
         onStartAnyway={startReading}
         languageCode={scriptLanguage.code}
-        languageName={scriptLanguage.name}
         onGoToStep={goToStep}
       />
     );
