@@ -266,6 +266,8 @@ header .flow-back:hover {
   height: auto;
   min-height: 100dvh;
   overflow: visible;
+  /* The backdrop's slight scale-up mustn't add a sideways scroll. */
+  overflow-x: clip;
 }
 .home-page .cinematic-backdrop {
   height: 100dvh;
@@ -507,6 +509,11 @@ header .flow-back:hover {
   color: #f2a080;
 }
 
+/* The landing header shares the hero's side margins, so the logo sits on
+   the same left edge as the headline. */
+.home-page .site-nav {
+  padding-inline: clamp(22px, 7vw, 108px);
+}
 .hero-editorial {
   min-height: calc(100dvh - clamp(68px, 10vh, 92px));
   display: flex;
@@ -999,6 +1006,9 @@ header .flow-back:hover {
   .site-nav {
     height: 66px;
     padding: 0 18px;
+  }
+  .home-page .site-nav {
+    padding-inline: 22px;
   }
   .site-nav-links {
     display: none;
@@ -2538,6 +2548,35 @@ header .flow-back:hover {
   width: 36px;
   height: 36px;
   border-radius: 8px;
+}
+/* The site header's brand: the icon with the name beside it, so it reads
+   as a logo rather than a stray app icon. */
+.site-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-wordmark {
+  color: #fff8ed;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .site-nav-brand {
+    gap: 10px;
+  }
+  .brand-wordmark {
+    font-size: 1.0625rem;
+  }
+}
+/* Too narrow for the name beside Start free and the menu: icon only. */
+@media (max-width: 380px) {
+  .brand-wordmark {
+    display: none;
+  }
 }
 .display-title {
   font-family: var(--font-display);

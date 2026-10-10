@@ -198,8 +198,11 @@ export default function SiteNav() {
 
   return (
     <nav className="site-nav" aria-label="Main">
-      <Link to="/" aria-label="AuditionWithMe home">
+      <Link to="/" className="site-nav-brand" aria-label="Audition With Me home">
         <BrandMark />
+        <span className="brand-wordmark" aria-hidden="true">
+          Audition With Me
+        </span>
       </Link>
 
       <div className="site-nav-links">
