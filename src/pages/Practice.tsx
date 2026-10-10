@@ -13,7 +13,12 @@ import { useToast } from "../lib/toast";
 import { apiFetch } from "../lib/api";
 import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
-import { saveScript, updateScript } from "../lib/scriptStore";
+import {
+  findSavedScript,
+  saveScript,
+  toReplayScript,
+  updateScript,
+} from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { createParseCache, type CachedParseFields } from "../lib/parseCache";
 import { DIRECTOR_VERSION } from "../lib/director";
@@ -93,11 +98,15 @@ export default function Practice() {
  * Auditions. */
 function PracticeSession() {
   const location = useLocation();
+  const { user } = useAuth();
   const [uploadId] = useState<string | null>(
     () => location.state?.uploadId ?? null,
   );
   const [savedScriptId] = useState<string | null>(
     () => location.state?.replayScript?.id ?? null,
+  );
+  const [contentHash] = useState<string | null>(
+    () => location.state?.contentHash ?? null,
   );
   const [upload, setUpload] = useState<{ file: File | null } | null>(() => {
     if (uploadId) {
@@ -106,6 +115,13 @@ function PracticeSession() {
     }
     return savedScriptId ? null : { file: null };
   });
+  // The script as saved now, not as history state remembers it: after a
+  // reload, a fresh upload's parse (and any casting and direction since) is
+  // on its saved row, so the session picks up from there instead of paying
+  // for the parse, casting and director calls again. undefined = looking.
+  const [saved, setSaved] = useState<ReplayScript | null | undefined>(() =>
+    savedScriptId || contentHash ? undefined : null,
+  );
   useEffect(() => {
     if (upload) return;
     let active = true;
@@ -121,9 +137,22 @@ function PracticeSession() {
       active = false;
     };
   }, [upload, uploadId, savedScriptId]);
+  useEffect(() => {
+    if (saved !== undefined || !user) return;
+    let active = true;
+    void findSavedScript(user.id, { id: savedScriptId, contentHash })
+      .catch(() => null)
+      .then((script) => {
+        if (active) setSaved(script ? toReplayScript(script) : null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [saved, user, savedScriptId, contentHash]);
 
-  if (!upload) return <div className="cinematic-page" aria-busy="true" />;
-  return <PracticeFlow file={upload.file} />;
+  if (!upload || saved === undefined)
+    return <div className="cinematic-page" aria-busy="true" />;
+  return <PracticeFlow file={upload.file} saved={saved} />;
 }
 
 // The steps' names, as the step counters show them.
@@ -134,7 +163,15 @@ const STEP_TITLES = [
   "Get ready",
 ];
 
-function PracticeFlow({ file }: { file: File | null }) {
+function PracticeFlow({
+  file,
+  saved,
+}: {
+  file: File | null;
+  /** This script's saved row, when it has one already (a replay, or a
+   * reload after the parse landed). */
+  saved: ReplayScript | null;
+}) {
   const startRehearsal = useStartRehearsal();
   // Step 1's Replace script: a new upload, in place of this one.
   const replaceScript = (next: File) =>
@@ -150,7 +187,15 @@ function PracticeFlow({ file }: { file: File | null }) {
   // parse call below (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = entryState?.rehearsalGrant ?? null;
-  const replayScript: ReplayScript | null = entryState?.replayScript ?? null;
+  const replayScript: ReplayScript | null =
+    saved ?? entryState?.replayScript ?? null;
+  // A reload mid-flow lands back on the step its URL names: the role picked
+  // then rides along in history state (see goToStepUrl).
+  const [resumeStep] = useState(() =>
+    replayScript ? stepFromPath(location.pathname) : 0,
+  );
+  const resumeRole: string | null =
+    typeof entryState?.chosenRole === "string" ? entryState.chosenRole : null;
   // Home.tsx already hashed this upload for its saved-script lookup.
   const uploadContentHash: string | null = entryState?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
@@ -327,8 +372,18 @@ function PracticeFlow({ file }: { file: File | null }) {
       setRoleDraft(presetRole || null);
       setSelectedRole(presetRole);
       setVoicesConfirmed(true);
+    } else if (resumeStep >= 2 && resumeRole !== null) {
+      chosenRoleRef.current = resumeRole;
+      setRoleDraft(resumeRole || null);
+      setSelectedRole(resumeRole);
+      // Back on step 4 only with the cast that was confirmed for it saved.
+      const voices = replayScript.characterVoices ?? {};
+      const castSaved = replayScript.characters
+        .filter((name) => name !== resumeRole)
+        .every((name) => voices[name]);
+      if (resumeStep === 3 && castSaved) setVoicesConfirmed(true);
     }
-  }, [replayScript, hasPresetRole, presetRole]);
+  }, [replayScript, hasPresetRole, presetRole]); // eslint-disable-line react-hooks/exhaustive-deps -- resume is read once
 
   useEffect(() => {
     if (replayScript) return;
@@ -745,7 +800,11 @@ function PracticeFlow({ file }: { file: File | null }) {
   // A script parsed before (re-uploaded, or reopened from My Auditions)
   // opens here too, already complete — every rehearsal starts at step 1.
   const [reviewingUpload, setReviewingUpload] = useState(
-    () => !!replayScript && !hasPresetRole && !replayScript.needsLanguageChoice,
+    () =>
+      !!replayScript &&
+      !hasPresetRole &&
+      !replayScript.needsLanguageChoice &&
+      resumeStep === 0,
   );
   // The role last picked, so Forward can re-pick it ("" — listen to the
   // whole scene — is a real choice, unlike roleDraft's null).
@@ -807,6 +866,9 @@ function PracticeFlow({ file }: { file: File | null }) {
   // The step history asked for, while the screen catches up to it.
   const targetStepRef = useRef<number | null>(null);
   const movedOnceRef = useRef(false);
+  // Reloaded mid-flow: the saved script lands a render after mount, so leave
+  // the URL alone until it has, rather than rewinding it to the upload.
+  const resumingRef = useRef(resumeStep > 0);
   // A take in progress, reported by Rehearsal. Leaving through history
   // can't be cancelled (beforeunload doesn't fire for it), so it's
   // confirmed by hand below.
@@ -820,7 +882,12 @@ function PracticeFlow({ file }: { file: File | null }) {
     selfNavRef.current = true;
     const state = locationStateRef.current;
     const practiceIndex = (state?.practiceIndex ?? 0) + (replace ? 0 : 1);
-    navigate(STEP_PATHS[step], { replace, state: { ...state, practiceIndex } });
+    // Steps past the role picker remember it, for a reload to resume with.
+    const chosenRole = step >= 2 ? selectedRole : undefined;
+    navigate(STEP_PATHS[step], {
+      replace,
+      state: { ...state, practiceIndex, chosenRole },
+    });
   };
 
   const showEarlierStep = (target: number) => {
@@ -861,6 +928,10 @@ function PracticeFlow({ file }: { file: File | null }) {
   };
 
   useEffect(() => {
+    if (resumingRef.current) {
+      if (steps.length === 0) return;
+      resumingRef.current = false;
+    }
     const historyMoved = prevHistoryStepRef.current !== historyStep;
     prevHistoryStepRef.current = historyStep;
     if (historyMoved) {
@@ -916,7 +987,7 @@ function PracticeFlow({ file }: { file: File | null }) {
       goToStepUrl(wizardStep, first && !hasUploadStep);
     else goToStepUrl(wizardStep, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
-  }, [wizardStep, historyStep]);
+  }, [wizardStep, historyStep, steps.length]);
 
   /** The header's step bars: back to an earlier setup step (1-based).
    * Through history when the entries are there (so Back/Forward stay in

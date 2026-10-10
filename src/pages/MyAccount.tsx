@@ -13,6 +13,7 @@ import {
 import {
   deleteScript as deleteScriptRecord,
   listScripts,
+  toReplayScript,
 } from "../lib/scriptStore";
 import { displayCharacterName } from "../lib/script";
 import { useToast } from "../lib/toast";
@@ -119,33 +120,18 @@ export default function MyAccount() {
     setExpandedTapeId(openTapeId);
   }, [location.state, selfTapes]);
 
-  const replayScriptFor = (script: SavedScript) => ({
-    id: script.id,
-    title: script.title,
-    steps: script.steps,
-    characters: script.characters,
-    languageCode: script.language_code,
-    languageName: script.language_name,
-    characterVoices: script.character_voices,
-    characterVolumes: script.character_volumes,
-    deliveryTags: script.delivery_tags,
-    directorVersion: script.director_version,
-    rolesRead: script.roles_read,
-    needsLanguageChoice: script.needs_language_choice,
-  });
-
   // Jumps straight into Rehearsal as a role already read before, reusing its
   // saved cast — no RolePicker/VoiceCasting detour.
   const practiceAsRole = (script: SavedScript, role: string) => {
     navigate("/practice", {
-      state: { replayScript: replayScriptFor(script), selectedRole: role },
+      state: { replayScript: toReplayScript(script), selectedRole: role },
     });
   };
 
   // Recast (or the very first practice on this script): RolePicker, then
   // VoiceCasting if there's anyone else to voice.
   const practice = (script: SavedScript) => {
-    navigate("/practice", { state: { replayScript: replayScriptFor(script) } });
+    navigate("/practice", { state: { replayScript: toReplayScript(script) } });
   };
 
   const scrollToScript = (scriptId: string) => {
