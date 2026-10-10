@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import PasswordField from "../components/PasswordField";
 import { supabase } from "../lib/supabase";
+import { friendlyAuthError } from "../lib/authErrors";
 
 type RedirectState = { from?: { pathname?: string }; intent?: string } | null;
 
@@ -30,7 +32,7 @@ export default function Login() {
     });
     if (signInError) {
       setSubmitting(false);
-      setError(signInError.message);
+      setError(friendlyAuthError(signInError, "log in"));
       return;
     }
     navigate(destination, {
@@ -66,15 +68,18 @@ export default function Login() {
             onChange={(event) => setEmail(event.target.value)}
           />
 
-          <label htmlFor="login-password">Password</label>
-          <input
+          <PasswordField
             id="login-password"
-            type="password"
+            label="Password"
             value={password}
             autoComplete="current-password"
-            required
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={setPassword}
           />
+          <p className="auth-forgot">
+            <Link to="/forgot-password" state={{ email }}>
+              Forgot password?
+            </Link>
+          </p>
 
           {error && (
             <p className="auth-error" role="alert">

@@ -1,8 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import NdaModal from "../components/NdaModal";
+import PasswordField from "../components/PasswordField";
+import { friendlyAuthError } from "../lib/authErrors";
 import { IS_BETA_TESTING } from "../lib/beta";
 import { supabase } from "../lib/supabase";
 
@@ -16,6 +18,32 @@ export default function Signup() {
   const [submitting, setSubmitting] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [showNda, setShowNda] = useState(false);
+  // Resend on the "check your email" screen, rate-limited client-side to
+  // match Supabase's own per-address cooldown.
+  const [resendIn, setResendIn] = useState(0);
+  const [resendNotice, setResendNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const timer = setTimeout(() => setResendIn((seconds) => seconds - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendIn]);
+
+  async function resendConfirmation() {
+    setResendNotice(null);
+    setError(null);
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/login` },
+    });
+    if (resendError) {
+      setError(friendlyAuthError(resendError, "sign up"));
+      return;
+    }
+    setResendNotice("Sent again. Check your inbox and spam folder.");
+    setResendIn(60);
+  }
 
   // The form itself just validates email/password and opens the NDA modal
   // -- account creation happens from there, in handleAcceptAndCreateAccount,
@@ -48,7 +76,7 @@ export default function Signup() {
     setShowNda(false);
 
     if (signUpError) {
-      setError(signUpError.message);
+      setError(friendlyAuthError(signUpError, "sign up"));
       return;
     }
 
@@ -63,6 +91,7 @@ export default function Signup() {
     }
 
     setAccountCreated(true);
+    setResendIn(60);
   }
 
   return (
@@ -85,17 +114,43 @@ export default function Signup() {
             <div className="auth-success" role="status">
               <h1>Check your email to confirm your account.</h1>
               <p>
-                We sent a confirmation link to {email}. Click it, then{" "}
+                We sent a confirmation link to{" "}
+                <span className="auth-email">{email}</span>. Click it, then{" "}
                 <Link to="/login" state={location.state}>
                   log in
                 </Link>{" "}
                 to continue.
               </p>
+              <div className="auth-success-actions">
+                <Link to="/login" state={location.state} className="btn-primary-link">
+                  Go to log in
+                </Link>
+                <button
+                  type="button"
+                  className="auth-secondary-button"
+                  disabled={resendIn > 0}
+                  onClick={() => void resendConfirmation()}
+                >
+                  {resendIn > 0 ? `Resend email (${resendIn}s)` : "Resend email"}
+                </button>
+                <button
+                  type="button"
+                  className="auth-secondary-button"
+                  onClick={() => {
+                    setAccountCreated(false);
+                    setResendNotice(null);
+                    setError(null);
+                  }}
+                >
+                  Use a different email
+                </button>
+              </div>
+              {resendNotice && <p className="auth-notice">{resendNotice}</p>}
             </div>
           ) : (
             <>
               <header>
-                <p>{IS_BETA_TESTING ? "Beta test now" : "Three free sessions"}</p>
+                <p>{IS_BETA_TESTING ? "Free during beta" : "Three free sessions"}</p>
                 <h1>Create your account</h1>
               </header>
               <label htmlFor="signup-email">Email</label>
@@ -108,15 +163,14 @@ export default function Signup() {
                 onChange={(event) => setEmail(event.target.value)}
               />
 
-              <label htmlFor="signup-password">Password</label>
-              <input
+              <PasswordField
                 id="signup-password"
-                type="password"
+                label="Password"
                 value={password}
                 autoComplete="new-password"
                 minLength={6}
-                required
-                onChange={(event) => setPassword(event.target.value)}
+                hint="At least 6 characters."
+                onChange={setPassword}
               />
             </>
           )}
