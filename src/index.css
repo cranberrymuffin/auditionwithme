@@ -3967,6 +3967,9 @@ header .flow-back:hover {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
+  /* Not even scrollable by script or focus — only the script pane scrolls,
+     so the sticky header can never slide over the active line. */
+  overflow: clip;
   background: #0f1b2a;
   color: #f8f1e6;
 }
@@ -3992,6 +3995,18 @@ header .flow-back:hover {
 .rehearsal-header > div:last-child {
   justify-content: flex-end;
 }
+.rehearsal-header > div:last-child a {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: rgba(248, 241, 230, 0.08);
+  color: #f8f1e6;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.rehearsal-header > div:last-child a:hover {
+  background: rgba(248, 241, 230, 0.14);
+}
 .rehearsal-header button,
 .rehearsal-header a {
   min-height: 44px;
@@ -4007,7 +4022,7 @@ header .flow-back:hover {
 .rehearsal-header > div > span {
   max-width: 220px;
   overflow: hidden;
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4044,7 +4059,7 @@ header .flow-back:hover {
   font-size: 0.9375rem;
 }
 .rehearsal-header > p span {
-  color: rgba(248, 241, 230, 0.58);
+  color: rgba(248, 241, 230, 0.72);
   font-size: 0.75rem;
 }
 .rehearsal-progress {
@@ -4133,23 +4148,73 @@ header .flow-back:hover {
 }
 .rehearsal-line-number {
   padding-top: 3px;
-  color: rgba(248, 241, 230, 0.42);
+  color: rgba(248, 241, 230, 0.55);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
 .rehearsal-line-copy {
   min-width: 0;
 }
+/* Speaker names: scene partners muted, the actor's own coral and tagged
+   "You", so their lines stand out at a glance down the whole script. */
 .rehearsal-line-copy strong {
-  display: block;
-  color: #f1a081;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.rehearsal-line.is-active.is-user .rehearsal-line-copy strong {
   display: flex;
   align-items: center;
   gap: 6px;
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.rehearsal-line.is-user .rehearsal-line-copy strong {
+  color: #f1a081;
+}
+.rehearsal-you-tag {
+  padding: 1px 7px;
+  border: 1px solid rgba(239, 154, 120, 0.55);
+  border-radius: 999px;
+  color: #f5ad8d;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rehearsal-line.is-active.is-user .rehearsal-you-tag {
+  border-color: rgba(255, 59, 48, 0.6);
+  color: #ff6b61;
+}
+/* Directions before anyone speaks: above the name, like the page. */
+.rehearsal-line-copy > .rehearsal-line-action {
+  display: block;
+  margin: 0 0 8px;
+  color: rgba(248, 241, 230, 0.6);
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-style: italic;
+  line-height: 1.45;
+}
+.rehearsal-line-action > span {
+  display: block;
+}
+.rehearsal-line-action > span + span {
+  margin-top: 4px;
+}
+/* A new scene: its heading as a divider across the script. */
+.rehearsal-scene-heading {
+  margin: 0;
+  padding: 18px clamp(18px, 3vw, 32px) 8px calc(clamp(18px, 3vw, 32px) + 44px);
+  border-top: 1px solid rgba(239, 154, 120, 0.35);
+  background: rgba(8, 18, 30, 0.35);
+  color: #f5ad8d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rehearsal-line:first-child .rehearsal-scene-heading {
+  border-top: 0;
+}
+.rehearsal-line.is-active.is-user .rehearsal-line-copy strong {
   color: #ff3b30;
 }
 .rehearsal-live-dot {
@@ -4171,12 +4236,12 @@ header .flow-back:hover {
 .rehearsal-line-copy em {
   display: block;
   margin-top: 4px;
-  color: rgba(248, 241, 230, 0.55);
+  color: rgba(248, 241, 230, 0.66);
   font-family: var(--font-display);
   font-size: 0.875rem;
   font-style: italic;
 }
-.rehearsal-line-copy > span {
+.rehearsal-line-copy > span:not(.rehearsal-line-action) {
   display: block;
   margin-top: 6px;
   color: rgba(248, 241, 230, 0.82);
@@ -4187,7 +4252,7 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.35);
   font-style: italic;
 }
-.rehearsal-line.is-active .rehearsal-line-copy > span {
+.rehearsal-line.is-active .rehearsal-line-copy > span:not(.rehearsal-line-action) {
   color: #f8f1e6;
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 2.4vw, 1.85rem);
@@ -4408,7 +4473,7 @@ header .flow-back:hover {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  max-width: 340px;
+  max-width: 380px;
   padding: 32px 28px;
   text-align: center;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -4422,7 +4487,7 @@ header .flow-back:hover {
 }
 .rehearsal-start-choice > p {
   margin: 0 0 14px;
-  color: rgba(248, 241, 230, 0.65);
+  color: rgba(248, 241, 230, 0.8);
   font-size: 0.875rem;
 }
 .rehearsal-start-choice > div {
@@ -4437,10 +4502,26 @@ header .flow-back:hover {
   font-size: 0.875rem;
   font-weight: 600;
 }
-.rehearsal-start-choice button:first-child {
+.rehearsal-start-choice .rehearsal-start-primary {
   border-color: rgba(255, 205, 183, 0.58);
   background: linear-gradient(135deg, #f4a583, #e98464);
   color: #101a28;
+}
+.rehearsal-start-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.rehearsal-start-choice .rehearsal-start-back {
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 0;
+  background: rgba(248, 241, 230, 0.08);
+  color: rgba(248, 241, 230, 0.9);
+  font-weight: 500;
+}
+.rehearsal-start-choice .rehearsal-start-back:hover {
+  background: rgba(248, 241, 230, 0.14);
+  filter: none;
 }
 .rehearsal-start-choice button:hover:not(:disabled) {
   filter: brightness(1.05);
@@ -4451,7 +4532,7 @@ header .flow-back:hover {
 }
 .rehearsal-start-choice > span {
   margin-top: 12px;
-  color: rgba(248, 241, 230, 0.5);
+  color: rgba(248, 241, 230, 0.7);
   font-size: 0.75rem;
 }
 .rehearsal-start-choice > .rehearsal-pregen {
@@ -4585,36 +4666,53 @@ header .flow-back:hover {
     opacity: 0.35;
   }
 }
-.self-tape-video-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px;
-  background: linear-gradient(0deg, rgba(0, 0, 0, 0.55), transparent);
+.self-tape-rec time {
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
-.self-tape-video-controls button {
-  width: 36px;
-  height: 36px;
+.self-tape-rec.is-practice {
+  background: rgba(16, 29, 44, 0.78);
+  color: rgba(248, 241, 230, 0.9);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+/* Pause / End take under the picture, never over the actor's face. */
+.self-tape-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.self-tape-controls button {
   display: inline-flex;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #f8f1e6;
   font-size: 0.875rem;
-  line-height: 1;
+  font-weight: 600;
 }
-.self-tape-video-controls button:hover {
-  background: rgba(0, 0, 0, 0.6);
+.self-tape-controls button span {
+  font-size: 0.75rem;
 }
-.self-tape-video-controls button:disabled {
+.self-tape-controls button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+}
+.self-tape-controls .self-tape-end {
+  border-color: rgba(255, 107, 97, 0.5);
+  color: #ff8a80;
+}
+.self-tape-controls .self-tape-end:hover:not(:disabled) {
+  border-color: rgba(255, 107, 97, 0.8);
+  background: rgba(255, 59, 48, 0.08);
+}
+.self-tape-controls button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.5;
 }
 .account-self-tapes {
   display: flex;
@@ -4811,7 +4909,7 @@ header .flow-back:hover {
 }
 @media (min-width: 1100px) {
   .rehearsal-workspace {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 26vw);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 30vw);
     grid-template-rows: minmax(0, 1fr);
     column-gap: 24px;
   }
@@ -4831,20 +4929,40 @@ header .flow-back:hover {
   /* The start card sits at the top, under the header, like the setup steps. */
   .rehearsal-start-overlay {
     align-items: flex-start;
-    padding-top: calc(78px + env(safe-area-inset-top));
+    padding: calc(78px + env(safe-area-inset-top)) 16px 16px;
   }
   .rehearsal-header {
     height: 62px;
     grid-template-columns: 1fr auto;
     padding: 0 16px;
   }
+  /* A compact strip: the picture at 45% width, controls beside it, so
+     the script keeps most of the screen. */
   .self-tape-setting {
     position: static;
+    display: grid;
+    grid-template-columns: 45% 1fr;
+    align-items: center;
+    gap: 10px;
     width: 100%;
     margin: 0;
+    padding: 10px 16px;
     border-left: 0;
     border-right: 0;
     border-radius: 0;
+  }
+  .self-tape-setting.is-practice {
+    grid-template-columns: 45%;
+    justify-content: center;
+  }
+  .self-tape-controls {
+    grid-template-columns: 1fr;
+  }
+  .self-tape-rec {
+    top: 6px;
+    left: 6px;
+    padding: 3px 7px;
+    font-size: 0.625rem;
   }
   .rehearsal-progress {
     top: 62px;
@@ -4872,8 +4990,11 @@ header .flow-back:hover {
   .rehearsal-line-active-panel {
     padding: 0 16px 16px;
   }
-  .rehearsal-line.is-active .rehearsal-line-copy > span {
+  .rehearsal-line.is-active .rehearsal-line-copy > span:not(.rehearsal-line-action) {
     font-size: clamp(1.35rem, 6.5vw, 1.75rem);
+  }
+  .rehearsal-scene-heading {
+    padding: 16px 16px 6px 52px;
   }
   .rehearsal-line-active-panel > footer {
     grid-template-columns: 1fr 1fr;
