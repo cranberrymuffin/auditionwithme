@@ -526,7 +526,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       </header>
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
 
-      <div className="rehearsal-workspace">
+      {/* Two columns only with the camera beside the script; just listening,
+          the script takes the centre. */}
+      <div className={`rehearsal-workspace ${willRecord && scriptSaved ? "has-camera" : ""}`}>
         {willRecord && scriptSaved && (
           <SelfTapeRecorder
             status={recorderStatus}
