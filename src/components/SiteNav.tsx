@@ -201,7 +201,7 @@ export default function SiteNav() {
       <Link to="/" className="site-nav-brand" aria-label="Audition With Me home">
         <BrandMark />
         <span className="brand-wordmark" aria-hidden="true">
-          Audition With Me
+          Audition <em>With Me</em>
         </span>
       </Link>
 
