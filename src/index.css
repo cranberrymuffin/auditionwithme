@@ -1749,6 +1749,165 @@ header .flow-back:hover {
   font-size: 1.1rem;
   line-height: 1;
 }
+/* Admin portal: every user and their audition feedback */
+.admin-main {
+  width: min(1040px, 100%);
+}
+.admin-error {
+  margin: 24px 0 0;
+  color: #ffc4a3;
+}
+.admin-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 28px 0 0;
+}
+.admin-stats > div {
+  min-width: 120px;
+  padding: 12px 16px;
+  border: 1px solid rgba(248, 241, 230, 0.16);
+  border-radius: 12px;
+  background: rgba(12, 23, 36, 0.32);
+}
+.admin-stats dt {
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.8125rem;
+}
+.admin-stats dd {
+  margin: 4px 0 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 28px 0 16px;
+}
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(12, 23, 36, 0.4);
+}
+.admin-tab {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: rgba(248, 241, 230, 0.76);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.admin-tab.is-active {
+  background: rgba(248, 241, 230, 0.14);
+  color: #f8f1e6;
+}
+.admin-search {
+  flex: 1 1 220px;
+  max-width: 320px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 241, 230, 0.2);
+  border-radius: 9px;
+  background: rgba(12, 23, 36, 0.4);
+  color: #f8f1e6;
+  font-size: 0.9375rem;
+}
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-empty {
+  margin: 0;
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.9375rem;
+}
+.admin-user {
+  border: 1px solid rgba(248, 241, 230, 0.14);
+  border-radius: 12px;
+  background: rgba(12, 23, 36, 0.32);
+}
+.admin-user-summary {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  color: inherit;
+  text-align: left;
+}
+.admin-user-email {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-user-meta {
+  color: rgba(248, 241, 230, 0.66);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.admin-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(239, 154, 120, 0.22);
+  color: #ffc4a3;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.admin-badge--muted {
+  background: rgba(248, 241, 230, 0.1);
+  color: rgba(248, 241, 230, 0.7);
+}
+.admin-user-feedback {
+  padding: 0 16px 16px;
+}
+.admin-feedback {
+  padding: 12px 14px;
+  border: 1px solid rgba(248, 241, 230, 0.12);
+  border-radius: 10px;
+  background: rgba(12, 23, 36, 0.36);
+}
+.admin-feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.admin-rating {
+  color: #f4a583;
+  letter-spacing: 0.05em;
+}
+.admin-rating-empty {
+  color: rgba(248, 241, 230, 0.2);
+}
+.admin-feedback-email {
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-feedback-comment {
+  margin: 8px 0 6px;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-feedback-comment--empty {
+  color: rgba(248, 241, 230, 0.5);
+  font-style: italic;
+}
 /* Account settings: email, password and delete, each its own auth-card */
 .settings-sections {
   display: flex;

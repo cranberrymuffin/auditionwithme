@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
+import { useIsAdmin } from "../hooks/useIsAdmin";
 import { supabase } from "../lib/supabase";
 import { IS_BETA_TESTING } from "../lib/beta";
 
@@ -18,6 +19,7 @@ function navLinkClass({ isActive }: { isActive: boolean }) {
 export default function SiteNav() {
   const { user, loading } = useAuth();
   const { entitlement } = useEntitlement();
+  const { isAdmin } = useIsAdmin();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -108,6 +110,7 @@ export default function SiteNav() {
   const isAccountAreaActive =
     location.pathname === "/account" ||
     location.pathname === "/account/settings" ||
+    location.pathname === "/admin" ||
     (showSubscriptionLink &&
       (location.pathname === "/pricing" || location.pathname === "/billing"));
 
@@ -180,6 +183,17 @@ export default function SiteNav() {
           >
             Account settings
           </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `site-nav-account-menu-item ${isActive ? "is-active" : ""}`
+              }
+              onClick={() => setAccountMenuOpen(false)}
+            >
+              Admin
+            </NavLink>
+          )}
         </div>
       )}
     </div>
@@ -291,6 +305,17 @@ export default function SiteNav() {
               >
                 Account settings
               </NavLink>
+              {isAdmin && (
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    `${navLinkClass({ isActive })} site-nav-drawer-sublink`
+                  }
+                  onClick={closeMenu}
+                >
+                  Admin
+                </NavLink>
+              )}
               <button
                 type="button"
                 className="eyebrow site-nav-link"

@@ -12,6 +12,7 @@
     "test:parse-cache": "tsx benchmarks/parse-cache.ts",
     "test:pregen": "tsx benchmarks/pregen.ts",
     "delete-user": "node scripts/delete-user.mjs",
+    "set-admin": "node scripts/set-admin.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",
     "dev": "vite",
     "dev:vercel": "vercel dev",
