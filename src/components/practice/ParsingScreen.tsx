@@ -75,7 +75,17 @@ export default function ParsingScreen({
           </h1>
           <p className="processing-explanation">
             {done ? (
-              <>Pick who you’re playing next.</>
+              <>
+                Pick who you’re playing next.
+                {/* Only while See script is open, on a line of its own below,
+                    so the sentence above never moves. */}
+                {scriptOpen && (
+                  <>
+                    <br />
+                    We’ve read the characters, dialogue, and scene directions.
+                  </>
+                )}
+              </>
             ) : (
               <>
                 We’re identifying characters, dialogue, and scene directions in
