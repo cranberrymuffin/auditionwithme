@@ -2706,9 +2706,18 @@ header .flow-back:hover {
   margin: 0 0 0.2em 0.18em;
   color: #ef9a78;
 }
-/* Long file names (no spaces, underscores) wrap instead of overflowing. */
+/* Long file names wrap at their underscores and hyphens (see ScriptName),
+   and only break mid-word when one part alone is wider than the line. */
 .processing-script-name {
   overflow-wrap: anywhere;
+}
+.processing-status h1.is-long-name {
+  font-size: clamp(2.5rem, 3.8vw, 3.25rem);
+}
+/* A long name starts its own line, so the lead-in above it never leaves
+   a word ("for") stranded. */
+.processing-status h1.is-long-name .processing-script-name {
+  display: block;
 }
 .processing-explanation {
   max-width: 560px;
