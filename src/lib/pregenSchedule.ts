@@ -1,5 +1,5 @@
 // Scheduling decisions for reader-audio pre-generation (useReaderAudioPregen.ts),
-// kept pure so benchmarks/pregen.ts can check them under tsx.
+// kept pure so benchmarks/checks/pregen.ts can check them under tsx.
 //
 // The ElevenLabs Starter plan allows 3 concurrent TTS requests for the whole
 // account, and api/tts.ts uses one server key, so every user's live playback

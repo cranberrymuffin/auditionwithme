@@ -8,7 +8,7 @@
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { BACKTRACK_WINDOW_MS, computeMax, computeP50, TakeMetrics } from "../src/lib/takeMetrics";
+import { BACKTRACK_WINDOW_MS, computeMax, computeP50, TakeMetrics } from "../../src/lib/takeMetrics";
 
 let passed = 0;
 function check(name: string, fn: () => void) {

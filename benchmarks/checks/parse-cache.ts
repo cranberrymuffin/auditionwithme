@@ -8,7 +8,7 @@
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { createParseCache, type CachedParseFields } from "../src/lib/parseCache";
+import { createParseCache, type CachedParseFields } from "../../src/lib/parseCache";
 
 let passed = 0;
 async function check(name: string, fn: () => Promise<void>) {

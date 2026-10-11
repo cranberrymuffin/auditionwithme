@@ -11,16 +11,16 @@
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { cacheKey } from "../src/lib/ttsCacheKey";
+import { cacheKey } from "../../src/lib/ttsCacheKey";
 import {
   buildReaderCue,
   buildReaderLine,
   LONG_BEAT_MS,
   readerLineIndices,
   SHORT_BEAT_MS,
-} from "../src/lib/readerLines";
-import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../src/lib/delivery";
-import { sanitizePerformance } from "../api/_direction";
+} from "../../src/lib/readerLines";
+import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../../src/lib/delivery";
+import { sanitizePerformance } from "../../api/_direction";
 import {
   canStartTake,
   MAX_PREGEN_WORKERS,
@@ -29,16 +29,16 @@ import {
   shouldHoldPregen,
   START_EARLY_LINES,
   targetWorkers,
-} from "../src/lib/pregenSchedule";
+} from "../../src/lib/pregenSchedule";
 import {
   parseEmotion,
   shouldHoldPregen as serverShouldHold,
   v2Stability,
   v3Stability,
-} from "../api/tts";
-import { clampCharacterEmotion } from "../src/lib/characterDelivery";
-import { planReaderAudioEviction } from "../src/lib/readerAudioStore";
-import type { Step } from "../src/types";
+} from "../../api/tts";
+import { clampCharacterEmotion } from "../../src/lib/characterDelivery";
+import { planReaderAudioEviction } from "../../src/lib/readerAudioStore";
+import type { Step } from "../../src/types";
 
 let passed = 0;
 function check(name: string, fn: () => void) {

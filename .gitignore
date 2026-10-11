@@ -25,6 +25,7 @@ dist-ssr
 .vercel
 
 test_data/*
-# Synthetic (not private sides), so it's tracked for benchmarks/tts-tone.ts.
+# Benchmark fixtures: synthetic lines, and scene excerpts from the sides above.
 !test_data/tts-tone-lines.json
+!test_data/tts-emotion-lines.json
 benchmarks/out/

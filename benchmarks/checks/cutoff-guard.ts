@@ -19,7 +19,7 @@ import {
   quietAdvance,
   semanticMatchMayAdvance,
   shouldTrySemanticFallback,
-} from "../src/lib/lineMatch";
+} from "../../src/lib/lineMatch";
 
 const MONOLOGUE =
   "You want to know why I stayed in this town after everyone else left? " +

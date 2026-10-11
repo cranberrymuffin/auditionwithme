@@ -17,8 +17,8 @@
 // render per line per variant (12 renders). Needs ANTHROPIC_API_KEY and
 // ELEVENLABS_API_KEY in the environment.
 //
-//   npx tsx benchmarks/tts-tone.ts             # render to benchmarks/out/
-//   npx tsx benchmarks/tts-tone.ts --dry-run   # print the plan, no API calls
+//   npx tsx benchmarks/voice/tone-ab.ts             # render to benchmarks/out/
+//   npx tsx benchmarks/voice/tone-ab.ts --dry-run   # print the plan, no API calls
 //
 // Run with tsx (node's type stripping doesn't map the ".js" ESM specifiers
 // the api/ modules use).
@@ -28,7 +28,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = join(ROOT, "test_data", "tts-tone-lines.json");
 const OUT_DIR = join(ROOT, "benchmarks", "out", "tts-tone");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -118,9 +118,9 @@ async function main() {
 
   // Imported after the env check above (see dry-run note).
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const { DIRECTOR_PROMPT } = await import("../api/casting.js");
-  const { BIG_DELIVERY_TAGS, v3Stability } = await import("../api/tts.js");
-  const { sanitizePerformance } = await import("../api/_direction.js");
+  const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
+  const { BIG_DELIVERY_TAGS, v3Stability } = await import("../../api/tts.js");
+  const { sanitizePerformance } = await import("../../api/_direction.js");
 
   // The stability contract the tone fix depends on (runs in --dry-run too).
   assert.equal(v3Stability(false), 0.3, "untagged/director lines read at 0.3");

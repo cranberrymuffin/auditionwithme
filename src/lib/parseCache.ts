@@ -1,7 +1,7 @@
 // Saves one upload's parse to the script store the moment it arrives, so a
 // reload or back-out before "Continue" can't lose it (and a re-upload finds
 // it by content hash instead of paying for another parse). Kept free of
-// storage imports so benchmarks/parse-cache.ts can drive it with fakes.
+// storage imports so benchmarks/checks/parse-cache.ts can drive it with fakes.
 import type { Step } from "../types";
 
 export type CachedParseFields = {
