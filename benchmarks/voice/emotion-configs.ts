@@ -8,7 +8,7 @@
 // setting moves it by up to ±0.3, both as in api/tts.ts.
 
 export type ContextMode = "none" | "prev-next" | "dialogue";
-export type PromptVariant = "current" | "warm" | "v4";
+export type PromptVariant = "current" | "warm" | "v4" | "sparse";
 
 export type TtsConfig = {
   name: string;
@@ -61,7 +61,11 @@ export const CONFIGS: Record<string, TtsConfig> = {
   // the big moments tagged for control rather than intensity, because v4
   // over-plays tagged high-intensity lines (quick-1 human round). Paired
   // against v4 with --pair-with v4, since v4 is production after PR #26.
-  "v4-prompt": { ...baseline, name: "v4-prompt", changes: "eleven_v4 + v4-tuned director prompt (restraint on big moments)", model: "eleven_v4", prompt: "v4" },
+  "v4-prompt": { ...baseline, name: "v4-prompt", changes: "eleven_v4 + control-tag director prompt (lost: tags still over-play on v4)", model: "eleven_v4", prompt: "v4" },
+  // Learned from v4-prompt: on v4 any tag is a performance, control tags
+  // included. This keeps today's prompt but takes the tags off the big
+  // moments entirely and caps how much of a scene gets tagged.
+  "v4-sparse": { ...baseline, name: "v4-sparse", changes: "eleven_v4 + sparse director prompt (no effect: v4 over-plays big moments from the words, not the tags)", model: "eleven_v4", prompt: "sparse" },
   // Fill in from the winners once experiments 1–6 have run.
   candidate: { ...baseline, name: "candidate", changes: "the combined winners (edit me)", model: "eleven_v4", prompt: "warm" },
 };
@@ -179,3 +183,44 @@ Example input:
 6| {stage: (furious)} BEN: I know what I said. Just forget it.
 
 Example output: [null, null, null, "[long pause] [low and steady] It's back. The cancer's back.", null, "[short pause] You're supposed to say what you're… thankful for.", "[tight and clipped] I know what I said. Just forget it."]`;
+
+/**
+ * The sparse director prompt for v4: today's prompt with one change of
+ * policy. prompt-1 showed that on v4 even "control" tags (low and steady,
+ * quiet intensity) read as a performance and over-play the big moments, so
+ * here the big moments get no tag at all — pacing punctuation at most — and
+ * tags are kept for quiet subtext the words don't carry, on a minority of
+ * lines. Bump DIRECTOR_VERSION if this ships.
+ */
+export const SPARSE_DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v4) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. Eleven v4 reads an untagged line naturally and performs any tag it is given in full, so direction here means mostly leaving lines alone, and tagging only where the words don't carry the feeling. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
+
+Your markup toolkit (Eleven v4):
+- Pacing punctuation first: ellipses (…) for weighted pauses and trailing thoughts, em-dashes for interruptions and pivots. This is the main tool.
+- Audio tags in square brackets, at the start of the line or between sentences, for quiet subtext only: ${WARM_TAG_VOCABULARY.filter((tag) => !["excited", "shocked", "incredulous", "firm", "stern", "urgent", "frustrated", "bitter", "scared", "worried", "pleading"].includes(tag)).join(", ")}. Non-verbal sounds ([sighs], [chuckles], [clears throat]) only where the script itself implies one.
+- Emphasis: CAPITALIZE a single stressed word where the reader would genuinely lean on it — at most one capitalized word per scene beat, never on a tagged line.
+
+Rules:
+- NEVER add, remove, reorder, or respell words. Only bracketed tags, punctuation, and letter casing may differ from the input line. Entries that change the words are discarded.
+- The big moments — anger, menace, panic, grief, a shouted order, an outburst, a plea — get NO tag. Their words already carry them, and the actor plays the scene; the reader's job is a clean, well-paced feed. Shape them with pacing punctuation if anything, else return null.
+- Tag a line only when the feeling is under the words rather than in them — warmth in a plain line, irony, hesitation, weariness, a line said quietly against its meaning — and only on a minority of lines in a scene (roughly one in three at most). Prefer the quietest tag that does the job, never more than one per line, and vary them.
+- Plain conversational lines usually need nothing; return null for a line that is fine exactly as written.
+- Judge from context, not just the line itself — a line's delivery depends on what was said before and where the scene is going.
+- Rows may carry {stage: …}: the script's own parentheticals and stage directions just before that line. They are context for delivery and timing only — never copy them into the markup. Rows with no dialogue (only {stage: …}) are action between lines; return null for them.
+
+Beats before a line:
+- The scene partner answers the instant the actor finishes, which is right for almost every line. Quick back-and-forth, banter, interruptions, and ordinary replies must stay snappy — give them no beat.
+- Only when the script's intention calls for a moment before the reader responds, start that line's markup with exactly one beat marker, as the very first thing: "[short pause]" (a breath) or "[long pause]" (a held moment). Use it for an explicit (beat), (pause), (a long beat) or (silence); a stage direction implying silence or a physical action before speaking; or a weighty emotional turn. Long only for explicit long beats/silence or the heaviest turns. Never anywhere but the start, never more than one, never on a line just because it is emotional.
+
+Output:
+- Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
+
+Example input:
+0| ANNA: Did you get the results?
+1| BEN: Yeah.
+2| ANNA: And?
+3| {stage: (a long beat)} BEN: It's back. The cancer's back.
+4| {stage: The kettle clicks off.} —:
+5| {stage: She stares at him, then turns away.} ANNA: You're supposed to say what you're thankful for.
+6| {stage: (furious)} BEN: I know what I said. Just forget it.
+
+Example output: [null, "[quietly] Yeah.", null, "[long pause] It's back… the cancer's back.", null, "[short pause] You're supposed to say what you're… thankful for.", "I know what I said — just forget it."]`;
