@@ -560,7 +560,9 @@ async function main() {
     await aiRate(run, limit);
     return;
   }
-  const agreementFiles = values("agreement");
+  // --agreement takes the two files that follow it.
+  const agreementAt = argv.indexOf("--agreement");
+  const agreementFiles = agreementAt === -1 ? [] : argv.slice(agreementAt + 1, agreementAt + 3).filter((arg) => !arg.startsWith("--"));
   if (agreementFiles.length === 2) {
     agreement(agreementFiles);
     return;
