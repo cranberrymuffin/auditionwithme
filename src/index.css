@@ -343,7 +343,9 @@ header .flow-back:hover {
   height: clamp(68px, 10vh, 92px);
   align-items: center;
   justify-content: space-between;
-  padding: 0 clamp(22px, 5vw, 76px);
+  /* Every header shares the landing hero's side margins, so the logo sits
+     on the same left edge on every page. */
+  padding: 0 clamp(22px, 7vw, 108px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -509,11 +511,6 @@ header .flow-back:hover {
   color: #f2a080;
 }
 
-/* The landing header shares the hero's side margins, so the logo sits on
-   the same left edge as the headline. */
-.home-page .site-nav {
-  padding-inline: clamp(22px, 7vw, 108px);
-}
 .hero-editorial {
   min-height: calc(100dvh - clamp(68px, 10vh, 92px));
   display: flex;
@@ -1007,10 +1004,7 @@ header .flow-back:hover {
   }
   .site-nav {
     height: 66px;
-    padding: 0 18px;
-  }
-  .home-page .site-nav {
-    padding-inline: 22px;
+    padding: 0 22px;
   }
   .site-nav-links {
     display: none;
@@ -4646,7 +4640,7 @@ header .flow-back:hover {
   height: 72px;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0 clamp(20px, 4vw, 64px);
+  padding: 0 clamp(22px, 7vw, 108px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.11);
   background: rgba(12, 23, 36, 0.88);
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.14);
@@ -4977,7 +4971,7 @@ header .flow-back:hover {
     height: 66px;
     grid-template-columns: 1fr auto auto;
     gap: 14px;
-    padding: 0 18px;
+    padding: 0 22px;
   }
   .step-bar {
     width: 16px;
