@@ -101,6 +101,15 @@ Three tiers of measurement, cheapest first:
    rates with 95% intervals per config against the baseline. Three to five
    raters, at least one an actor.
 
+An AI rater can scale the listening across hundreds of pairs:
+`GEMINI_API_KEY=… npm run bench:emotion -- --ai-rate --run <run>` (Gemini
+hears each pair in both orders and only counts answers the orders agree
+on; `--ai-model` picks the model, `--pairs N` limits the count). It writes a
+ratings file the scorer accepts. Check it against a human first:
+`npm run bench:emotion -- --agreement ratings-<human>.json ratings-ai-*.json --run <run>`
+prints percent agreement and Cohen's kappa per question; below about 0.4
+kappa, don't let it decide anything on its own.
+
 **Ship criteria** for a new default: naturalness win rate ≥ 65% with the
 interval's low end above 50%, emotional fit not worse, "over the top" not
 above the baseline. Then bump `DIRECTOR_VERSION` if the prompt changed, bump

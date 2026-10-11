@@ -27,7 +27,18 @@
 //   npm run bench:emotion -- --quick --config v4 --run v4-quick
 //   npm run bench:emotion -- --config v4 --config stab-0.45 --run week1
 //   npm run bench:emotion -- --score ratings-*.json --run week1
+//   npm run bench:emotion -- --ai-rate --run week1            # Gemini listens (GEMINI_API_KEY)
+//   npm run bench:emotion -- --agreement ratings-jess.json ratings-ai-gemini-2.5-flash.json --run week1
 //   npm run bench:emotion -- --list
+//
+// The AI rater (--ai-rate) answers the same three questions as the human
+// page from the audio itself, through an audio-capable model (Gemini by
+// default; Claude can't take audio). It hears every pair in both orders and
+// only counts an answer the two orders agree on, which removes the judge's
+// position bias. Treat it as a way to scale ratings across hundreds of
+// pairs, not a replacement for ears: --agreement reports how often it
+// agrees with a human file, and it's only worth trusting on a run where
+// that agreement is good.
 //
 // Run with tsx (node's type stripping doesn't map the ".js" ESM specifiers
 // the api/ modules use).
@@ -113,6 +124,7 @@ const values = (name: string) =>
 const value = (name: string) => values(name)[0];
 
 const DRY_RUN = flag("dry-run");
+const AI_MODEL = value("ai-model") ?? "gemini-2.5-flash";
 const DIRECT_ONLY = flag("direct-only");
 const QUICK = flag("quick");
 const PAIR_WITH = value("pair-with") ?? DEFAULT_PAIR_WITH;
@@ -325,6 +337,141 @@ function score(run: string, files: string[]) {
   console.log("\nWin rates exclude ties; brackets are 95% Wilson intervals. Ship criteria: natural ≥ 65% with the interval's low end above 50%, fit not worse, too much not above the reference.");
 }
 
+// ---------------------------------------------------------------- AI rater
+
+type Verdict = { natural: "A" | "B" | "tie"; fit: "A" | "B" | "tie"; tooMuch: "A" | "B" | "both" | "neither"; reason: string };
+
+const AI_RUBRIC = `You are an experienced audition coach judging an AI scene partner that reads opposite a human actor. You will hear the same line of dialogue read twice, read A then read B, by the same voice. The scene partner should sound like a real, present reader: emotionally truthful to the moment, specific, never flat or mechanical, and never over the top (it supports the actor, it doesn't perform at them).
+
+Answer with JSON only:
+- "natural": which read sounds more like a real person speaking in this moment ("A", "B", or "tie").
+- "fit": which read fits the emotional moment of the scene better ("A", "B", or "tie").
+- "tooMuch": which read, if any, is over-acted or melodramatic for an audition reader ("A", "B", "both", or "neither").
+- "reason": one sentence.
+Judge the delivery only — the words are identical.`;
+
+const swapVerdict = (verdict: Verdict): Verdict => {
+  const flip = <T extends string>(choice: T): T =>
+    (choice === "A" ? "B" : choice === "B" ? "A" : choice) as T;
+  return { ...verdict, natural: flip(verdict.natural), fit: flip(verdict.fit), tooMuch: flip(verdict.tooMuch) };
+};
+
+async function geminiJudge(apiKey: string, prompt: string, first: Buffer, second: Buffer): Promise<Verdict> {
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: prompt },
+          { text: "Read A:" },
+          { inline_data: { mime_type: "audio/mpeg", data: first.toString("base64") } },
+          { text: "Read B:" },
+          { inline_data: { mime_type: "audio/mpeg", data: second.toString("base64") } },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          natural: { type: "STRING", enum: ["A", "B", "tie"] },
+          fit: { type: "STRING", enum: ["A", "B", "tie"] },
+          tooMuch: { type: "STRING", enum: ["A", "B", "both", "neither"] },
+          reason: { type: "STRING" },
+        },
+        required: ["natural", "fit", "tooMuch", "reason"],
+      },
+    },
+  };
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(AI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+    if ((response.status === 429 || response.status >= 500) && attempt < 4) {
+      const wait = 4000 * (attempt + 1);
+      console.warn(`${response.status} from Gemini; waiting ${wait}ms`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      continue;
+    }
+    if (!response.ok) throw new Error(`Gemini ${response.status}: ${(await response.text()).slice(0, 300)}`);
+    const data = (await response.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+    return JSON.parse(text) as Verdict;
+  }
+}
+
+async function aiRate(run: string, limit: number | null) {
+  const dir = join(OUT_ROOT, run);
+  const pairs = (JSON.parse(readFileSync(join(dir, "pairs.json"), "utf8")) as Pair[]).slice(0, limit ?? undefined);
+  console.log(`AI rater: ${pairs.length} pairs × 2 orders through ${AI_MODEL}`);
+  if (DRY_RUN) {
+    console.log("Dry run: no calls made.");
+    return;
+  }
+  const apiKey = requireEnv("GEMINI_API_KEY");
+  const out = join(dir, `ratings-ai-${AI_MODEL.replace(/[^a-z0-9.]+/gi, "-")}.json`);
+  const existing = existsSync(out)
+    ? (JSON.parse(readFileSync(out, "utf8")) as { pairs: Record<string, Rating & { reasons?: string[]; agreed?: boolean }> })
+    : { pairs: {} };
+  const ratings = existing.pairs;
+  let done = 0;
+  for (const pair of pairs) {
+    if (ratings[pair.id]) continue;
+    const prompt = `${AI_RUBRIC}\n\nScene context:\n${pair.context.join("\n") || "(scene opens)"}\n\nThe line, read by ${pair.speaker}: "${pair.text}"`;
+    const a = readFileSync(join(dir, pair.A));
+    const b = readFileSync(join(dir, pair.B));
+    try {
+      const forward = await geminiJudge(apiKey, prompt, a, b);
+      const backward = swapVerdict(await geminiJudge(apiKey, prompt, b, a));
+      const agree = <K extends keyof Verdict>(key: K, tie: Verdict[K]): Verdict[K] =>
+        forward[key] === backward[key] ? forward[key] : tie;
+      ratings[pair.id] = {
+        natural: agree("natural", "tie"),
+        fit: agree("fit", "tie"),
+        tooMuch: agree("tooMuch", "neither"),
+        reasons: [forward.reason, backward.reason],
+        agreed: forward.natural === backward.natural && forward.fit === backward.fit,
+      };
+    } catch (error) {
+      console.warn(`${pair.id}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    done += 1;
+    writeFileSync(out, JSON.stringify({ run, rater: `ai:${AI_MODEL}`, pairs: ratings }, null, 2) + "\n");
+    if (done % 10 === 0) console.log(`${done} pairs rated`);
+  }
+  const agreed = Object.values(ratings).filter((rating) => rating.agreed).length;
+  console.log(`Wrote ${out}: ${Object.keys(ratings).length} pairs, order-consistent on ${agreed}.`);
+  console.log(`Score with: npm run bench:emotion -- --score ${out} --run ${run}`);
+}
+
+/** How often two rating files agree on the pairs they share: percent
+ * agreement and Cohen's kappa per question. */
+function agreement(files: string[]) {
+  const [first, second] = files.map((file) => JSON.parse(readFileSync(file, "utf8")) as Ratings);
+  const shared = Object.keys(first.pairs ?? {}).filter((id) => second.pairs?.[id]);
+  console.log(`${shared.length} shared pairs between ${first.rater || files[0]} and ${second.rater || files[1]}`);
+  for (const question of ["natural", "fit", "tooMuch"] as const) {
+    const answered = shared.filter((id) => first.pairs![id][question] && second.pairs![id][question]);
+    const n = answered.length;
+    if (!n) continue;
+    const observed = answered.filter((id) => first.pairs![id][question] === second.pairs![id][question]).length / n;
+    const categories = new Set(answered.flatMap((id) => [first.pairs![id][question], second.pairs![id][question]]));
+    let expected = 0;
+    for (const category of categories) {
+      const p1 = answered.filter((id) => first.pairs![id][question] === category).length / n;
+      const p2 = answered.filter((id) => second.pairs![id][question] === category).length / n;
+      expected += p1 * p2;
+    }
+    const kappa = expected === 1 ? 1 : (observed - expected) / (1 - expected);
+    console.log(`  ${question.padEnd(8)} agree ${pct(observed)}  kappa ${kappa.toFixed(2)}  (n=${n})`);
+  }
+  console.log("Kappa: < 0.2 slight, 0.2–0.4 fair, 0.4–0.6 moderate, 0.6–0.8 substantial.");
+}
+
 // ---------------------------------------------------------------- rater page
 
 function raterHtml(run: string, pairs: Pair[], sceneClips: Render[]): string {
@@ -401,6 +548,21 @@ async function main() {
     for (const config of Object.values(CONFIGS)) {
       console.log(`${config.name.padEnd(14)} ${config.changes}`);
     }
+    return;
+  }
+  if (flag("ai-rate")) {
+    const run = value("run");
+    if (!run) {
+      console.error("--ai-rate needs --run <name>.");
+      process.exit(1);
+    }
+    const limit = value("pairs") ? Number(value("pairs")) : null;
+    await aiRate(run, limit);
+    return;
+  }
+  const agreementFiles = values("agreement");
+  if (agreementFiles.length === 2) {
+    agreement(agreementFiles);
     return;
   }
   const scoreFiles = values("score");
