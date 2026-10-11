@@ -158,6 +158,13 @@ rater on the quick pairs.
   0.3 → flat −0.12 / over-acted +0.26; 0.45 → identical (−0.12 / +0.26);
   0.6 → −0.09 / +0.36. Stability doesn't rein v4 in; it stays at 0.3, and
   the over-playing is a prompt matter (the `v4-prompt` config).
+- **Prompt follow-up on v4** (`prompt-1`, 86 lines, AI per-clip scores vs
+  plain v4): a prompt that tags the big moments with *control* tags (low
+  and steady, quiet intensity, tight and clipped) made them worse — over-
+  acted +0.22 on high-intensity lines, fit −0.10 overall — and tagging lines
+  today's prompt leaves alone hurt too (over +0.17, fit −0.14). On v4 any
+  tag is a full performance, control tags included. The next variant
+  (`v4-sparse`) leaves the big moments untagged and tags only quiet subtext.
 - **AI listening.** Pairwise judging is unreliable here: three Gemini models
   agreed with each other and with the human only at chance on naturalness
   and fit (kappa ≤ 0.17), while agreeing moderately on "over the top" (kappa
