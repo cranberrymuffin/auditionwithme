@@ -132,6 +132,41 @@ The `dialogue` config renders whole scenes through Text-to-Dialogue, so it
 produces scene clips rather than per-line pairs; rate those on their own in
 the rater page's "Scene clips" section.
 
+#### Findings so far (October 2026)
+
+Runs `audit-1`, `quick-1` (29 lines × baseline, v4, warm-prompt) and
+`full-1` (86 lines × 12 configs, ~20k characters billed), plus one human
+rater on the quick pairs.
+
+- **Why it sounds robotic.** The reader-first prompt leaves **45% of
+  emotionally cued lines with no shaping at all**, and its most-used tags
+  (`flatly`, `deadpan`, `matter of fact`, `quietly`, `calm`) tell the voice
+  to be flat. On v3 even the tags it does add don't translate into audible
+  pitch movement: lines it tagged move no more than lines it left alone.
+- **What moves the voice.** `eleven_v4` (and `v4_turbo`) add ~0.5–0.7
+  semitones of pitch deviation on about 60% of lines, most on high-intensity
+  lines. Nothing else does: stability 0.45/0.5 change nothing on v3, 0.2
+  *reduces* movement, and so does the Emotion slider (+0.5), which maps to
+  stability. The warm prompt only pays off on v4.
+- **The human verdict on v4** (one rater, 56 pairs): preferred for
+  naturalness on 59% of pairs and fit on 57%, but "over the top" on 17%
+  (baseline 0%). It wins on lines the director left untagged (7–3, never too
+  much) and loses on tagged and high-intensity lines (6–6, five too much):
+  v4 follows tags much more strongly than v3. The warm prompt on v3 lost
+  (43%). Follow-up configs `v4-stab-0.45` / `v4-stab-0.6` test v4 with its
+  tagged lines reined in.
+- **AI listening.** Pairwise judging is unreliable here: three Gemini models
+  agreed with each other and with the human only at chance on naturalness
+  and fit (kappa ≤ 0.17), while agreeing moderately on "over the top" (kappa
+  0.36). Per-clip scoring (`--ai-score`) is more repeatable (same "flat"
+  score on 66% of re-scores, within one point on 98%) and moved the same
+  way as the human (v4 less flat, slightly more over-acted); use it to
+  screen, not to decide.
+- **Facts for shipping.** v3 rejects `previous_text`/`next_text`
+  (`unsupported_model`); v4 accepts them. The reader-audio cache key
+  (`src/lib/ttsCacheKey.ts`) has neither model nor stability in it, so a new
+  default needs a key bump.
+
 ### Tone A/B (`voice/tone-ab.ts`)
 
 The earlier, narrower harness from the "over the top" round: six synthetic
