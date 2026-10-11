@@ -88,6 +88,10 @@ type Render = {
   deliveryTag: string | null;
   beat: string | null;
   stability: number;
+  /** Characters ElevenLabs billed for the render, from its character-cost header. */
+  cost?: number;
+  /** The render failed (status and message); no file was written. */
+  error?: string;
 };
 
 type Pair = {
@@ -514,7 +518,9 @@ async function main() {
 
   mkdirSync(outDir, { recursive: true });
 
-  async function elevenPost(path: string, body: unknown, file: string) {
+  // Resolves to the characters billed; a non-OK response past the retries
+  // throws, and the caller records it against the render and carries on.
+  async function elevenPost(path: string, body: unknown, file: string): Promise<number | undefined> {
     for (let attempt = 0; ; attempt++) {
       const response = await fetch(`https://api.elevenlabs.io/v1/${path}`, {
         method: "POST",
@@ -527,11 +533,13 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, wait));
         continue;
       }
-      if (!response.ok) throw new Error(`ElevenLabs ${response.status} on ${path}: ${await response.text()}`);
+      if (!response.ok) throw new Error(`ElevenLabs ${response.status}: ${(await response.text()).slice(0, 200)}`);
       writeFileSync(join(outDir, file), Buffer.from(await response.arrayBuffer()));
-      return;
+      const cost = Number(response.headers.get("character-cost"));
+      return Number.isFinite(cost) ? cost : undefined;
     }
   }
+  let billed = 0;
 
   const renders: Render[] = [];
   const audits: Record<string, LineAudit[]> = {};
@@ -575,9 +583,16 @@ async function main() {
           if (!chunk.length) return;
           part += 1;
           const file = `${scene.id}--${config.name}${part > 1 ? `-part${part}` : ""}.mp3`;
-          await elevenPost("text-to-dialogue", { inputs: chunk, model_id: config.model, settings: { stability: config.stability } }, file);
-          renders.push({ line: scene.id, config: config.name, file, scene: scene.id, speaker: "", voice: "", voiceId: "", model: config.model, text: chunk.map((input) => input.text).join("\n"), markup: null, deliveryTag: null, beat: null, stability: config.stability });
-          console.log(`rendered ${file}`);
+          const render: Render = { line: scene.id, config: config.name, file, scene: scene.id, speaker: "", voice: "", voiceId: "", model: config.model, text: chunk.map((input) => input.text).join("\n"), markup: null, deliveryTag: null, beat: null, stability: config.stability };
+          try {
+            render.cost = await elevenPost("text-to-dialogue", { inputs: chunk, model_id: config.model, settings: { stability: config.stability } }, file);
+            billed += render.cost ?? 0;
+            console.log(`rendered ${file} (${render.cost ?? "?"} chars)`);
+          } catch (error) {
+            render.error = error instanceof Error ? error.message : String(error);
+            console.warn(`FAILED ${file}: ${render.error}`);
+          }
+          renders.push(render);
           chunk = [];
           chars = 0;
         };
@@ -601,18 +616,24 @@ async function main() {
         if (!DIRECT_ONLY) {
           const previous = reads.slice(0, target.index).reverse().find((candidate) => candidate.line.text.trim());
           const next = reads.slice(target.index + 1).find((candidate) => candidate.line.text.trim());
-          await elevenPost(
-            `text-to-speech/${encodeURIComponent(voice.id)}`,
-            {
-              text: read.text,
-              model_id: config.model,
-              voice_settings: voiceSettings(read.stability),
-              ...(config.context === "prev-next" && previous ? { previous_text: previous.line.text.slice(-CONTEXT_CHAR_LIMIT) } : {}),
-              ...(config.context === "prev-next" && next ? { next_text: next.line.text.slice(0, CONTEXT_CHAR_LIMIT) } : {}),
-            },
-            file,
-          );
-          console.log(`rendered ${file}`);
+          try {
+            render.cost = await elevenPost(
+              `text-to-speech/${encodeURIComponent(voice.id)}`,
+              {
+                text: read.text,
+                model_id: config.model,
+                voice_settings: voiceSettings(read.stability),
+                ...(config.context === "prev-next" && previous ? { previous_text: previous.line.text.slice(-CONTEXT_CHAR_LIMIT) } : {}),
+                ...(config.context === "prev-next" && next ? { next_text: next.line.text.slice(0, CONTEXT_CHAR_LIMIT) } : {}),
+              },
+              file,
+            );
+            billed += render.cost ?? 0;
+            console.log(`rendered ${file} (${render.cost ?? "?"} chars)`);
+          } catch (error) {
+            render.error = error instanceof Error ? error.message : String(error);
+            console.warn(`FAILED ${file}: ${render.error}`);
+          }
         }
         renders.push(render);
       }
@@ -636,10 +657,10 @@ async function main() {
   // Blind pairs: every non-reference config against the reference, per line.
   const pairs: Pair[] = [];
   const pairKey: PairKey = {};
-  const reference = renders.filter((render) => render.config === PAIR_WITH && !render.scene);
+  const reference = renders.filter((render) => render.config === PAIR_WITH && !render.scene && !render.error);
   for (const config of configs) {
     if (config.name === PAIR_WITH || config.context === "dialogue") continue;
-    for (const render of renders.filter((candidate) => candidate.config === config.name && !candidate.scene)) {
+    for (const render of renders.filter((candidate) => candidate.config === config.name && !candidate.scene && !candidate.error)) {
       const base = reference.find((candidate) => candidate.line === render.line);
       if (!base) continue;
       const target = targets.find((candidate) => candidate.id === render.line)!;
@@ -652,7 +673,9 @@ async function main() {
     }
   }
 
-  writeFileSync(join(outDir, "key.json"), JSON.stringify({ run, pairWith: PAIR_WITH, configs: configs.map((config) => config.name), renders }, null, 2) + "\n");
+  const failed = renders.filter((render) => render.error).length;
+  writeFileSync(join(outDir, "key.json"), JSON.stringify({ run, pairWith: PAIR_WITH, configs: configs.map((config) => config.name), billedCharacters: billed, renders }, null, 2) + "\n");
+  if (!DIRECT_ONLY) console.log(`\nElevenLabs billed ${billed} characters for this run${failed ? `; ${failed} render(s) failed (see key.json)` : ""}.`);
   if (!DIRECT_ONLY) {
     writeFileSync(join(outDir, "pairs.json"), JSON.stringify(pairs, null, 2) + "\n");
     writeFileSync(join(outDir, "pair-key.json"), JSON.stringify(pairKey, null, 2) + "\n");
