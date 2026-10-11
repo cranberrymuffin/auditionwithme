@@ -153,8 +153,11 @@ rater on the quick pairs.
   (baseline 0%). It wins on lines the director left untagged (7–3, never too
   much) and loses on tagged and high-intensity lines (6–6, five too much):
   v4 follows tags much more strongly than v3. The warm prompt on v3 lost
-  (43%). Follow-up configs `v4-stab-0.45` / `v4-stab-0.6` test v4 with its
-  tagged lines reined in.
+  (43%).
+- **Stability on v4** (`quick-2`, AI per-clip scores vs the v3 baseline):
+  0.3 → flat −0.12 / over-acted +0.26; 0.45 → identical (−0.12 / +0.26);
+  0.6 → −0.09 / +0.36. Stability doesn't rein v4 in; it stays at 0.3, and
+  the over-playing is a prompt matter (the `v4-prompt` config).
 - **AI listening.** Pairwise judging is unreliable here: three Gemini models
   agreed with each other and with the human only at chance on naturalness
   and fit (kappa ≤ 0.17), while agreeing moderately on "over the top" (kappa
