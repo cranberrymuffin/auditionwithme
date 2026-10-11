@@ -45,7 +45,10 @@ export const CONFIGS: Record<string, TtsConfig> = {
   "stab-0.5": { ...baseline, name: "stab-0.5", changes: "stability 0.3 → 0.5 (ElevenLabs' API default)", stability: 0.5 },
   "style-0.3": { ...baseline, name: "style-0.3", changes: "style 0 → 0.3", style: 0.3 },
   "warm-prompt": { ...baseline, name: "warm-prompt", changes: "director prompt → warm variant (every cued line shaped)", prompt: "warm" },
-  "prev-next": { ...baseline, name: "prev-next", changes: "previous_text/next_text sent with each line", context: "prev-next" },
+  // ElevenLabs rejects previous_text/next_text on eleven_v3 (unsupported_model,
+  // confirmed in run full-1), so this context mode only has a chance on v4.
+  "prev-next": { ...baseline, name: "prev-next", changes: "previous_text/next_text sent with each line (fails on v3)", context: "prev-next" },
+  "v4-prev-next": { ...baseline, name: "v4-prev-next", changes: "eleven_v4 + previous_text/next_text", model: "eleven_v4", context: "prev-next" },
   "dialogue": { ...baseline, name: "dialogue", changes: "whole scene rendered in one Text-to-Dialogue call (scene clips, not per-line)", context: "dialogue" },
   "emotion-0.5": { ...baseline, name: "emotion-0.5", changes: "character Emotion setting → Expressive (+0.5)", emotion: 0.5 },
   "v4-warm": { ...baseline, name: "v4-warm", changes: "eleven_v4 + warm prompt", model: "eleven_v4", prompt: "warm" },
