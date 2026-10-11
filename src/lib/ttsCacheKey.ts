@@ -27,6 +27,14 @@ export type TtsLine = {
 
 export type TtsIntensity = "subtle" | "natural" | "dramatic";
 
+/** The model and settings a stored read was rendered with. Neither is in the
+ * request the client sends (api/tts.ts chooses them), so this is what makes
+ * audio generated under an older default miss the cache instead of playing
+ * on. Bump it whenever api/tts.ts changes the model or the stability rules.
+ *   (absent) — eleven_v3 at 0.3
+ *   "eleven_v4@0.3" — the first v4 default (benchmarks/voice/emotion.ts) */
+export const RENDER_VERSION = "eleven_v4@0.3";
+
 /** Identifies one rendered read: same key, same audio. Anything that changes
  * what ElevenLabs would generate (voice, words, direction) changes the key;
  * reader volume and playback speed are applied client-side and don't. */
@@ -46,6 +54,7 @@ export const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     // Always "natural" now (Rehearsal pins it), but kept in the key: dropping
     // it would change every key's shape and orphan already-cached audio.
     intensity,
+    RENDER_VERSION,
     // Appended only off natural, so lines read at the default keep the key
     // they were already stored under.
     ...(line.emotion ? [line.emotion] : []),

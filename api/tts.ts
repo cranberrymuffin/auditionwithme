@@ -12,12 +12,21 @@ export { shouldHoldPregen } from "./_elevenlabs.js";
 
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no character voice assigned
 
-// Eleven v3 is the expressive acting model: it takes inline audio tags like
+// Eleven v4 is the expressive acting model: it takes inline audio tags like
 // "[angry]". Multilingual v2 is the fallback when the account or voice can't
-// serve v3 — v2 would read audio tags out loud, so markup only ever goes on
-// the v3 request. Eleven v3 does not accept previous_text or next_text; the AI
-// director already uses scene context to produce the inline performance.
-const EXPRESSIVE_MODEL = "eleven_v3";
+// serve it — v2 would read audio tags out loud, so markup only ever goes on
+// the v4 request.
+//
+// v4 replaced v3 after the emotiveness benchmark (benchmarks/voice/emotion.ts,
+// October 2026): beta testers heard v3 as robotic, and v3 turned out to barely
+// respond to the director's tags or to stability — lines it tagged moved no
+// more than lines it left alone, and stability 0.2–0.5 made no measurable
+// difference. v4 adds about half a semitone of pitch movement on most lines
+// and was preferred for naturalness on 59% of blind pairs (fit on 57%).
+// Unlike v3, v4 accepts previous_text/next_text, but that isn't sent yet: the
+// AI director already works from scene context, and per-line context on v4
+// hasn't been listened to.
+const EXPRESSIVE_MODEL = "eleven_v4";
 const FALLBACK_MODEL = "eleven_multilingual_v2";
 
 // Fixed at the old "natural" preset. The client still sends an `intensity`
@@ -62,12 +71,14 @@ export const BIG_DELIVERY_TAGS = new Set([
   "panicked",
 ]);
 
-// Ordinary lines read at 0.3: looser than v3's Natural preset (0.5), which
-// sounded flat and synthetic, but well short of Creative (0), which
-// exaggerated every tagged line into something beta testers called "over
-// the top" for an audition reader. Emotion still comes mainly from the
-// director's scene-aware audio tags. Creative is kept only for the script's
-// own big-delivery parentheticals, whatever the character's Emotion setting:
+// Ordinary lines read at 0.3. The value predates v4 (it was the v3 setting
+// between Natural, 0.5, which sounded flat, and Creative, 0, which over-acted)
+// and was kept on v4 because the benchmark found stability makes little
+// difference there either: 0.45 scored the same as 0.3 for flatness and
+// over-acting. v4 follows the director's tags much more strongly than v3,
+// so it can over-play a tagged, high-intensity line; that's a prompt matter,
+// not a stability one. Creative is kept only for the script's own
+// big-delivery parentheticals, whatever the character's Emotion setting:
 // the script itself asked for it. Otherwise that setting moves the 0.3 —
 // Very expressive reaches Creative, Very reserved goes past Natural.
 export function v3Stability(bigDelivery: boolean, emotion = 0): number {
