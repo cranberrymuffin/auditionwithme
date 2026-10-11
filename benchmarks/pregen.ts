@@ -33,7 +33,6 @@ import {
 import {
   parseEmotion,
   shouldHoldPregen as serverShouldHold,
-  v2Stability,
   v3Stability,
 } from "../api/tts";
 import { clampCharacterEmotion } from "../src/lib/characterDelivery";
@@ -396,9 +395,6 @@ check("emotion moves stability, but never a script's big delivery", () => {
   assert.equal(v3Stability(false, 0.5), 0.15);
   assert.equal(v3Stability(false, -1), 0.6);
   assert.equal(v3Stability(true, -1), 0);
-  assert.equal(v2Stability(), 0.45);
-  assert.equal(v2Stability(1), 0.15);
-  assert.equal(v2Stability(-1), 0.75);
   assert.equal(parseEmotion("1"), 0);
   assert.equal(parseEmotion(-9), -1);
 });
