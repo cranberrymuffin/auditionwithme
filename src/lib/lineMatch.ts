@@ -1,6 +1,6 @@
 // Pure line-matching logic for live word tracking (useScribeTracking.ts),
 // kept free of app imports (no Supabase/apiFetch) so it can be exercised
-// directly under tsx — see benchmarks/cutoff-guard.ts.
+// directly under tsx — see benchmarks/checks/cutoff-guard.ts.
 
 // How many spoken words we scan ahead looking for the current target word
 // before giving up on it and moving to the next one. Without this, a single
