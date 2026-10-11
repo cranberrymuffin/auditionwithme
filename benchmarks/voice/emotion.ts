@@ -28,6 +28,7 @@
 //   npm run bench:emotion -- --config v4 --config stab-0.45 --run week1
 //   npm run bench:emotion -- --score ratings-*.json --run week1
 //   npm run bench:emotion -- --ai-rate --run week1            # Gemini listens (GEMINI_API_KEY)
+//   npm run bench:emotion -- --ai-score --run week1 --quick   # Gemini scores each clip 1–5, twice
 //   npm run bench:emotion -- --agreement ratings-jess.json ratings-ai-gemini-2.5-flash.json --run week1
 //   npm run bench:emotion -- --list
 //
@@ -457,6 +458,125 @@ async function aiRate(run: string, limit: number | null) {
   console.log(`Score with: npm run bench:emotion -- --score ${out} --run ${run}`);
 }
 
+// Absolute per-clip scoring: the narrow questions behind the complaint, asked
+// of one clip at a time. Each clip is scored twice in separate calls so the
+// judge's test–retest reliability is measured before its means are trusted.
+type ClipScore = { flat: number; overacted: number; fit: number; note: string };
+
+const CLIP_RUBRIC = `You are an experienced audition coach. You will hear one line of dialogue read by an AI scene partner that reads opposite a human actor. Score the read on three 1–5 scales:
+- "flat": 1 = sounds like a real person speaking in the moment, with natural pitch movement and rhythm; 5 = flat, monotone or mechanical, like text being read out.
+- "overacted": 1 = restrained and truthful; 5 = melodramatic or over the top for an audition reader.
+- "fit": 1 = wrong feeling for the moment; 5 = exactly the feeling the moment calls for.
+Judge the delivery only. Answer with JSON only, plus a one-sentence "note".`;
+
+async function geminiScoreClip(apiKey: string, prompt: string, audio: Buffer): Promise<ClipScore> {
+  const body = {
+    contents: [{ role: "user", parts: [{ text: prompt }, { inline_data: { mime_type: "audio/mpeg", data: audio.toString("base64") } }] }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "OBJECT",
+        properties: { flat: { type: "INTEGER" }, overacted: { type: "INTEGER" }, fit: { type: "INTEGER" }, note: { type: "STRING" } },
+        required: ["flat", "overacted", "fit", "note"],
+      },
+    },
+  };
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(AI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    );
+    if ((response.status === 429 || response.status >= 500) && attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 4000 * (attempt + 1)));
+      continue;
+    }
+    if (!response.ok) throw new Error(`Gemini ${response.status}: ${(await response.text()).slice(0, 300)}`);
+    const data = (await response.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    return JSON.parse(data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "") as ClipScore;
+  }
+}
+
+async function aiScore(run: string, limit: number | null) {
+  const dir = join(OUT_ROOT, run);
+  const key = JSON.parse(readFileSync(join(dir, "key.json"), "utf8")) as { renders: Render[] };
+  const fixture = loadFixture();
+  const quickIds = new Set(fixture.targets.filter((target) => target.quick).map((target) => target.id));
+  const onlyLines = new Set(values("lines").flatMap((list) => list.split(",")));
+  const onlyConfigs = new Set(values("config"));
+  const sceneById = new Map(fixture.scenes.map((scene) => [scene.id, scene]));
+  const targetById = new Map(fixture.targets.map((target) => [target.id, target]));
+  const clips = key.renders
+    .filter((render) => !render.scene && !render.error)
+    .filter((render) => !QUICK || quickIds.has(render.line))
+    .filter((render) => !onlyLines.size || onlyLines.has(render.line))
+    .filter((render) => !onlyConfigs.size || onlyConfigs.has(render.config))
+    .slice(0, limit ?? undefined);
+  console.log(`AI clip scoring: ${clips.length} clips × 2 passes through ${AI_MODEL}`);
+  if (DRY_RUN) {
+    console.log("Dry run: no calls made.");
+    return;
+  }
+  const apiKey = requireEnv("GEMINI_API_KEY");
+  const out = join(dir, `clip-scores-ai-${AI_MODEL.replace(/[^a-z0-9.]+/gi, "-")}.json`);
+  const scores: Record<string, { line: string; config: string; passes: ClipScore[] }> = existsSync(out)
+    ? (JSON.parse(readFileSync(out, "utf8")) as { clips: typeof scores }).clips
+    : {};
+  let done = 0;
+  for (const clip of clips) {
+    if (scores[clip.file]?.passes.length === 2) continue;
+    const target = targetById.get(clip.line)!;
+    const scene = sceneById.get(target.scene)!;
+    const context = scene.lines.slice(Math.max(0, target.index - 2), target.index).map((line) => `${line.speaker}: ${line.text}`);
+    const prompt = `${CLIP_RUBRIC}\n\nScene context:\n${context.join("\n") || "(scene opens)"}\n\nThe line, read by ${clip.speaker}: "${scene.lines[target.index].text}"`;
+    const audio = readFileSync(join(dir, clip.file));
+    try {
+      const passes = [await geminiScoreClip(apiKey, prompt, audio), await geminiScoreClip(apiKey, prompt, audio)];
+      scores[clip.file] = { line: clip.line, config: clip.config, passes };
+    } catch (error) {
+      console.warn(`${clip.file}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    done += 1;
+    writeFileSync(out, JSON.stringify({ run, rater: `ai:${AI_MODEL}`, clips: scores }, null, 2) + "\n");
+    if (done % 10 === 0) console.log(`${done} clips scored`);
+  }
+  reportClipScores(scores);
+  console.log(`Wrote ${out}`);
+}
+
+/** Test–retest reliability of the two passes, then per-config means with
+ * paired differences from the reference config on the same lines. */
+function reportClipScores(scores: Record<string, { line: string; config: string; passes: ClipScore[] }>) {
+  const entries = Object.values(scores).filter((entry) => entry.passes.length === 2);
+  const questions = ["flat", "overacted", "fit"] as const;
+  console.log(`\nTest–retest over ${entries.length} clips (same clip scored twice):`);
+  for (const question of questions) {
+    const exact = entries.filter((entry) => entry.passes[0][question] === entry.passes[1][question]).length;
+    const within1 = entries.filter((entry) => Math.abs(entry.passes[0][question] - entry.passes[1][question]) <= 1).length;
+    console.log(`  ${question.padEnd(10)} same score ${pct(exact / entries.length)}   within 1 ${pct(within1 / entries.length)}`);
+  }
+  const mean = (entry: { passes: ClipScore[] }, question: (typeof questions)[number]) =>
+    (entry.passes[0][question] + entry.passes[1][question]) / 2;
+  const byLineConfig = new Map(entries.map((entry) => [`${entry.line}|${entry.config}`, entry]));
+  const configs = [...new Set(entries.map((entry) => entry.config))].sort();
+  console.log(`\n${"config".padEnd(14)} ${"n".padStart(4)}  ${"flat (1 best)".padStart(16)}  ${"overacted".padStart(16)}  ${"fit (5 best)".padStart(16)}   paired Δ vs ${PAIR_WITH}`);
+  for (const config of configs) {
+    const own = entries.filter((entry) => entry.config === config);
+    const avg = (question: (typeof questions)[number]) => own.reduce((sum, entry) => sum + mean(entry, question), 0) / own.length;
+    const deltas = questions.map((question) => {
+      const paired = own.flatMap((entry) => {
+        const reference = byLineConfig.get(`${entry.line}|${PAIR_WITH}`);
+        return reference ? [mean(entry, question) - mean(reference, question)] : [];
+      });
+      return paired.length ? (paired.reduce((sum, value) => sum + value, 0) / paired.length).toFixed(2) : "—";
+    });
+    console.log(
+      `${config.padEnd(14)} ${String(own.length).padStart(4)}  ${avg("flat").toFixed(2).padStart(16)}  ${avg("overacted").toFixed(2).padStart(16)}  ${avg("fit").toFixed(2).padStart(16)}   flat ${deltas[0]}  over ${deltas[1]}  fit ${deltas[2]}`,
+    );
+  }
+}
+
 /** How often two rating files agree on the pairs they share: percent
  * agreement and Cohen's kappa per question. */
 function agreement(files: string[]) {
@@ -570,6 +690,25 @@ async function main() {
     return;
   }
   // --agreement takes the two files that follow it.
+  if (flag("ai-score")) {
+    const run = value("run");
+    if (!run) {
+      console.error("--ai-score needs --run <name>.");
+      process.exit(1);
+    }
+    await aiScore(run, value("clips") ? Number(value("clips")) : null);
+    return;
+  }
+  if (flag("ai-report")) {
+    const run = value("run");
+    const file = value("ai-report");
+    if (!run || !file) {
+      console.error("--ai-report <clip-scores file> needs --run <name>.");
+      process.exit(1);
+    }
+    reportClipScores((JSON.parse(readFileSync(file, "utf8")) as { clips: Record<string, { line: string; config: string; passes: ClipScore[] }> }).clips);
+    return;
+  }
   const agreementAt = argv.indexOf("--agreement");
   const agreementFiles = agreementAt === -1 ? [] : argv.slice(agreementAt + 1, agreementAt + 3).filter((arg) => !arg.startsWith("--"));
   if (agreementFiles.length === 2) {
