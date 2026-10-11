@@ -12,20 +12,35 @@ export { shouldHoldPregen } from "./_elevenlabs.js";
 
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no character voice assigned
 
-// Eleven v3 is the expressive acting model: it takes inline audio tags like
-// "[angry]". Multilingual v2 is the fallback when the account or voice can't
-// serve v3 — v2 would read audio tags out loud, so markup only ever goes on
-// the v3 request. Eleven v3 does not accept previous_text or next_text; the AI
-// director already uses scene context to produce the inline performance.
-const EXPRESSIVE_MODEL = "eleven_v3";
-const FALLBACK_MODEL = "eleven_multilingual_v2";
+// Eleven v4 is the expressive acting model: it takes inline audio tags like
+// "[angry]". Eleven v3 is the fallback when v4 can't serve a request (a voice
+// it doesn't support, a validation error): it takes the same tags and the
+// same stability rules, so a line that falls back keeps its performance and
+// only loses v4's extra movement. Nothing falls back past v3 — the player's
+// browser-TTS fallback (useTtsPlayer.ts) covers a line neither can render —
+// and the old multilingual_v2 fallback, which read every tag out loud and
+// silently flattened the line, is gone.
+//
+// v4 replaced v3 after the emotiveness benchmark (benchmarks/voice/emotion.ts,
+// October 2026): beta testers heard v3 as robotic, and v3 turned out to barely
+// respond to the director's tags or to stability — lines it tagged moved no
+// more than lines it left alone, and stability 0.2–0.5 made no measurable
+// difference. v4 adds about half a semitone of pitch movement on most lines
+// and was preferred for naturalness on 59% of blind pairs (fit on 57%).
+// Unlike v3, v4 accepts previous_text/next_text, but that isn't sent yet: the
+// AI director already works from scene context, and per-line context on v4
+// hasn't been listened to.
+const EXPRESSIVE_MODEL = "eleven_v4";
+const FALLBACK_MODEL = "eleven_v3";
 
-// Fixed at the old "natural" preset. The client still sends an `intensity`
-// field (pinned to "natural" and kept in its cache key), but it's ignored
-// here: a global intensity knob made every line louder at once, which beta
-// testers heard as over-acting. Emotion now comes from per-line audio tags,
-// plus each character's own Emotion setting (see v2Stability below).
-const V2_SETTINGS = { stability: 0.45, style: 0.35 };
+// The client still sends `intensity` (pinned to "natural" and kept in its
+// cache key) and the neighbouring lines as previousText/nextText; both are
+// ignored here. A global intensity knob made every line louder at once, which
+// beta testers heard as over-acting — emotion comes from the director's
+// per-line audio tags plus each character's own Emotion setting. Line context
+// isn't sent because v3 rejects previous_text/next_text (unsupported_model)
+// and on v4 it hasn't been listened to; the director already works from the
+// scene.
 
 // How far a character's Emotion setting (-1 very reserved … 1 very
 // expressive, src/lib/characterDelivery.ts) moves stability off its natural
@@ -42,14 +57,6 @@ export function parseEmotion(emotion: unknown): number {
 const clampStability = (stability: number) =>
   Math.round(Math.min(Math.max(stability, 0), 1) * 100) / 100;
 
-export function v2Stability(emotion = 0): number {
-  return clampStability(V2_SETTINGS.stability - emotion * EMOTION_STABILITY_SPAN);
-}
-
-// Cap on how much surrounding dialogue is sent as prosody context — roughly
-// the last/next five or six lines, enough to carry the scene's emotional arc.
-const CONTEXT_CHAR_LIMIT = 1800;
-
 // Script parentheticals that genuinely call for a big, uncontained read.
 // The AI director can't produce these (they're kept out of its vocabulary in
 // api/casting.ts) — only an explicit "(shouting)"-style direction in the
@@ -62,12 +69,14 @@ export const BIG_DELIVERY_TAGS = new Set([
   "panicked",
 ]);
 
-// Ordinary lines read at 0.3: looser than v3's Natural preset (0.5), which
-// sounded flat and synthetic, but well short of Creative (0), which
-// exaggerated every tagged line into something beta testers called "over
-// the top" for an audition reader. Emotion still comes mainly from the
-// director's scene-aware audio tags. Creative is kept only for the script's
-// own big-delivery parentheticals, whatever the character's Emotion setting:
+// Ordinary lines read at 0.3. The value predates v4 (it was the v3 setting
+// between Natural, 0.5, which sounded flat, and Creative, 0, which over-acted)
+// and was kept on v4 because the benchmark found stability makes little
+// difference there either: 0.45 scored the same as 0.3 for flatness and
+// over-acting. v4 follows the director's tags much more strongly than v3,
+// so it can over-play a tagged, high-intensity line; that's a prompt matter,
+// not a stability one. Creative is kept only for the script's own
+// big-delivery parentheticals, whatever the character's Emotion setting:
 // the script itself asked for it. Otherwise that setting moves the 0.3 —
 // Very expressive reaches Creative, Very reserved goes past Natural.
 export function v3Stability(bigDelivery: boolean, emotion = 0): number {
@@ -97,16 +106,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const {
     text,
     voiceId,
-    previousText,
-    nextText,
     deliveryTag,
     performance,
     emotion: rawEmotion,
   } = (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
-      previousText?: string;
-      nextText?: string;
       deliveryTag?: string;
       /** AI-director markup of `text`: inline v3 audio tags + pacing punctuation. */
       performance?: string;
@@ -131,14 +136,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // enforces that, so treat a request carrying both as tag-only.
   const markup = tag ? null : sanitizePerformance(performance, text);
   const expressiveText = markup ?? (tag ? `[${tag}] ${text}` : text);
-  const context = {
-    ...(typeof previousText === "string" && previousText.trim()
-      ? { previous_text: previousText.slice(-CONTEXT_CHAR_LIMIT) }
-      : {}),
-    ...(typeof nextText === "string" && nextText.trim()
-      ? { next_text: nextText.slice(0, CONTEXT_CHAR_LIMIT) }
-      : {}),
-  };
+  // `tag` is the explicit deliveryTag (script parenthetical) only — director
+  // markup never makes a line "big".
+  const stability = v3Stability(tag != null && BIG_DELIVERY_TAGS.has(tag), emotion);
 
   const synthesize = (modelId: string) =>
     fetchElevenLabs(
@@ -149,32 +149,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           "xi-api-key": apiKey,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(
-          modelId === EXPRESSIVE_MODEL
-            ? {
-                text: expressiveText,
-                model_id: modelId,
-                // `tag` is the explicit deliveryTag (script parenthetical) only —
-                // director markup never makes a line "big".
-                voice_settings: {
-                  stability: v3Stability(
-                    tag != null && BIG_DELIVERY_TAGS.has(tag),
-                    emotion,
-                  ),
-                },
-              }
-            : {
-                text,
-                model_id: modelId,
-                voice_settings: {
-                  ...V2_SETTINGS,
-                  stability: v2Stability(emotion),
-                  similarity_boost: 0.75,
-                  use_speaker_boost: true,
-                },
-                ...context,
-              },
-        ),
+        // v4 and the v3 fallback take the same request: both read the tags.
+        body: JSON.stringify({
+          text: expressiveText,
+          model_id: modelId,
+          voice_settings: { stability },
+        }),
       },
     );
 
@@ -204,8 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const audio = await upstream.arrayBuffer();
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Content-Length", audio.byteLength);
-    // Which model actually rendered the line — the v2 fallback silently strips
-    // all expressive markup, so surfacing this makes "why does it sound flat"
+    // Which model actually rendered the line, so a fallback to v3 is
     // diagnosable from the browser's network tab.
     res.setHeader("X-TTS-Model", servedModel);
     return res.status(200).send(Buffer.from(audio));

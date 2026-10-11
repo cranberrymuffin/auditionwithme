@@ -11,7 +11,7 @@
 // Run with tsx (no test runner in this repo; failures exit non-zero).
 
 import assert from "node:assert/strict";
-import { cacheKey } from "../../src/lib/ttsCacheKey";
+import { cacheKey, RENDER_VERSION } from "../../src/lib/ttsCacheKey";
 import {
   buildReaderCue,
   buildReaderLine,
@@ -33,7 +33,6 @@ import {
 import {
   parseEmotion,
   shouldHoldPregen as serverShouldHold,
-  v2Stability,
   v3Stability,
 } from "../../api/tts";
 import { clampCharacterEmotion } from "../../src/lib/characterDelivery";
@@ -165,13 +164,14 @@ check("prosody context skips unspoken steps", () => {
   assert.equal(buildReaderLine(steps, 3, voices, []), null);
 });
 
-check("reader lines carry no leading [pause], and the key keeps its old shape", () => {
+check("reader lines carry no leading [pause], and the key keeps its shape plus the render version", () => {
   const line = buildReaderLine(steps, 1, voices, [])!;
   assert.equal("leadingPause" in line, false);
   const parts = JSON.parse(cacheKey(line, "natural")) as unknown[];
-  assert.equal(parts.length, 8);
+  assert.equal(parts.length, 9);
   assert.equal(parts[6], false); // the old leading-pause slot
   assert.equal(parts[7], "natural");
+  assert.equal(parts[8], RENDER_VERSION); // so audio from an older default misses
 });
 
 check("a director beat marker is split off: not in the text, performance, or key", () => {
@@ -395,9 +395,6 @@ check("emotion moves stability, but never a script's big delivery", () => {
   assert.equal(v3Stability(false, 0.5), 0.15);
   assert.equal(v3Stability(false, -1), 0.6);
   assert.equal(v3Stability(true, -1), 0);
-  assert.equal(v2Stability(), 0.45);
-  assert.equal(v2Stability(1), 0.15);
-  assert.equal(v2Stability(-1), 0.75);
   assert.equal(parseEmotion("1"), 0);
   assert.equal(parseEmotion(-9), -1);
 });
