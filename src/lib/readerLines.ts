@@ -1,7 +1,7 @@
 // Which steps the AI scene partner reads, and the exact TTS request for each.
 // Shared by Rehearsal.tsx (playback) and useReaderAudioPregen.ts (generation
 // before Start) so both build identical requests — and therefore identical
-// cache keys. Pure, so benchmarks/pregen.ts can check it under tsx.
+// cache keys. Pure, so benchmarks/checks/pregen.ts can check it under tsx.
 import type { Step } from "../types";
 import {
   beatFromContent,

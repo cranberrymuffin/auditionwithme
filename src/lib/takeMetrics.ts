@@ -1,7 +1,7 @@
 // Per-take rehearsal telemetry, saved on the audition's self_tape_feedback
 // row (see supabase/migrations/20261008120000_self_tape_feedback_metrics.sql).
 // Numeric only: nothing here ever holds a transcript, script text, or audio.
-// No imports, so benchmarks/take-metrics.ts can run it under plain tsx.
+// No imports, so benchmarks/checks/take-metrics.ts can run it under plain tsx.
 
 /** How the actor's line got credited as finished without a manual Next. */
 export type DetectedAdvanceKind = "auto" | "semantic" | "silence";

@@ -15,7 +15,7 @@ import {
   PATIENT_HOLD_MS,
   quietAdvance,
   type QuietInputs,
-} from "../src/lib/lineMatch";
+} from "../../src/lib/lineMatch";
 
 let passed = 0;
 function check(name: string, fn: () => void) {

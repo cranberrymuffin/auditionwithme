@@ -15,16 +15,17 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractPdfLayout, type PdfLayoutResult } from "../src/lib/pdf";
+import { extractPdfLayout, type PdfLayoutResult } from "../../src/lib/pdf";
 import {
   cleanLayoutLines,
   flattenLayout,
   parseScreenplayLayout,
-} from "../api/_layout.js";
-import { applySidesMarkup } from "../api/_sides.js";
+} from "../../api/_layout.js";
+import { applySidesMarkup } from "../../api/_sides.js";
 
 const TEST_DATA = join(
   dirname(fileURLToPath(import.meta.url)),
+  "..",
   "..",
   "test_data",
 );

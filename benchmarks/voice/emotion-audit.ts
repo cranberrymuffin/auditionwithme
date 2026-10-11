@@ -1,4 +1,4 @@
-// Markup audit for the emotiveness benchmark (benchmarks/tts-emotion.ts):
+// Markup audit for the emotiveness benchmark (benchmarks/voice/emotion.ts):
 // scores what the AI director produced for each target line against the
 // fixture's hand-written labels, before any audio exists. Pure, so the
 // dry-run checks can exercise it.

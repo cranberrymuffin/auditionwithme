@@ -1,4 +1,4 @@
-// The configurations benchmarks/tts-emotion.ts can render. Each one changes
+// The configurations benchmarks/voice/emotion.ts can render. Each one changes
 // a single thing against `baseline` (what production does today), so a
 // listening test isolates that variable; `candidate` is where the winners
 // get combined once they've each beaten the baseline on their own.

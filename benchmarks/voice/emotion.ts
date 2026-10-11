@@ -1,13 +1,13 @@
 // Emotiveness benchmark for the scene partner's voice (beta feedback: "the
 // reader sounds robotic"). Renders the labelled lines in
 // test_data/tts-emotion-lines.json under one or more configurations
-// (benchmarks/tts-emotion-configs.ts) through the real pipeline pieces —
+// (benchmarks/voice/emotion-configs.ts) through the real pipeline pieces —
 // the AI director prompt, sanitizePerformance, the stability rules — and
 // produces everything the three measurement tiers need:
 //
 //   1. audit.json      how the director shaped each line vs. its label
 //                      (no audio needed: --direct-only)
-//   2. acoustics       run benchmarks/tts-acoustics.py on the output folder
+//   2. acoustics       run benchmarks/voice/acoustics.py on the output folder
 //   3. rater.html      blind A/B pairs of every config against --pair-with;
 //                      raters download a ratings JSON, scored with --score
 //
@@ -47,7 +47,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONFIGS, DEFAULT_PAIR_WITH, WARM_DIRECTOR_PROMPT, type TtsConfig } from "./tts-emotion-configs.js";
+import { CONFIGS, DEFAULT_PAIR_WITH, WARM_DIRECTOR_PROMPT, type TtsConfig } from "./emotion-configs.js";
 import {
   auditLine,
   extractTags,
@@ -57,15 +57,15 @@ import {
   wilson,
   type Label,
   type LineAudit,
-} from "./lib/ttsEmotionAudit.js";
+} from "./emotion-audit.js";
 import {
   beatFromContent,
   deliveryTagFromContent,
   splitLeadingBeat,
-} from "../src/lib/delivery.js";
-import type { ContentLine } from "../src/types.js";
+} from "../../src/lib/delivery.js";
+import type { ContentLine } from "../../src/types.js";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = join(ROOT, "test_data", "tts-emotion-lines.json");
 const OUT_ROOT = join(ROOT, "benchmarks", "out", "tts-emotion");
 
@@ -619,15 +619,15 @@ async function main() {
   const prompts = [...new Set(configs.map((config) => config.prompt))];
 
   // Imported after the env check above (see dry-run note).
-  const { DIRECTOR_PROMPT } = await import("../api/casting.js");
-  const { BIG_DELIVERY_TAGS } = await import("../api/tts.js");
-  const { sanitizePerformance } = await import("../api/_direction.js");
+  const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
+  const { BIG_DELIVERY_TAGS } = await import("../../api/tts.js");
+  const { sanitizePerformance } = await import("../../api/_direction.js");
   const promptText = (variant: TtsConfig["prompt"]) => (variant === "warm" ? WARM_DIRECTOR_PROMPT : DIRECTOR_PROMPT);
 
   // Voices: catalog names in the fixture → ids, like casting resolves them.
   const voiceIds = new Map<string, string>();
   if (!DRY_RUN && elevenKey) {
-    const { fetchVoices } = await import("../api/_elevenlabs.js");
+    const { fetchVoices } = await import("../../api/_elevenlabs.js");
     const catalog = await fetchVoices(elevenKey);
     for (const name of new Set(Object.values(fixture.voices))) {
       const match = catalog.find((voice) => voice.name.split(/\s+-\s+/)[0].trim().toLowerCase() === name.toLowerCase());
@@ -846,7 +846,7 @@ async function main() {
     writeFileSync(join(outDir, "rater.html"), raterHtml(run, pairs, renders.filter((render) => render.scene)));
     console.log(`\nWrote ${renders.length} renders, ${pairs.length} blind pairs → ${outDir}`);
     console.log(`Open ${join(outDir, "rater.html")} to rate; score with: npm run bench:emotion -- --score ratings-<name>.json --run ${run}`);
-    console.log(`Acoustics: python3 benchmarks/tts-acoustics.py ${outDir}`);
+    console.log(`Acoustics: python3 benchmarks/voice/acoustics.py ${outDir}`);
   } else {
     console.log(`\nWrote audit → ${outDir} (no audio: --direct-only)`);
   }

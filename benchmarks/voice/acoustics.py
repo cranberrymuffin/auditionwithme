@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Acoustic proxies for the emotiveness benchmark (benchmarks/tts-emotion.ts).
+"""Acoustic proxies for the emotiveness benchmark (benchmarks/voice/emotion.ts).
 
 A flat, "robotic" read has little pitch movement and little variation in
 loudness and pace. This measures those per rendered clip and compares each
@@ -19,10 +19,9 @@ Per clip:
   duration_s
 
 Usage:
-  python3 benchmarks/tts-acoustics.py benchmarks/out/tts-emotion/<run>
-  python3 benchmarks/tts-acoustics.py benchmarks/out/tts-emotion/<run> --csv
+  python3 benchmarks/voice/acoustics.py benchmarks/out/tts-emotion/<run>
 
-Needs: pip install -r benchmarks/requirements-acoustics.txt
+Needs: pip install -r benchmarks/voice/requirements.txt
 (librosa, numpy, soundfile; soundfile ≥ 0.12 decodes MP3 without ffmpeg).
 """
 
@@ -36,7 +35,7 @@ try:
     import librosa
     import numpy as np
 except ImportError as error:  # pragma: no cover
-    sys.exit(f"{error}. Install with: pip install -r benchmarks/requirements-acoustics.txt")
+    sys.exit(f"{error}. Install with: pip install -r benchmarks/voice/requirements.txt")
 
 SR = 22050
 FRAME = 1024
@@ -127,7 +126,7 @@ def main() -> None:
         rows.append({"line": render["line"], "config": render["config"], "file": render["file"], **metrics})
         print(f"{render['config']:>14} {render['line']:<22} f0σ {metrics['f0_std_st']:>5} st  range {metrics['f0_range_st']:>5} st  rmsσ {metrics['rms_std_db']:>5} dB  pauses {metrics['pauses']}")
 
-    if "--csv" in sys.argv or True:
+    if True:
         out = run_dir / "acoustics.csv"
         with out.open("w", newline="") as handle:
             writer = csv.DictWriter(handle, fieldnames=["line", "config", "file", *METRICS, "f0_median_hz", "voiced_share"])
