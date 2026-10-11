@@ -405,7 +405,16 @@ async function geminiJudge(apiKey: string, prompt: string, first: Buffer, second
 
 async function aiRate(run: string, limit: number | null) {
   const dir = join(OUT_ROOT, run);
-  const pairs = (JSON.parse(readFileSync(join(dir, "pairs.json"), "utf8")) as Pair[]).slice(0, limit ?? undefined);
+  // The same --quick / --lines / --config filters as rendering, so a slice of a
+  // big run can be rated first.
+  const quickIds = new Set(loadFixture().targets.filter((target) => target.quick).map((target) => target.id));
+  const onlyLines = new Set(values("lines").flatMap((list) => list.split(",")));
+  const onlyConfigs = new Set(values("config"));
+  const pairs = (JSON.parse(readFileSync(join(dir, "pairs.json"), "utf8")) as Pair[])
+    .filter((pair) => !QUICK || quickIds.has(pair.line))
+    .filter((pair) => !onlyLines.size || onlyLines.has(pair.line))
+    .filter((pair) => !onlyConfigs.size || onlyConfigs.has(pair.id.slice(pair.line.length + 2)))
+    .slice(0, limit ?? undefined);
   console.log(`AI rater: ${pairs.length} pairs × 2 orders through ${AI_MODEL}`);
   if (DRY_RUN) {
     console.log("Dry run: no calls made.");

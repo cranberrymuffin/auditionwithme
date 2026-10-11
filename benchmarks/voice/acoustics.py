@@ -20,6 +20,7 @@ Per clip:
 
 Usage:
   python3 benchmarks/voice/acoustics.py benchmarks/out/tts-emotion/<run>
+Writes acoustics.csv into the run folder and prints per-config means.
 
 Needs: pip install -r benchmarks/voice/requirements.txt
 (librosa, numpy, soundfile; soundfile ≥ 0.12 decodes MP3 without ffmpeg).
@@ -126,13 +127,12 @@ def main() -> None:
         rows.append({"line": render["line"], "config": render["config"], "file": render["file"], **metrics})
         print(f"{render['config']:>14} {render['line']:<22} f0σ {metrics['f0_std_st']:>5} st  range {metrics['f0_range_st']:>5} st  rmsσ {metrics['rms_std_db']:>5} dB  pauses {metrics['pauses']}")
 
-    if True:
-        out = run_dir / "acoustics.csv"
-        with out.open("w", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=["line", "config", "file", *METRICS, "f0_median_hz", "voiced_share"])
-            writer.writeheader()
-            writer.writerows(rows)
-        print(f"\nWrote {out}")
+    out = run_dir / "acoustics.csv"
+    with out.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["line", "config", "file", *METRICS, "f0_median_hz", "voiced_share"])
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"\nWrote {out}")
 
     configs = sorted({row["config"] for row in rows})
     baseline = key.get("pairWith", "baseline")
