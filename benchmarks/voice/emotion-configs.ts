@@ -65,7 +65,7 @@ export const CONFIGS: Record<string, TtsConfig> = {
   // Learned from v4-prompt: on v4 any tag is a performance, control tags
   // included. This keeps today's prompt but takes the tags off the big
   // moments entirely and caps how much of a scene gets tagged.
-  "v4-sparse": { ...baseline, name: "v4-sparse", changes: "eleven_v4 + sparse director prompt (big moments untagged, pacing only)", model: "eleven_v4", prompt: "sparse" },
+  "v4-sparse": { ...baseline, name: "v4-sparse", changes: "eleven_v4 + sparse director prompt (no effect: v4 over-plays big moments from the words, not the tags)", model: "eleven_v4", prompt: "sparse" },
   // Fill in from the winners once experiments 1–6 have run.
   candidate: { ...baseline, name: "candidate", changes: "the combined winners (edit me)", model: "eleven_v4", prompt: "warm" },
 };
