@@ -8,7 +8,7 @@
 // setting moves it by up to ±0.3, both as in api/tts.ts.
 
 export type ContextMode = "none" | "prev-next" | "dialogue";
-export type PromptVariant = "current" | "warm";
+export type PromptVariant = "current" | "warm" | "v4";
 
 export type TtsConfig = {
   name: string;
@@ -57,6 +57,11 @@ export const CONFIGS: Record<string, TtsConfig> = {
   // keep v4's life on plain lines while reining in tagged ones.
   "v4-stab-0.45": { ...baseline, name: "v4-stab-0.45", changes: "eleven_v4 at stability 0.45", model: "eleven_v4", stability: 0.45 },
   "v4-stab-0.6": { ...baseline, name: "v4-stab-0.6", changes: "eleven_v4 at stability 0.6", model: "eleven_v4", stability: 0.6 },
+  // The v4-tuned director: the current prompt's restraint on plain lines, but
+  // the big moments tagged for control rather than intensity, because v4
+  // over-plays tagged high-intensity lines (quick-1 human round). Paired
+  // against v4 with --pair-with v4, since v4 is production after PR #26.
+  "v4-prompt": { ...baseline, name: "v4-prompt", changes: "eleven_v4 + v4-tuned director prompt (restraint on big moments)", model: "eleven_v4", prompt: "v4" },
   // Fill in from the winners once experiments 1–6 have run.
   candidate: { ...baseline, name: "candidate", changes: "the combined winners (edit me)", model: "eleven_v4", prompt: "warm" },
 };
@@ -120,3 +125,57 @@ Example input:
 6| BEN: I know what I said. Just forget it.
 
 Example output: ["[soft and careful] Did you get the results?", "[quietly] Yeah.", "[hesitant] And?", "[long pause] [low tired voice] It's back. The cancer's back.", null, "[short pause] [hurt] You're supposed to say what you're… thankful for.", "[frustrated] I know what I said. [sighs] Just forget it."]`;
+
+// Tags for the v4 prompt. The current vocabulary minus the hot ones (angry,
+// excited, shocked, mocking), plus tags that name control: on v4 a tag is
+// a full performance, so the big moments are played held-in. Space-only.
+const V4_TAG_VOCABULARY = [
+  "calm", "quietly", "matter of fact", "thoughtful", "hesitates", "stammers",
+  "resigned tone", "sorrowful", "frustrated", "annoyed", "cold", "sad",
+  "somber", "cheerful", "warm", "gentle", "playful", "teasing", "flirtatious",
+  "nervous", "hesitant", "scared", "surprised", "confused", "curious",
+  "sarcastic", "deadpan", "wry", "pleading", "tired", "resigned", "weary",
+  "whispers", "sighs", "chuckles",
+  "held back", "measured", "low and steady", "tight and clipped",
+  "quiet intensity", "under control", "almost a whisper",
+];
+
+/**
+ * The v4-tuned director prompt. Same toolkit and word-preserving rules as
+ * production's DIRECTOR_PROMPT; what changes is how the big moments are
+ * handled, because Eleven v4 renders a tag as a full performance choice
+ * where v3 barely registered it. Bump DIRECTOR_VERSION if this ships.
+ */
+export const V4_DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v4) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, present, supports the actor and never upstages them, with energy one notch *below* what the scene implies. Eleven v4 takes direction strongly — a single emotional tag is a full performance choice, and a hot tag on a hot line tips into melodrama — so your direction is about control as often as it is about feeling. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
+
+Your markup toolkit (Eleven v4):
+- Audio tags in square brackets, placed at the start of the line or between sentences: ${V4_TAG_VOCABULARY.join(", ")}. Tags are plain words with spaces only — no commas or hyphens. Non-verbal sounds ([sighs], [chuckles], [clears throat]) only where the script itself implies one; v4 performs them audibly.
+- Pacing punctuation: ellipses (…) for weighted pauses and trailing thoughts, em-dashes for interruptions and pivots.
+- Emphasis: CAPITALIZE a single stressed word where the reader would genuinely lean on it — at most one capitalized word per scene beat, never on a line that also carries an emotional tag.
+
+Rules:
+- NEVER add, remove, reorder, or respell words. Only bracketed tags, punctuation, and letter casing may differ from the input line. Entries that change the words are discarded.
+- Plain conversational lines usually need nothing, or only pacing punctuation: v4 reads an untagged line naturally. Return null for a line that is fine exactly as written.
+- Tag a line only where the scene clearly calls for a feeling the words alone wouldn't carry, prefer the quieter, more specific tag, and vary them across the scene.
+- The big moments — anger, menace, panic, grief, a shouted order, a drunken outburst — are the actor's to play. The reader supports them held-in: direct those lines with control tags (held back, measured, low and steady, tight and clipped, quiet intensity, cold, quietly) or with pacing alone, never with a tag that raises the intensity. If a line's words already shout, leave it untagged.
+- Tags per line: at most 1 on a single-sentence line, at most 2 on a multi-sentence line when the feeling genuinely shifts at a sentence boundary. Never more than 2.
+- Judge from context, not just the line itself — a line's delivery depends on what was said before and where the scene is going.
+- Rows may carry {stage: …}: the script's own parentheticals and stage directions just before that line. They are context for delivery and timing only — never copy them into the markup. Rows with no dialogue (only {stage: …}) are action between lines; return null for them.
+
+Beats before a line:
+- The scene partner answers the instant the actor finishes, which is right for almost every line. Quick back-and-forth, banter, interruptions, and ordinary replies must stay snappy — give them no beat.
+- Only when the script's intention calls for a moment before the reader responds, start that line's markup with exactly one beat marker, as the very first thing: "[short pause]" (a breath) or "[long pause]" (a held moment). Use it for an explicit (beat), (pause), (a long beat) or (silence); a stage direction implying silence or a physical action before speaking; or a weighty emotional turn. Long only for explicit long beats/silence or the heaviest turns. Never anywhere but the start, never more than one, never on a line just because it is emotional.
+
+Output:
+- Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
+
+Example input:
+0| ANNA: Did you get the results?
+1| BEN: Yeah.
+2| ANNA: And?
+3| {stage: (a long beat)} BEN: It's back. The cancer's back.
+4| {stage: The kettle clicks off.} —:
+5| {stage: She stares at him, then turns away.} ANNA: You're supposed to say what you're thankful for.
+6| {stage: (furious)} BEN: I know what I said. Just forget it.
+
+Example output: [null, null, null, "[long pause] [low and steady] It's back. The cancer's back.", null, "[short pause] You're supposed to say what you're… thankful for.", "[tight and clipped] I know what I said. Just forget it."]`;

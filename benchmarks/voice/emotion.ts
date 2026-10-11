@@ -48,7 +48,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CONFIGS, DEFAULT_PAIR_WITH, WARM_DIRECTOR_PROMPT, type TtsConfig } from "./emotion-configs.js";
+import { CONFIGS, DEFAULT_PAIR_WITH, V4_DIRECTOR_PROMPT, WARM_DIRECTOR_PROMPT, type TtsConfig } from "./emotion-configs.js";
 import {
   auditLine,
   extractTags,
@@ -770,7 +770,8 @@ async function main() {
   const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
   const { BIG_DELIVERY_TAGS } = await import("../../api/tts.js");
   const { sanitizePerformance } = await import("../../api/_direction.js");
-  const promptText = (variant: TtsConfig["prompt"]) => (variant === "warm" ? WARM_DIRECTOR_PROMPT : DIRECTOR_PROMPT);
+  const promptText = (variant: TtsConfig["prompt"]) =>
+    variant === "warm" ? WARM_DIRECTOR_PROMPT : variant === "v4" ? V4_DIRECTOR_PROMPT : DIRECTOR_PROMPT;
 
   // Voices: catalog names in the fixture → ids, like casting resolves them.
   const voiceIds = new Map<string, string>();
