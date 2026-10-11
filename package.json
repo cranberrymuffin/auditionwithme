@@ -11,6 +11,8 @@
     "test:metrics": "tsx benchmarks/take-metrics.ts",
     "test:parse-cache": "tsx benchmarks/parse-cache.ts",
     "test:pregen": "tsx benchmarks/pregen.ts",
+    "test:emotion": "tsx benchmarks/tts-emotion.ts --dry-run --quick",
+    "bench:emotion": "tsx benchmarks/tts-emotion.ts",
     "delete-user": "node scripts/delete-user.mjs",
     "set-admin": "node scripts/set-admin.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",
