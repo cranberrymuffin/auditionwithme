@@ -52,6 +52,11 @@ export const CONFIGS: Record<string, TtsConfig> = {
   "dialogue": { ...baseline, name: "dialogue", changes: "whole scene rendered in one Text-to-Dialogue call (scene clips, not per-line)", context: "dialogue" },
   "emotion-0.5": { ...baseline, name: "emotion-0.5", changes: "character Emotion setting → Expressive (+0.5)", emotion: 0.5 },
   "v4-warm": { ...baseline, name: "v4-warm", changes: "eleven_v4 + warm prompt", model: "eleven_v4", prompt: "warm" },
+  // v4 follows the director's tags far more strongly than v3 (quick-1 human
+  // ratings: v4 won on untagged lines and over-played tagged ones), so these
+  // keep v4's life on plain lines while reining in tagged ones.
+  "v4-stab-0.45": { ...baseline, name: "v4-stab-0.45", changes: "eleven_v4 at stability 0.45", model: "eleven_v4", stability: 0.45 },
+  "v4-stab-0.6": { ...baseline, name: "v4-stab-0.6", changes: "eleven_v4 at stability 0.6", model: "eleven_v4", stability: 0.6 },
   // Fill in from the winners once experiments 1–6 have run.
   candidate: { ...baseline, name: "candidate", changes: "the combined winners (edit me)", model: "eleven_v4", prompt: "warm" },
 };
