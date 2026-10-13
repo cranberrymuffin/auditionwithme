@@ -253,6 +253,7 @@ export default function RehearsalSetup({
     failed?: boolean;
     text: string;
     aside?: ReactNode;
+    note?: string;
   }[] = [
     ...(willRecord
       ? [
@@ -263,6 +264,7 @@ export default function RehearsalSetup({
             aside: cameraStream && audioTrack && checkAudio && (
               <MicLevel stream={cameraStream} context={checkAudio} />
             ),
+            note: "For best results, use a Bluetooth external microphone.",
           },
         ]
       : []),
@@ -342,9 +344,15 @@ export default function RehearsalSetup({
             <span aria-hidden="true">
               {device.done ? "✓" : device.failed ? "✕" : "○"}
             </span>
-            <strong>{device.name}</strong>
+            <strong>
+              {device.name}
+              {device.note && "*"}
+            </strong>
             <small title={device.text}>{device.text}</small>
             {device.aside}
+            {device.note && (
+              <p className="rehearsal-setup-device-note">*{device.note}</p>
+            )}
           </li>
         ))}
       </ul>

@@ -4448,6 +4448,12 @@ header .flow-back:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.rehearsal-setup-device-note {
+  grid-column: 2 / -1;
+  margin: -6px 0 0;
+  color: rgba(248, 241, 230, 0.5);
+  font-size: 0.75rem;
+}
 /* The microphone's live level: bars light up as the actor speaks. */
 .mic-level {
   display: inline-flex;
