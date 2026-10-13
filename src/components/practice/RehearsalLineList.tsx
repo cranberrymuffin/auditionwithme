@@ -10,11 +10,13 @@ function formatLogTime(ms: number): string {
 }
 
 /**
- * Whether the audio debug panel shows. Off for actors; a tester chasing the
- * mobile cue-reliability issues turns it on with ?audioDebug=1 (it sticks on
- * that device until ?audioDebug=0). Events are logged either way.
+ * Whether the audio debug panel shows. Always on in dev; off for actors in
+ * production, where a tester chasing the mobile cue-reliability issues turns
+ * it on with ?audioDebug=1 (it sticks on that device until ?audioDebug=0).
+ * Events are logged either way.
  */
 function audioDebugEnabled(): boolean {
+  if (import.meta.env.DEV) return true;
   try {
     const param = new URLSearchParams(window.location.search).get("audioDebug");
     if (param === "1") localStorage.setItem("awm:audioDebug", "1");
