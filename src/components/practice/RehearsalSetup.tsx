@@ -344,14 +344,11 @@ export default function RehearsalSetup({
             <span aria-hidden="true">
               {device.done ? "✓" : device.failed ? "✕" : "○"}
             </span>
-            <strong>
-              {device.name}
-              {device.note && "*"}
-            </strong>
+            <strong>{device.name}</strong>
             <small title={device.text}>{device.text}</small>
             {device.aside}
             {device.note && (
-              <p className="rehearsal-setup-device-note">*{device.note}</p>
+              <p className="rehearsal-setup-device-note">{device.note}</p>
             )}
           </li>
         ))}
