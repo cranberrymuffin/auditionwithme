@@ -5026,20 +5026,6 @@ header .flow-back:hover {
   }
 }
 
-/* Word-by-word tracking states in the teleprompter */
-.word--said {
-  color: #ff3b30;
-  font-weight: 700;
-}
-.word--current {
-  color: var(--ink);
-  background: var(--glow);
-  border-radius: 0.2em;
-}
-.word--unsaid {
-  color: var(--ink-muted);
-}
-
 /* Focused rehearsal workspace */
 .rehearsal-page {
   height: 100vh;

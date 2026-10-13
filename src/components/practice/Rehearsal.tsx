@@ -562,7 +562,6 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
             selectedRole={selectedRole}
             lineMode={lineMode}
             isMyLine={isMyLine}
-            matchedWordCount={matchedWordCount}
             status={status}
             canReplay={Boolean(cueStep)}
             onJump={goTo}
