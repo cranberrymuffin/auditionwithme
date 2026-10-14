@@ -72,9 +72,9 @@ const OUT_ROOT = join(ROOT, "benchmarks", "out", "tts-emotion");
 
 const DIRECTOR_MODEL = "claude-opus-5";
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily, api/tts.ts's fallback
-// api/tts.ts's EMOTION_STABILITY_SPAN and CONTEXT_CHAR_LIMIT.
+// api/tts.ts's EMOTION_STABILITY_SPAN and LINE_CONTEXT_CHARS.
 const EMOTION_STABILITY_SPAN = 0.3;
-const CONTEXT_CHAR_LIMIT = 1800;
+const CONTEXT_CHAR_LIMIT = 300;
 // api/casting.ts's MAX_DIRECTION_CHARS.
 const MAX_DIRECTION_CHARS = 200;
 // Text-to-Dialogue's documented per-request ceiling.
@@ -127,6 +127,18 @@ const value = (name: string) => values(name)[0];
 const DRY_RUN = flag("dry-run");
 const AI_MODEL = value("ai-model") ?? "gemini-2.5-flash";
 const DIRECT_ONLY = flag("direct-only");
+// Asks the director for its answer through structured outputs (a JSON
+// schema) instead of free text, which some models wrap in prose or answer
+// twice — leaving the extractor nothing to parse.
+const DIRECTOR_SCHEMA = flag("director-schema");
+const DIRECTOR_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    lines: { type: "array", items: { anyOf: [{ type: "string" }, { type: "null" }] } },
+  },
+  required: ["lines"],
+  additionalProperties: false,
+} as const;
 const QUICK = flag("quick");
 const PAIR_WITH = value("pair-with") ?? DEFAULT_PAIR_WITH;
 
@@ -764,7 +776,9 @@ async function main() {
   }
   const sceneById = new Map(fixture.scenes.map((scene) => [scene.id, scene]));
   const scenes = [...new Set(targets.map((target) => target.scene))].map((id) => sceneById.get(id)!);
-  const prompts = [...new Set(configs.map((config) => config.prompt))];
+  // Each distinct director run: a prompt variant on a model.
+  const directorOf = (config: TtsConfig) => `${config.prompt}@${config.directorModel ?? DIRECTOR_MODEL}`;
+  const prompts = [...new Set(configs.map(directorOf))];
 
   // Imported after the env check above (see dry-run note).
   const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
@@ -799,6 +813,7 @@ async function main() {
   console.log(`Run "${run}": ${targets.length} lines in ${scenes.length} scenes × ${configs.length} config(s)`);
   console.log(`  director calls: ${prompts.length * scenes.length} (${prompts.join(", ")} × ${scenes.length} scenes)`);
   console.log(`  renders: ${DIRECT_ONLY ? 0 : renderCount}`);
+  if (DIRECTOR_SCHEMA) console.log("  director output: structured (JSON schema)");
   for (const config of configs) console.log(`  ${config.name.padEnd(14)} ${config.changes}`);
   if (DRY_RUN) {
     console.log("\nDry run: no API calls made, nothing written.");
@@ -808,24 +823,39 @@ async function main() {
   // The director, once per prompt variant per scene; the whole scene goes in
   // one call, as api/casting.ts's directLines sends the whole script.
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
+  const { jsonSchemaOutputFormat } = await import("@anthropic-ai/sdk/helpers/json-schema");
   const anthropic = new Anthropic();
   const directed = new Map<string, (string | null)[]>();
-  for (const variant of prompts) {
+  for (const director of prompts) {
+    const [variant, model] = director.split("@") as [TtsConfig["prompt"], string];
     for (const scene of scenes) {
-      const response = await anthropic.messages.create({
-        model: DIRECTOR_MODEL,
+      const response = await anthropic.messages.parse({
+        model,
         max_tokens: 8000,
-        output_config: { effort: "low" },
+        output_config: {
+          effort: "low",
+          ...(DIRECTOR_SCHEMA ? { format: jsonSchemaOutputFormat(DIRECTOR_OUTPUT_SCHEMA) } : {}),
+        },
         system: promptText(variant),
         messages: [{ role: "user", content: `Scene dialogue, one line per row:\n${numberedRows(scene)}` }],
       });
       const textBlock = response.content.find((block) => block.type === "text");
-      const entries = extractJsonArray(textBlock?.type === "text" ? textBlock.text : "") ?? [];
+      const entries: unknown[] = DIRECTOR_SCHEMA
+        ? [...((response.parsed_output as { lines?: unknown[] } | null)?.lines ?? [])]
+        : extractJsonArray(textBlock?.type === "text" ? textBlock.text : "") ?? [];
+      if (!entries.length) {
+        // Production (api/casting.ts) would leave the whole script undirected.
+        const text = textBlock?.type === "text" ? textBlock.text : "";
+        console.warn(
+          `no entries for ${scene.id} (${director}): stop_reason=${response.stop_reason}, ` +
+            `output_tokens=${response.usage.output_tokens}, text=${JSON.stringify(text.slice(0, 300))}`,
+        );
+      }
       directed.set(
-        `${variant}:${scene.id}`,
+        `${director}:${scene.id}`,
         scene.lines.map((line, index) => sanitizePerformance(entries[index], line.text)),
       );
-      console.log(`directed ${scene.id} (${variant}): ${entries.length} entries`);
+      console.log(`directed ${scene.id} (${director}): ${entries.length} entries`);
     }
   }
 
@@ -872,7 +902,7 @@ async function main() {
       scene.lines.map((line, index) => {
         const content = toContent(line.direction);
         const deliveryTag = deliveryTagFromContent(content);
-        const shaped = shapeLine(line.text, deliveryTag, directed.get(`${config.prompt}:${scene.id}`)?.[index] ?? null);
+        const shaped = shapeLine(line.text, deliveryTag, directed.get(`${directorOf(config)}:${scene.id}`)?.[index] ?? null);
         const beat = beatFromContent(content) ?? (shaped.beat as "short" | "long" | null) ?? null;
         return { line, deliveryTag: deliveryTag ?? null, ...shaped, beat, stability: stabilityFor(config, !!deliveryTag && BIG_DELIVERY_TAGS.has(deliveryTag)) };
       });
