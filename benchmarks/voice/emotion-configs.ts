@@ -68,11 +68,11 @@ export const CONFIGS: Record<string, TtsConfig> = {
   // Production since the line-context change: v4, previous_text/next_text,
   // the current director prompt on its current model. The reference the
   // director-model configs below pair against (--pair-with prod).
-  prod: { ...baseline, name: "prod", changes: "production today: eleven_v4 + previous_text/next_text, current director on claude-opus-5", model: "eleven_v4", context: "prev-next" },
+  prod: { ...baseline, name: "prod", changes: "production today: eleven_v4 + previous_text/next_text, current director on claude-opus-5-5", model: "eleven_v4", context: "prev-next" },
   // Same audio settings as prod; only the model running the director
-  // changes. Cheaper per token than claude-opus-5 ($5/$25 per MTok in/out):
-  // Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50.
-  "director-opus-5.5": { ...baseline, name: "director-opus-5.5", changes: "prod, director on claude-opus-5-5", model: "eleven_v4", context: "prev-next", directorModel: "claude-opus-5-5" },
+  // changes. Per MTok in/out: Opus 5 (the director before Opus 5.5)
+  // $5/$25, Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50.
+  "director-opus-5": { ...baseline, name: "director-opus-5", changes: "prod, director on claude-opus-5 (the previous director)", model: "eleven_v4", context: "prev-next", directorModel: "claude-opus-5" },
   "director-sonnet-5.5": { ...baseline, name: "director-sonnet-5.5", changes: "prod, director on claude-sonnet-5-5", model: "eleven_v4", context: "prev-next", directorModel: "claude-sonnet-5-5" },
   "director-haiku-5.5": { ...baseline, name: "director-haiku-5.5", changes: "prod, director on claude-haiku-5-5", model: "eleven_v4", context: "prev-next", directorModel: "claude-haiku-5-5" },
   // Fill in from the winners once experiments 1–6 have run.

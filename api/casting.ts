@@ -360,8 +360,18 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     .join("\n");
 
   try {
-    const stream = client.messages.stream({
-      model: "claude-opus-5",
+    // Opus 5.5: newer than Opus 5 and cheaper per token ($4/$20 vs $5/$25
+    // per MTok), and at least as good on the director audit
+    // (benchmarks/voice/emotion.ts, run director-models-2). It always thinks
+    // adaptively; effort is the only control, and it's set explicitly below
+    // (this model defaults to medium). `fallbacks: "default"` re-runs a
+    // request its safety classifiers decline on the model Anthropic
+    // recommends for that category, inside the same call, instead of handing
+    // back a refusal — dark scenes are ordinary script material.
+    const stream = client.beta.messages.stream({
+      model: "claude-opus-5-5",
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
       // The model echoes each directed line back with markup, so the output
       // budget scales with script length rather than tag count.
       max_tokens: 32000,
@@ -381,6 +391,11 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     });
     const response = await stream.finalMessage();
 
+    if (response.stop_reason === "refusal") {
+      // Declined even after the fallback: read the script unadorned.
+      console.error("Line direction refused:", response.stop_details);
+      return res.status(500).json({ error: "Line direction failed" });
+    }
     const textBlock = response.content.find((block) => block.type === "text");
     let parsed: unknown;
     try {

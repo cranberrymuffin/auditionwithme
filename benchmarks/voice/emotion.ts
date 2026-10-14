@@ -70,7 +70,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = join(ROOT, "test_data", "tts-emotion-lines.json");
 const OUT_ROOT = join(ROOT, "benchmarks", "out", "tts-emotion");
 
-const DIRECTOR_MODEL = "claude-opus-5";
+const DIRECTOR_MODEL = "claude-opus-5-5"; // api/casting.ts's
 const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily, api/tts.ts's fallback
 // api/tts.ts's EMOTION_STABILITY_SPAN and LINE_CONTEXT_CHARS.
 const EMOTION_STABILITY_SPAN = 0.3;
