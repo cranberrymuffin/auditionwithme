@@ -4451,6 +4451,7 @@ header .flow-back:hover {
 .rehearsal-setup-device-note {
   grid-column: 2 / -1;
   margin: -6px 0 0;
+  text-align: right;
   color: rgba(248, 241, 230, 0.5);
   font-size: 0.75rem;
 }

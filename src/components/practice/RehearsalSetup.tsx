@@ -235,7 +235,10 @@ export default function RehearsalSetup({
   useEffect(() => {
     setPermissionSlow(false);
     if (!willRecord || cameraStream || cameraStatus === "error") return;
-    const timer = setTimeout(() => setPermissionSlow(true), PERMISSION_NUDGE_AFTER_MS);
+    const timer = setTimeout(
+      () => setPermissionSlow(true),
+      PERMISSION_NUDGE_AFTER_MS,
+    );
     return () => clearTimeout(timer);
   }, [willRecord, cameraStream, cameraStatus]);
 
@@ -264,7 +267,7 @@ export default function RehearsalSetup({
             aside: cameraStream && audioTrack && checkAudio && (
               <MicLevel stream={cameraStream} context={checkAudio} />
             ),
-            note: "For best results, use a Bluetooth external microphone.",
+            note: "For best results, use an external microphone.",
           },
         ]
       : []),
@@ -293,11 +296,7 @@ export default function RehearsalSetup({
         }${pregen.total > 0 ? ` · ${pregen.ready} of ${pregen.total}` : ""}`;
 
   return (
-    <SetupStep
-      step={4}
-      scriptName={scriptName}
-      onGoToStep={onGoToStep}
-    >
+    <SetupStep step={4} scriptName={scriptName} onGoToStep={onGoToStep}>
       <div className="role-intro">
         <h1>Ready to rehearse?</h1>
       </div>
@@ -338,7 +337,11 @@ export default function RehearsalSetup({
           <li
             key={device.name}
             className={
-              device.done ? "is-complete" : device.failed ? "is-failed" : undefined
+              device.done
+                ? "is-complete"
+                : device.failed
+                  ? "is-failed"
+                  : undefined
             }
           >
             <span aria-hidden="true">
@@ -356,7 +359,11 @@ export default function RehearsalSetup({
       {willRecord && cameraStatus === "error" && (
         <div className="device-problem" role="alert">
           <p>{cameraError}</p>
-          <button type="button" className="speaker-test" onClick={onRetryCamera}>
+          <button
+            type="button"
+            className="speaker-test"
+            onClick={onRetryCamera}
+          >
             Try again
           </button>
         </div>
@@ -367,7 +374,11 @@ export default function RehearsalSetup({
             Look for your browser’s permission prompt near the address bar and
             choose Allow for the camera and microphone.
           </p>
-          <button type="button" className="speaker-test" onClick={onRetryCamera}>
+          <button
+            type="button"
+            className="speaker-test"
+            onClick={onRetryCamera}
+          >
             Ask again
           </button>
         </div>
