@@ -186,6 +186,16 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       // VAD threshold, so boost the signal ourselves before sending it.
       const gain = audioContext.createGain();
       gain.gain.value = 3;
+      // A loud line at 3x runs past full scale, and the 16-bit conversion
+      // would square off every peak — distortion Scribe then has to read
+      // through. A hard limiter just under full scale catches those peaks
+      // and leaves ordinary speech, well under the threshold, untouched.
+      const limiter = audioContext.createDynamicsCompressor();
+      limiter.threshold.value = -6;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.1;
       processor = audioContext.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
       processor.onaudioprocess = (e) => {
         if (state.closed) return;
@@ -207,13 +217,15 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       const silent = audioContext.createGain();
       silent.gain.value = 0;
       source.connect(gain);
-      gain.connect(processor);
+      gain.connect(limiter);
+      limiter.connect(processor);
       processor.connect(silent);
       silent.connect(audioContext.destination);
 
-      // Mic level for the silence-advance rule, read off the same boosted
-      // signal Scribe gets. Fed into the muted node like the processor,
-      // so it's pulled by the graph without ever being audible.
+      // Mic level for the silence-advance rule, read off the boosted signal
+      // before the limiter (whose make-up gain would shift SILENCE_RMS's
+      // calibration). Fed into the muted node like the processor, so it's
+      // pulled by the graph without ever being audible.
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 2048;
       gain.connect(analyser);
