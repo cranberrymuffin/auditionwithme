@@ -18,6 +18,11 @@ export type TtsLine = {
   /** The character's emotion setting (lib/characterDelivery.ts), -1 … 1;
    * missing or 0 is the natural read. */
   emotion?: number;
+  /** The script's language (ISO 639-1), sent to ElevenLabs as language_code
+   * so it reads and normalizes the line in that language. Set only off
+   * English (lib/readerLines.ts): English reads stay as they were rendered,
+   * and keep their keys. */
+  languageCode?: string;
   /** A coached line (coachTakeStore.ts): the actor's own recorded read,
    * re-voiced by speech-to-speech (api/sts.ts) instead of synthesized from
    * text. The take carries the whole performance, so a coached line has no
@@ -65,4 +70,6 @@ export const cacheKey = (line: TtsLine, intensity: TtsIntensity) =>
     // Likewise only on coached lines. An object, so it can't be mistaken for
     // the emotion before it.
     ...(line.coachTakeId ? [{ coach: line.coachTakeId }] : []),
+    // Likewise only off English.
+    ...(line.languageCode ? [{ lang: line.languageCode }] : []),
   ]);

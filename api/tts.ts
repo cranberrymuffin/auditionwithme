@@ -66,6 +66,13 @@ export function parseEmotion(emotion: unknown): number {
     : 0;
 }
 
+/** The request's language as an ISO 639 code, or null (missing, junk). */
+export function parseLanguageCode(languageCode: unknown): string | null {
+  return typeof languageCode === "string" && /^[a-z]{2,3}$/i.test(languageCode.trim())
+    ? languageCode.trim().toLowerCase()
+    : null;
+}
+
 const clampStability = (stability: number) =>
   Math.round(Math.min(Math.max(stability, 0), 1) * 100) / 100;
 
@@ -121,6 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     deliveryTag,
     performance,
     emotion: rawEmotion,
+    languageCode: rawLanguageCode,
   } = (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
@@ -129,8 +137,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       performance?: string;
       /** The character's Emotion setting, -1 … 1 (missing = natural). */
       emotion?: unknown;
+      /** The script's language (ISO 639-1); sent only off English. */
+      languageCode?: unknown;
     };
   const emotion = parseEmotion(rawEmotion);
+  const languageCode = parseLanguageCode(rawLanguageCode);
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
   }
@@ -152,7 +163,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // markup never makes a line "big".
   const stability = v3Stability(tag != null && BIG_DELIVERY_TAGS.has(tag), emotion);
 
-  const synthesize = (modelId: string) =>
+  // language_code goes on the v4 request only. The fallback exists for
+  // requests v4 rejected, and an unsupported language code is one way to get
+  // there — so v3 gets the request as it was before the code was sent.
+  const synthesize = (modelId: string, withLanguage: boolean) =>
     fetchElevenLabs(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId || DEFAULT_VOICE_ID)}`,
       {
@@ -166,13 +180,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: expressiveText,
           model_id: modelId,
           voice_settings: { stability },
+          ...(withLanguage && languageCode ? { language_code: languageCode } : {}),
         }),
       },
     );
 
   try {
     let servedModel = EXPRESSIVE_MODEL;
-    let upstream = await synthesize(EXPRESSIVE_MODEL);
+    let upstream = await synthesize(EXPRESSIVE_MODEL, true);
     if (!upstream.ok && shouldFallBack(upstream.status)) {
       const detail = await upstream.text();
       console.warn(
@@ -180,7 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         detail,
       );
       servedModel = FALLBACK_MODEL;
-      upstream = await synthesize(FALLBACK_MODEL);
+      upstream = await synthesize(FALLBACK_MODEL, false);
     }
 
     relayConcurrency(upstream, res, lastSeenConcurrency);

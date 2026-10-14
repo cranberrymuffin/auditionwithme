@@ -153,6 +153,7 @@ async function lineRequest(
       deliveryTag: line.deliveryTag,
       performance: line.performance,
       emotion: line.emotion,
+      languageCode: line.languageCode,
       intensity,
     }),
     timeoutMs: FETCH_TIMEOUT_MS,

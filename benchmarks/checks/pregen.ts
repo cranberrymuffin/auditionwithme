@@ -33,6 +33,7 @@ import {
 } from "../../src/lib/pregenSchedule";
 import {
   parseEmotion,
+  parseLanguageCode,
   shouldFallBack,
   shouldHoldPregen as serverShouldHold,
   v3Stability,
@@ -424,6 +425,30 @@ check("only per-request failures fall back from v4 to v3", () => {
   assert.equal(shouldFallBack(402), false);
   assert.equal(shouldFallBack(429), false); // concurrency: client honors Retry-After
   assert.equal(shouldFallBack(500), false);
+});
+
+check("the script's language keys and sends only off English", () => {
+  const key = (languageCode?: string) =>
+    cacheKey(buildReaderLine(steps, 1, voices, [], {}, {}, languageCode)!, "natural");
+  // English (and the default) keep the keys reads were already stored under.
+  assert.equal(key("en"), key());
+  assert.equal(buildReaderLine(steps, 1, voices, [], {}, {}, "en")!.languageCode, undefined);
+  // Any other language is its own read.
+  assert.equal(buildReaderLine(steps, 1, voices, [], {}, {}, "es")!.languageCode, "es");
+  assert.notEqual(key("es"), key());
+  assert.notEqual(key("es"), key("fr"));
+  // A coached line is the actor's recording: no language to send.
+  assert.equal(buildReaderLine(steps, 1, voices, [], {}, { 1: "take" }, "es")!.languageCode, undefined);
+});
+
+check("the server takes only a plausible language code", () => {
+  assert.equal(parseLanguageCode("es"), "es");
+  assert.equal(parseLanguageCode(" PT "), "pt");
+  assert.equal(parseLanguageCode("fil"), "fil");
+  assert.equal(parseLanguageCode("en-US"), null);
+  assert.equal(parseLanguageCode("spanish"), null);
+  assert.equal(parseLanguageCode(7), null);
+  assert.equal(parseLanguageCode(undefined), null);
 });
 
 console.log(`\n${passed} checks passed`);

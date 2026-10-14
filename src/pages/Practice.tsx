@@ -830,6 +830,7 @@ function PracticeFlow({
     // Pinned, as in Rehearsal — part of the cache key.
     intensity: "natural",
     scriptId,
+    languageCode: scriptLanguage.code,
   });
 
   // The name shown for this script everywhere in the flow: a rename, else

@@ -95,7 +95,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   // carries the line's intentional beat, held before it plays.
   const readerCue = useCallback(
     (index: number): ReaderCue | null =>
-      buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions, coachTakes),
+      buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions, coachTakes, languageCode),
     [steps, characterVoices, characterEmotions, coachTakes],
   );
   // Fixed for the take: set on the voice setup screen, never mid-scene.

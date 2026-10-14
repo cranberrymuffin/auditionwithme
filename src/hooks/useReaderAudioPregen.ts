@@ -89,6 +89,7 @@ export function useReaderAudioPregen({
   deliveryTags,
   intensity,
   scriptId,
+  languageCode,
 }: {
   enabled: boolean;
   steps: Step[];
@@ -103,6 +104,8 @@ export function useReaderAudioPregen({
   intensity: TtsIntensity;
   /** Script the audio is stored under on-device. */
   scriptId: string;
+  /** The script's language; part of the key off English. */
+  languageCode: string;
 }): ReaderAudioPregen {
   const [state, setState] = useState<ReaderAudioPregenState>(IDLE);
   const [tagsWaitExpired, setTagsWaitExpired] = useState(false);
@@ -125,21 +128,21 @@ export function useReaderAudioPregen({
     const paid = untaggedKeysRef.current;
     if (!paid.size) return deliveryTags;
     const keep = readerLineIndices(steps, selectedRole).filter((index) => {
-      const line = buildReaderLine(steps, index, characterVoices, [], characterEmotions, coachTakes);
+      const line = buildReaderLine(steps, index, characterVoices, [], characterEmotions, coachTakes, languageCode);
       return line !== null && paid.has(cacheKey(line, intensity));
     });
     return keep.length ? keepUntaggedReads(steps, deliveryTags, keep) : deliveryTags;
-  }, [deliveryTags, tagsWaitExpired, steps, selectedRole, characterVoices, characterEmotions, coachTakes, intensity]);
+  }, [deliveryTags, tagsWaitExpired, steps, selectedRole, characterVoices, characterEmotions, coachTakes, intensity, languageCode]);
 
   // The exact requests Rehearsal will make, keyed the same way.
   const lines = useMemo(() => {
     const tags = effectiveTags;
     if (!enabled || tags === null) return null;
     return readerLineIndices(steps, selectedRole).flatMap((index) => {
-      const line = buildReaderLine(steps, index, characterVoices, tags, characterEmotions, coachTakes);
+      const line = buildReaderLine(steps, index, characterVoices, tags, characterEmotions, coachTakes, languageCode);
       return line ? [{ index, line, key: cacheKey(line, intensity) }] : [];
     });
-  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, coachTakes, effectiveTags, intensity]);
+  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, coachTakes, effectiveTags, intensity, languageCode]);
   // Restart only when the set of keys actually changes, not on every new
   // array identity (e.g. a re-render that rebuilt equal tags).
   const signature = lines ? JSON.stringify(lines.map((item) => item.key)) : null;

@@ -51,7 +51,8 @@ export type ReaderCue = { line: TtsLine; beatMs: number };
  * request only when it's off natural, so default reads keep their keys. A
  * line the actor coached (step index → take id in `coachTakes`) is their
  * recording re-voiced instead: just the take and the voice, keeping only the
- * beat before it.
+ * beat before it. The script's language rides along only off English, so
+ * English reads keep their keys too.
  */
 export function buildReaderCue(
   steps: Step[],
@@ -60,6 +61,7 @@ export function buildReaderCue(
   deliveryTags: (string | null)[],
   characterEmotions: Record<string, number> = {},
   coachTakes: Record<number, string> = {},
+  languageCode = "en",
 ): ReaderCue | null {
   const step = steps[index];
   if (!step?.verbalLine.trim()) return null;
@@ -92,6 +94,7 @@ export function buildReaderCue(
       deliveryTag: parenthetical ?? legacyTag,
       performance,
       ...(emotion ? { emotion } : {}),
+      ...(languageCode && languageCode !== "en" ? { languageCode } : {}),
     },
     beatMs,
   };
@@ -106,9 +109,10 @@ export function buildReaderLine(
   deliveryTags: (string | null)[],
   characterEmotions: Record<string, number> = {},
   coachTakes: Record<number, string> = {},
+  languageCode = "en",
 ): TtsLine | null {
   return (
-    buildReaderCue(steps, index, characterVoices, deliveryTags, characterEmotions, coachTakes)
+    buildReaderCue(steps, index, characterVoices, deliveryTags, characterEmotions, coachTakes, languageCode)
       ?.line ?? null
   );
 }
