@@ -19,6 +19,37 @@ const SAMPLE_RATE = 16000;
 // How often the mic level is sampled and the silence-advance rule re-checked.
 const MIC_LEVEL_POLL_MS = 200;
 
+// Each line opens its own Scribe socket, and each socket needs a fresh
+// single-use token — a round trip through /api/eleven-account to ElevenLabs.
+// The next line's token is fetched while the current one is live, so a new
+// line only waits on the WebSocket handshake. Tokens expire 15 minutes
+// after minting; one held longer than this (a long pause) is dropped.
+const TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
+let heldToken: { token: Promise<string>; fetchedAt: number } | null = null;
+
+async function fetchScribeToken(): Promise<string> {
+  const tokenRes = await apiFetch("/api/eleven-account", { method: "POST" });
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.token) throw new Error(tokenData.error || "No Scribe token");
+  return tokenData.token;
+}
+
+/** A token for a new socket: the prefetched one if it's still fresh (or a
+ * fresh fetch if prefetching failed), otherwise a fresh fetch. */
+function takeScribeToken(): Promise<string> {
+  const held = heldToken;
+  heldToken = null;
+  if (!held || Date.now() - held.fetchedAt > TOKEN_MAX_AGE_MS) return fetchScribeToken();
+  return held.token.catch(() => fetchScribeToken());
+}
+
+function prefetchScribeToken(): void {
+  if (heldToken) return;
+  const token = fetchScribeToken();
+  token.catch(() => {}); // takeScribeToken retries; nothing to report here
+  heldToken = { token, fetchedAt: Date.now() };
+}
+
 // Bias Scribe toward this line's distinctive vocabulary (character names,
 // unusual script words) — the words most likely to be misheard by a generic
 // model. Common short words are skipped since biasing them wastes budget
@@ -122,13 +153,13 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
     const start = async () => {
       try {
-        const tokenRes = await apiFetch("/api/eleven-account", { method: "POST" });
-        const tokenData = await tokenRes.json();
-        if (!tokenRes.ok || !tokenData.token) throw new Error(tokenData.error || "No Scribe token");
+        const token = await takeScribeToken();
         if (state.closed) return cleanup();
+        // For the actor's next line, while this one plays out.
+        prefetchScribeToken();
 
         const params = new URLSearchParams({
-          token: tokenData.token,
+          token,
           model_id: "scribe_v2_realtime",
           audio_format: `pcm_${SAMPLE_RATE}`,
           commit_strategy: "vad",
