@@ -294,7 +294,7 @@ Beats before a line:
 
 Output:
 - Return null for lines that are fine exactly as written.
-- Return ONLY a JSON array, no prose and no markdown fences, with exactly one entry (a markup string or null) per input line, in input order.
+- Return \`lines\`: exactly one entry (a markup string or null) per input line, in input order.
 
 Example input:
 0| ANNA: Did you get the results?
@@ -305,14 +305,21 @@ Example input:
 5| {stage: She stares at him, then turns away.} ANNA: You're supposed to say what you're thankful for.
 6| BEN: I know what I said. Just forget it.
 
-Example output: [null, null, null, "[long pause] It's back. The cancer's back.", null, "[short pause] [hesitates] You're supposed to say what you're… thankful for.", "I know what I said. [sighs] Just forget it."]`;
+Example output: {"lines": [null, null, null, "[long pause] It's back. The cancer's back.", null, "[short pause] [hesitates] You're supposed to say what you're… thankful for.", "I know what I said. [sighs] Just forget it."]}`;
 
-function extractJsonArray(raw: string): string | null {
-  const start = raw.indexOf("[");
-  const end = raw.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) return null;
-  return raw.slice(start, end + 1);
-}
+// The director answers through structured outputs: the API holds its reply
+// to this schema, so prose around the answer, a second "corrected" answer,
+// or a stray fence can't break parsing — which free-text extraction hit on
+// cheaper models (benchmarks/voice/emotion.ts --director-schema). Entries
+// are still checked one by one (sanitizePerformance) below.
+const DIRECTOR_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    lines: { type: "array", items: { anyOf: [{ type: "string" }, { type: "null" }] } },
+  },
+  required: ["lines"],
+  additionalProperties: false,
+} as const;
 
 async function directLines(req: VercelRequest, res: VercelResponse) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -360,7 +367,10 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
       max_tokens: 32000,
       // A well-specified per-line classification — low effort keeps latency
       // and cost down while adaptive thinking stays available for hard scenes.
-      output_config: { effort: "low" },
+      output_config: {
+        effort: "low",
+        format: jsonSchemaOutputFormat(DIRECTOR_OUTPUT_SCHEMA),
+      },
       system: DIRECTOR_PROMPT,
       messages: [
         {
@@ -372,17 +382,13 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     const response = await stream.finalMessage();
 
     const textBlock = response.content.find((block) => block.type === "text");
-    const json = extractJsonArray(
-      textBlock?.type === "text" ? textBlock.text : "",
-    );
-    if (!json) {
-      return res.status(500).json({ error: "Line direction failed" });
-    }
-
     let parsed: unknown;
     try {
-      parsed = JSON.parse(json);
+      // Only a reply cut short (max_tokens) or a refusal can fail the schema.
+      parsed = (JSON.parse(textBlock?.type === "text" ? textBlock.text : "") as { lines?: unknown })
+        .lines;
     } catch {
+      console.error(`Line direction unparseable (stop_reason=${response.stop_reason})`);
       return res.status(500).json({ error: "Line direction failed" });
     }
     if (!Array.isArray(parsed)) {

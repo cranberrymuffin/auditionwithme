@@ -127,10 +127,11 @@ const value = (name: string) => values(name)[0];
 const DRY_RUN = flag("dry-run");
 const AI_MODEL = value("ai-model") ?? "gemini-2.5-flash";
 const DIRECT_ONLY = flag("direct-only");
-// Asks the director for its answer through structured outputs (a JSON
-// schema) instead of free text, which some models wrap in prose or answer
-// twice — leaving the extractor nothing to parse.
-const DIRECTOR_SCHEMA = flag("director-schema");
+// The director answers through structured outputs (a JSON schema), as
+// production's does (api/casting.ts). --director-text asks for free text
+// instead, the old way — which some models wrap in prose or answer twice,
+// leaving the extractor nothing to parse.
+const DIRECTOR_SCHEMA = !flag("director-text");
 const DIRECTOR_OUTPUT_SCHEMA = {
   type: "object",
   properties: {

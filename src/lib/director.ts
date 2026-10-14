@@ -3,7 +3,11 @@
 // delivery tags were generated under; Practice.tsx re-runs direct-lines for
 // any script whose stored version is older, so a prompt change actually
 // reaches scripts directed before it. Rows saved before versioning existed
-// have no version and count as stale. Bump this with every prompt change.
+// have no version and count as stale. Bump this with every prompt change
+// that can change the markup. Not for one that only changes how the answer
+// is packaged — like moving to structured output, which returns the same
+// markup in a {"lines": [...]} wrapper: a bump re-directs every saved
+// script, and re-renders its audio, for nothing.
 //   1 — original "skilled actor" prompt (implicit, never stored)
 //   2 — reader-first prompt with grounded tags (beta tone feedback, Oct 2026)
 //   3 — sees each line's stage directions; may lead a line with a
