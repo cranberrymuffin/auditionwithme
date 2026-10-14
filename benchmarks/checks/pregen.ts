@@ -21,7 +21,7 @@ import {
   SHORT_BEAT_MS,
 } from "../../src/lib/readerLines";
 import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../../src/lib/delivery";
-import { sanitizePerformance } from "../../api/_direction";
+import { normalizeTag, sanitizePerformance } from "../../api/_direction";
 import {
   canStartTake,
   MAX_PREGEN_WORKERS,
@@ -461,6 +461,22 @@ check("line context is clipped to the words nearest the line", () => {
   assert.equal(lineContext(long, "end")!.length, 300);
   assert.ok(lineContext(long, "end")!.endsWith("END")); // the line before: its last words
   assert.ok(lineContext(`START${"b".repeat(400)}`, "start")!.startsWith("START"));
+});
+
+check("director tags may describe the voice, commas and all", () => {
+  assert.equal(normalizeTag("sighs"), "sighs");
+  assert.equal(normalizeTag(" Quiet ,measured "), "quiet, measured");
+  assert.equal(normalizeTag("under her breath,"), "under her breath");
+  assert.equal(normalizeTag("matter-of-fact"), null); // hyphens: use spaces
+  assert.equal(normalizeTag("2 seconds"), null);
+  assert.equal(normalizeTag("a".repeat(41)), null);
+  assert.equal(
+    sanitizePerformance("[Quiet, measured] I know what I said.", "I know what I said."),
+    "[quiet, measured] I know what I said.",
+  );
+  // Junk tags still go, and the words still can't change.
+  assert.equal(sanitizePerformance("[#1!] I know.", "I know."), "I know.");
+  assert.equal(sanitizePerformance("[quiet, measured] I knew.", "I know."), null);
 });
 
 console.log(`\n${passed} checks passed`);

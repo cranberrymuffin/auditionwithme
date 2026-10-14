@@ -10,4 +10,6 @@
 //       [short pause]/[long pause] beat marker (beta "no pauses" feedback)
 //   4 — hesitations inside a line are ellipses, not a [pause] tag (Eleven v4
 //       documents punctuation for pauses, not pause tags)
-export const DIRECTOR_VERSION = 4;
+//   5 — written for Eleven v4: may use a short description of the voice as a
+//       tag ("[quiet, measured]"); tags never describe actions or staging
+export const DIRECTOR_VERSION = 5;

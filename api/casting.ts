@@ -247,7 +247,7 @@ const MAX_LINES = 400;
 // paragraphs are clipped so they can't dominate the prompt.
 const MAX_DIRECTION_CHARS = 200;
 
-// Emotional tags Eleven v3 handles well, offered to the director as the core
+// Emotional tags Eleven v3 and v4 handle well, offered to the director as the core
 // palette (validation no longer requires them — sanitizePerformance keeps any
 // simple bracketed tag and guarantees the spoken words are unchanged).
 // Weighted toward grounded, conversational colors (per ElevenLabs' v3
@@ -256,8 +256,9 @@ const MAX_DIRECTION_CHARS = 200;
 // desperate, threatening, screams) are deliberately absent: they only reach
 // the TTS from an explicit script parenthetical (src/lib/delivery.ts), where
 // api/tts.ts's BIG_DELIVERY_TAGS lets them read big on purpose.
-// Multi-word tags use spaces, never hyphens — the tag validators only accept
-// letters and spaces, so "[matter-of-fact]" would be silently dropped.
+// Multi-word tags use spaces, never hyphens — the tag validator
+// (normalizeTag, api/_direction.ts) only accepts letters, spaces and commas,
+// so "[matter-of-fact]" would be silently dropped.
 //
 // Bump DIRECTOR_VERSION (src/lib/director.ts) whenever this list or
 // DIRECTOR_PROMPT changes, so saved scripts get re-directed.
@@ -271,10 +272,11 @@ const TAG_VOCABULARY = [
   "tired", "resigned", "whispers", "laughs", "sighs",
 ];
 
-export const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v3) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
+export const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v4) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
 
-Your markup toolkit (Eleven v3):
+Your markup toolkit (Eleven v4):
 - Audio tags in square brackets, placed at the start of the line or between sentences — emotional tags (${TAG_VOCABULARY.join(", ")}) and non-verbal sounds ([laughs], [chuckles], [sighs], [gasps], [clears throat]).
+- When no single word fits, a tag may instead be a short description of the voice itself, letters, spaces and commas only, under 40 characters: [quiet, measured], [under her breath], [softly, holding back tears]. It counts as one tag. Tags describe only how the voice sounds — never actions, staging or sound effects ([standing], [pacing], [door slams]), which the model may act out as noise.
 - Pacing punctuation: ellipses (…) for a hesitation or weighted pause inside a line and for trailing thoughts, em-dashes for interruptions and pivots. Never write a pause as a tag inside a line ([pause] and the like); a beat before the line uses the leading marker described below.
 - Emphasis: CAPITALIZE a single stressed word where the reader would genuinely lean on it — at most one capitalized word per scene beat, not one per line.
 
