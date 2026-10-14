@@ -57,6 +57,25 @@ function prefetchScribeToken(): void {
   heldToken = { token, fetchedAt: Date.now() };
 }
 
+const TRANSCRIPT_MESSAGES = new Set(["partial_transcript", "committed_transcript"]);
+
+/** Everything Scribe sends that isn't a transcript — session_started, and
+ * the errors and warnings it sends just before closing the socket
+ * (quota_exceeded, rate_limited, insufficient_audio_activity,
+ * session_time_limit_exceeded, …) — goes to the audio log, so a line that
+ * fell back to manual advance says why. The error payload's fields aren't
+ * documented, so it's logged by type plus whatever detail it carries. */
+function logScribeMessage(msg: { message_type?: string; [field: string]: unknown }) {
+  const type = msg.message_type ?? "unknown message";
+  if (type === "session_started") {
+    logAudioEvent("scribe", "session started");
+    return;
+  }
+  const detail = [msg.error, msg.message, msg.detail].find((value) => typeof value === "string");
+  logAudioEvent("scribe", `${type}: ${detail ?? JSON.stringify(msg).slice(0, 200)}`);
+  console.warn("Scribe:", type, msg);
+}
+
 function floatTo16BitPcmBase64(input: Float32Array): string {
   const buf = new ArrayBuffer(input.length * 2);
   const view = new DataView(buf);
@@ -296,6 +315,10 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data);
+          if (!TRANSCRIPT_MESSAGES.has(msg.message_type)) {
+            logScribeMessage(msg);
+            return;
+          }
           const text: string = msg.text ?? "";
           if (msg.message_type === "committed_transcript") {
             // A commit restating the in-progress partial isn't new speech.
@@ -319,8 +342,18 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           }
         };
 
-        ws.onerror = () => setListening(false);
-        ws.onclose = () => setListening(false);
+        ws.onerror = () => {
+          if (!state.closed) logAudioEvent("scribe", "socket error");
+          setListening(false);
+        };
+        ws.onclose = (event) => {
+          // Only closes we didn't ask for: a dropped socket leaves the actor
+          // on manual advance, and the code says why.
+          if (!state.closed) {
+            logAudioEvent("scribe", `socket closed (${event.code}${event.reason ? `: ${event.reason}` : ""})`);
+          }
+          setListening(false);
+        };
 
         ws.onopen = () => {
           if (state.closed) return;
