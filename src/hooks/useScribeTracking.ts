@@ -18,6 +18,12 @@ const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
 // How often the mic level is sampled and the silence-advance rule re-checked.
 const MIC_LEVEL_POLL_MS = 200;
+// ScriptProcessorNode buffer: 256 ms at 16 kHz, inside the 0.1–1 s chunk
+// size ElevenLabs recommends.
+const CHUNK_SAMPLES = 4096;
+// Audio captured before the socket opens is held and sent once it does. A
+// socket that takes this long isn't coming; past it, the oldest chunks go.
+const MAX_BUFFERED_CHUNKS = Math.ceil((10 * SAMPLE_RATE) / CHUNK_SAMPLES);
 
 // Each line opens its own Scribe socket, and each socket needs a fresh
 // single-use token — a round trip through /api/eleven-account to ElevenLabs.
@@ -151,10 +157,139 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       logAudioEvent("scribe", "deactivated");
     };
 
+    // Chunks captured while the socket is still opening. The actor starts
+    // speaking the moment the reader's cue ends, which is exactly when this
+    // effect runs, so without the buffer their first words would go to a
+    // socket that isn't there yet.
+    const pending: string[] = [];
+    const sendChunk = (chunk: string) => {
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(chunk);
+        return;
+      }
+      pending.push(chunk);
+      if (pending.length > MAX_BUFFERED_CHUNKS) pending.shift();
+    };
+
+    const startCapture = () => {
+      audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+      logAudioEvent("scribe", `mic ctx created, initial state=${audioContext.state}`);
+      // Safari can hand back a context that isn't running yet, which would
+      // otherwise leave onaudioprocess silently never firing.
+      void audioContext.resume().then(
+        () => logAudioEvent("scribe", `mic ctx resume() resolved, state=${audioContext?.state}`),
+        (err) => logAudioEvent("scribe", `mic ctx resume() rejected: ${err}`),
+      );
+      const source = audioContext.createMediaStreamSource(micStream);
+      // Browser autoGainControl still leaves quiet mic input under Scribe's
+      // VAD threshold, so boost the signal ourselves before sending it.
+      const gain = audioContext.createGain();
+      gain.gain.value = 3;
+      processor = audioContext.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
+      processor.onaudioprocess = (e) => {
+        if (state.closed) return;
+        sendChunk(
+          JSON.stringify({
+            message_type: "input_audio_chunk",
+            audio_base_64: floatTo16BitPcmBase64(e.inputBuffer.getChannelData(0)),
+            sample_rate: audioContext!.sampleRate,
+          })
+        );
+      };
+      // ScriptProcessorNode only fires once it's part of a live graph
+      // reaching the destination, but the actual point is capturing this
+      // 3x-boosted mic signal, not playing it back — routing it to the
+      // destination directly would echo the user's own voice out the
+      // speaker at 3x gain, which on a phone (mic and speaker inches
+      // apart) is a feedback howl waiting to happen. A muted node keeps
+      // the graph running without making any of that audible.
+      const silent = audioContext.createGain();
+      silent.gain.value = 0;
+      source.connect(gain);
+      gain.connect(processor);
+      processor.connect(silent);
+      silent.connect(audioContext.destination);
+
+      // Mic level for the silence-advance rule, read off the same boosted
+      // signal Scribe gets. Fed into the muted node like the processor,
+      // so it's pulled by the graph without ever being audible.
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      gain.connect(analyser);
+      analyser.connect(silent);
+      const samples = new Float32Array(analyser.fftSize);
+      state.lastMicActiveAt = Date.now();
+      micLevelTimer = setInterval(() => {
+        if (state.closed) return;
+        analyser.getFloatTimeDomainData(samples);
+        let sum = 0;
+        for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+        const now = Date.now();
+        if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = now;
+        if (lineCompletionRef.current) return;
+        const inputs: QuietInputs = {
+          scriptWords,
+          progress: { matched: state.matchedCount, endingHeard: state.endingHeard },
+          msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
+          // Our mic level reads the raw signal, so in a noisy room (HVAC,
+          // traffic) it may never drop under SILENCE_RMS. Scribe's VAD runs
+          // on background-filtered audio; once it has committed the
+          // segment, take its word that the actor stopped.
+          msSinceMicActive: state.scribeHeardPause
+            ? now - (state.lastTextChangeAt ?? now)
+            : state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
+        };
+        const rule = quietAdvance(inputs);
+        if (rule) {
+          logAudioEvent(
+            "scribe",
+            rule === "ending"
+              ? "line's ending heard and actor went quiet, advancing"
+              : "actor held a long pause with nearly all of the line heard, advancing",
+          );
+          // An ending-heard advance is word detection, just with a word
+          // or two in the middle misheard, so it's counted with full matches.
+          lineCompletionRef.current = { kind: rule === "ending" ? "auto" : "silence", at: now };
+          setMatchedWordCount(scriptWords.length);
+          return;
+        }
+
+        // Still not credited after the whole patient hold — maybe the
+        // actor paraphrased. Ask the semantic fallback whether what Scribe
+        // did transcribe still conveys the line, rather than leave them
+        // stuck on manual advance. Once per distinct transcript, and only
+        // once word matching has already credited most of the line —
+        // otherwise a pause partway through a monologue reads as "done"
+        // and the scene partner cuts the actor off (see lib/lineMatch.ts).
+        const quiet = quietFor(inputs);
+        const heard = (state.committed + state.partial).trim();
+        if (
+          quiet === null ||
+          quiet < PATIENT_HOLD_MS ||
+          heard === state.semanticChecked ||
+          !shouldTrySemanticFallback(scriptWords, state.matchedCount, heard)
+        ) {
+          return;
+        }
+        state.semanticChecked = heard;
+        logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
+        void checkSemanticLineMatch(line, heard).then((match) => {
+          if (state.closed || !match || lineCompletionRef.current) return;
+          if (!semanticMatchMayAdvance(scriptWords, heard)) {
+            logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
+            return;
+          }
+          logAudioEvent("scribe", "semantic fallback matched line");
+          lineCompletionRef.current = { kind: "semantic", at: Date.now() };
+          setMatchedWordCount(scriptWords.length);
+        });
+      }, MIC_LEVEL_POLL_MS);
+    };
+
     const start = async () => {
       try {
         const token = await takeScribeToken();
-        if (state.closed) return cleanup();
+        if (state.closed) return;
         // For the actor's next line, while this one plays out.
         prefetchScribeToken();
 
@@ -208,119 +343,11 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         ws.onopen = () => {
           if (state.closed) return;
           setListening(true);
-          audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-          logAudioEvent("scribe", `mic ctx created, initial state=${audioContext.state}`);
-          // Safari can hand back a context that isn't running yet this deep
-          // into an async chain (token fetch + WebSocket handshake), which
-          // would otherwise leave onaudioprocess silently never firing.
-          void audioContext.resume().then(
-            () => logAudioEvent("scribe", `mic ctx resume() resolved, state=${audioContext?.state}`),
-            (err) => logAudioEvent("scribe", `mic ctx resume() rejected: ${err}`),
-          );
-          const source = audioContext.createMediaStreamSource(micStream);
-          // Browser autoGainControl still leaves quiet mic input under Scribe's
-          // VAD threshold, so boost the signal ourselves before sending it.
-          const gain = audioContext.createGain();
-          gain.gain.value = 3;
-          processor = audioContext.createScriptProcessor(4096, 1, 1);
-          processor.onaudioprocess = (e) => {
-            if (ws?.readyState !== WebSocket.OPEN) return;
-            ws.send(
-              JSON.stringify({
-                message_type: "input_audio_chunk",
-                audio_base_64: floatTo16BitPcmBase64(e.inputBuffer.getChannelData(0)),
-                sample_rate: audioContext!.sampleRate,
-              })
-            );
-          };
-          // ScriptProcessorNode only fires once it's part of a live graph
-          // reaching the destination, but the actual point is capturing this
-          // 3x-boosted mic signal, not playing it back — routing it to the
-          // destination directly would echo the user's own voice out the
-          // speaker at 3x gain, which on a phone (mic and speaker inches
-          // apart) is a feedback howl waiting to happen. A muted node keeps
-          // the graph running without making any of that audible.
-          const silent = audioContext.createGain();
-          silent.gain.value = 0;
-          source.connect(gain);
-          gain.connect(processor);
-          processor.connect(silent);
-          silent.connect(audioContext.destination);
-
-          // Mic level for the silence-advance rule, read off the same boosted
-          // signal Scribe gets. Fed into the muted node like the processor,
-          // so it's pulled by the graph without ever being audible.
-          const analyser = audioContext.createAnalyser();
-          analyser.fftSize = 2048;
-          gain.connect(analyser);
-          analyser.connect(silent);
-          const samples = new Float32Array(analyser.fftSize);
-          state.lastMicActiveAt = Date.now();
-          micLevelTimer = setInterval(() => {
-            if (state.closed) return;
-            analyser.getFloatTimeDomainData(samples);
-            let sum = 0;
-            for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-            const now = Date.now();
-            if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = now;
-            if (lineCompletionRef.current) return;
-            const inputs: QuietInputs = {
-              scriptWords,
-              progress: { matched: state.matchedCount, endingHeard: state.endingHeard },
-              msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
-              // Our mic level reads the raw signal, so in a noisy room (HVAC,
-              // traffic) it may never drop under SILENCE_RMS. Scribe's VAD runs
-              // on background-filtered audio; once it has committed the
-              // segment, take its word that the actor stopped.
-              msSinceMicActive: state.scribeHeardPause
-                ? now - (state.lastTextChangeAt ?? now)
-                : state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
-            };
-            const rule = quietAdvance(inputs);
-            if (rule) {
-              logAudioEvent(
-                "scribe",
-                rule === "ending"
-                  ? "line's ending heard and actor went quiet, advancing"
-                  : "actor held a long pause with nearly all of the line heard, advancing",
-              );
-              // An ending-heard advance is word detection, just with a word
-              // or two in the middle misheard, so it's counted with full matches.
-              lineCompletionRef.current = { kind: rule === "ending" ? "auto" : "silence", at: now };
-              setMatchedWordCount(scriptWords.length);
-              return;
-            }
-
-            // Still not credited after the whole patient hold — maybe the
-            // actor paraphrased. Ask the semantic fallback whether what Scribe
-            // did transcribe still conveys the line, rather than leave them
-            // stuck on manual advance. Once per distinct transcript, and only
-            // once word matching has already credited most of the line —
-            // otherwise a pause partway through a monologue reads as "done"
-            // and the scene partner cuts the actor off (see lib/lineMatch.ts).
-            const quiet = quietFor(inputs);
-            const heard = (state.committed + state.partial).trim();
-            if (
-              quiet === null ||
-              quiet < PATIENT_HOLD_MS ||
-              heard === state.semanticChecked ||
-              !shouldTrySemanticFallback(scriptWords, state.matchedCount, heard)
-            ) {
-              return;
-            }
-            state.semanticChecked = heard;
-            logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
-            void checkSemanticLineMatch(line, heard).then((match) => {
-              if (state.closed || !match || lineCompletionRef.current) return;
-              if (!semanticMatchMayAdvance(scriptWords, heard)) {
-                logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
-                return;
-              }
-              logAudioEvent("scribe", "semantic fallback matched line");
-              lineCompletionRef.current = { kind: "semantic", at: Date.now() };
-              setMatchedWordCount(scriptWords.length);
-            });
-          }, MIC_LEVEL_POLL_MS);
+          if (pending.length) {
+            logAudioEvent("scribe", `socket open, sending ${pending.length} buffered chunks (${Math.round((pending.length * CHUNK_SAMPLES * 1000) / SAMPLE_RATE)}ms)`);
+          }
+          for (const chunk of pending) ws!.send(chunk);
+          pending.length = 0;
         };
       } catch (err) {
         console.error("Scribe tracking unavailable:", err);
@@ -328,6 +355,13 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       }
     };
 
+    try {
+      startCapture();
+    } catch (err) {
+      console.error("Scribe mic capture unavailable:", err);
+      cleanup();
+      return;
+    }
     start();
     return cleanup;
   }, [active, line, languageCode, micStream]);
