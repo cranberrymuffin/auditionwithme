@@ -199,4 +199,25 @@ check("keyterms keep accented letters", () => {
   assert.deepEqual(extractKeyterms("Where is José going, Zoë?"), ["Where", "José", "going", "Zoë"]);
 });
 
+check("a lone heard word can't complete a short line by stepping over the rest", () => {
+  // Scribe "hearing" just the name (noise, biased toward the keyterm).
+  assert.equal(assessLine(split("Hi, Ben."), "Ben").matched, 1);
+  assert.equal(assessLine(split("Where's Ana?"), "Ana").matched, 1);
+  assert.equal(assessLine(split("Where are you?"), "you").matched, 1);
+  // Nor through the quiet rule: half a line heard is short of its share.
+  const inputs: QuietInputs = {
+    scriptWords: split("Hi, Ben."),
+    progress: assessLine(split("Hi, Ben."), "Ben"),
+    msSinceTextChange: ENDING_HEARD_QUIET_MS * 10,
+    msSinceMicActive: ENDING_HEARD_QUIET_MS * 10,
+  };
+  assert.equal(quietAdvance(inputs), null);
+});
+
+check("a line heard but for a word or two still completes", () => {
+  assert.equal(assessLine(split("Get out of here"), "out of here").matched, 4);
+  assert.equal(assessLine(split("Hi, Ben."), "hi Ben").matched, 2);
+  assert.equal(assessLine(split("Morning."), "morning").matched, 1);
+});
+
 console.log(`\n${passed} checks passed`);

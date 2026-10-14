@@ -350,6 +350,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           state.endingHeard = progress.endingHeard;
           setMatchedWordCount((prev) => Math.max(prev, progress.matched));
           if (progress.matched >= scriptWords.length && !lineCompletionRef.current) {
+            // What credited the line, so a line that moved on before the
+            // actor spoke shows what Scribe thought it heard.
+            logAudioEvent("scribe", `line matched on "${(state.committed + state.partial).trim().slice(0, 120)}"`);
             lineCompletionRef.current = { kind: "auto", at: Date.now() };
           }
         };

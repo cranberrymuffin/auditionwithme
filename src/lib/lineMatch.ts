@@ -109,11 +109,16 @@ export function assessLine(scriptWords: string[], transcript: string): LineProgr
 
   let si = 0;
   let pi = 0;
+  // Script words found in the transcript, and words credited without being
+  // heard (stepped over, see below) — counted in the caller's words.
+  const heard = new Set<number>();
+  const stepped = new Set<number>();
   while (si < script.length && pi < spoken.length) {
     const windowEnd = Math.min(pi + SKIP_LOOKAHEAD, spoken.length);
     const window = spoken.slice(pi, windowEnd);
     const found = window.findIndex((w) => wordsMatch(w, script[si].token));
     if (found !== -1) {
+      heard.add(script[si].from);
       si++;
       pi += found + 1;
       continue;
@@ -123,6 +128,7 @@ export function assessLine(scriptWords: string[], transcript: string): LineProgr
       // transcript and the target never showed up in it — it was likely
       // misheard or skipped. Credit it and move on without consuming any
       // spoken words, so it can't also swallow the match for the next one.
+      stepped.add(script[si].from);
       si++;
       continue;
     }
@@ -137,6 +143,7 @@ export function assessLine(scriptWords: string[], transcript: string): LineProgr
       }
     }
     if (skip) {
+      for (let k = 0; k < skip; k++) stepped.add(script[si + k].from);
       si += skip;
       continue;
     }
@@ -145,7 +152,20 @@ export function assessLine(scriptWords: string[], transcript: string): LineProgr
     // guess; a later call with more transcript will resolve it.
     break;
   }
-  if (si >= script.length) return { matched: scriptWords.length, endingHeard: true };
+  if (si >= script.length) {
+    // Stepping over words is for a word or two lost from a line otherwise
+    // heard, not for a line mostly unheard: on "Hi, Ben." a lone "Ben" —
+    // misheard room noise, which biasing Scribe toward the name (keyterms)
+    // makes likelier — would otherwise credit the whole line and bring the
+    // scene partner in before the actor has said a word. So the words heard
+    // must outnumber the ones stepped over; until then the line counts only
+    // what was heard.
+    const steppedOnly = [...stepped].filter((word) => !heard.has(word)).length;
+    if (scriptWords.length > 1 && steppedOnly >= heard.size) {
+      return { matched: heard.size, endingHeard: true };
+    }
+    return { matched: scriptWords.length, endingHeard: true };
+  }
 
   // Every token of the words before the first unmatched token was matched.
   const matched = script[si].from;
