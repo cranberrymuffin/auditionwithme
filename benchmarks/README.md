@@ -31,6 +31,14 @@ Run them all before a PR; CI doesn't yet.
 runs the deterministic screenplay-layout parser over the PDFs in
 `test_data/` and reports what each strategy extracts.
 
+**Parse strategy comparison** (`parse/strategy-compare.ts`,
+`npm run bench:strategies`): runs every strategy in the parse chain (rules,
+Haiku text, Sonnet text, Sonnet reading the PDF) on the same sides and scores
+each against the ground truth in `parse/sides-fixtures.ts`: assertions passed,
+spoken lines copied verbatim, run-to-run stability (`--runs N`), and spoken
+lines that differ from the rules parse. Narrow with `--only rules,sonnet-pdf`
+or `--file CANNED`. Loads `ANTHROPIC_API_KEY` from `.env.local`.
+
 **PDF upload latency** (`parse/pdf-latency.mjs`, `npm run benchmark:pdf`):
 compares the original binary-PDF model request with the text-first request.
 

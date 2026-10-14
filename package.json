@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "bench:sides": "tsx benchmarks/parse/sides-parse.ts",
+    "bench:strategies": "tsx --env-file=.env.local benchmarks/parse/strategy-compare.ts",
     "benchmark:pdf": "node benchmarks/parse/pdf-latency.mjs",
     "test:cutoff": "tsx benchmarks/checks/cutoff-guard.ts",
     "test:match": "tsx benchmarks/checks/line-match.ts",

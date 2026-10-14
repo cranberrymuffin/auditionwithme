@@ -62,7 +62,7 @@ type ClassifierResult = {
   junk?: (number | string)[];
 };
 
-type ParsePayload = {
+export type ParsePayload = {
   characters: string[];
   languageCode: string;
   languageName: string;
@@ -71,7 +71,12 @@ type ParsePayload = {
   modelDurationMs: number;
 };
 
-async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
+/** Token usage of a strategy's model call; kept out of the response body. */
+export type ModelUsage = { inputTokens: number; outputTokens: number };
+
+export async function parseTextFast(
+  scriptText: string,
+): Promise<{ payload: ParsePayload; usage: ModelUsage } | null> {
   const lines = scriptText.split("\n").map((line) => line.trim());
   const candidates = collectSpeakerCandidates(lines);
   if (candidates.size === 0) return null;
@@ -170,14 +175,22 @@ async function parseTextFast(scriptText: string): Promise<ParsePayload | null> {
   if (steps.length < 3) return null;
 
   return {
-    characters,
-    languageCode:
-      typeof result.languageCode === "string" ? result.languageCode : "en",
-    languageName:
-      typeof result.languageName === "string" ? result.languageName : "English",
-    steps,
-    processingMode: "text-fast",
-    modelDurationMs: Math.round(modelDurationMs),
+    payload: {
+      characters,
+      languageCode:
+        typeof result.languageCode === "string" ? result.languageCode : "en",
+      languageName:
+        typeof result.languageName === "string"
+          ? result.languageName
+          : "English",
+      steps,
+      processingMode: "text-fast",
+      modelDurationMs: Math.round(modelDurationMs),
+    },
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
   };
 }
 
@@ -249,6 +262,134 @@ Output format: return ONLY valid JSON, no prose, no markdown fences:
     }
   ]
 }`;
+
+/**
+ * Full model parse: Sonnet reads the whole script (extracted text, or the PDF
+ * itself) and returns every step. The last strategy in the chain.
+ */
+export async function parseFull(
+  input: { scriptText: string } | { pdfData: string },
+): Promise<
+  | { ok: true; payload: ParsePayload; usage: ModelUsage }
+  | { ok: false; error: string }
+> {
+  const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] =
+    "scriptText" in input
+      ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${input.scriptText}\n</SCRIPT>`
+      : [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: input.pdfData,
+            },
+          },
+          {
+            type: "text",
+            text: "Process this script PDF as instructed and return the JSON result.",
+          },
+        ];
+  const modelStartedAt = performance.now();
+  const stream = client.messages.stream({
+    model: "claude-sonnet-5",
+    // Sonnet 5's streamed output ceiling — long scripts need the headroom
+    // since the full parse echoes every line back as JSON.
+    max_tokens: 64000,
+    // Sonnet 5 runs adaptive thinking by default, which roughly triples output
+    // tokens and latency on this task (measured: ~53s/6.4K tokens with thinking
+    // vs ~16s/2K tokens without, for near-identical visible output) with no
+    // measurable quality gain on this well-specified extraction/formatting task.
+    thinking: { type: "disabled" },
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: userContent,
+      },
+    ],
+  });
+
+  const response = await stream.finalMessage();
+  const modelDurationMs = performance.now() - modelStartedAt;
+
+  if (response.stop_reason === "max_tokens") {
+    console.error(
+      `parse-script: output truncated at max_tokens (input=${response.usage.input_tokens}, output=${response.usage.output_tokens})`,
+    );
+    return {
+      ok: false,
+      error:
+        "This script is too long to process. Try uploading only the pages you need.",
+    };
+  }
+
+  // A `thinking` block can precede the `text` block — don't assume content[0].
+  const textBlock = response.content.find((b) => b.type === "text");
+  const raw = textBlock?.type === "text" ? textBlock.text : "";
+
+  const json = extractJson(raw);
+  if (!json) {
+    return { ok: false, error: "Script parsing failed" };
+  }
+
+  type RawStep = {
+    speaker: string;
+    verbalLine: string;
+    content: { kind: string; text: string }[];
+  };
+  let parsed: {
+    characters?: string[];
+    languageCode?: string;
+    languageName?: string;
+    steps?: RawStep[];
+  };
+  try {
+    parsed = JSON.parse(json) as typeof parsed;
+  } catch {
+    console.error("parse-script: malformed JSON from model");
+    return { ok: false, error: "Script parsing failed" };
+  }
+
+  const validSteps =
+    Array.isArray(parsed.steps) &&
+    parsed.steps.every(
+      (step) =>
+        step &&
+        typeof step.speaker === "string" &&
+        typeof step.verbalLine === "string" &&
+        Array.isArray(step.content) &&
+        step.content.every(
+          (line) =>
+            line &&
+            (line.kind === "verbal" || line.kind === "nonverbal") &&
+            typeof line.text === "string",
+        ),
+    );
+  if (!validSteps || !isValidCharacters(parsed.characters)) {
+    return { ok: false, error: "Script parsing failed" };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      characters: parsed.characters ?? [],
+      languageCode:
+        typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
+      languageName:
+        typeof parsed.languageName === "string"
+          ? parsed.languageName
+          : "English",
+      steps: parsed.steps ?? [],
+      processingMode: "scriptText" in input ? "text-full" : "pdf-fallback",
+      modelDurationMs: Math.round(modelDurationMs),
+    },
+    usage: {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    },
+  };
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -347,8 +488,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         const fast = await parseTextFast(effectiveText);
         if (fast) {
-          res.setHeader("Server-Timing", `model;dur=${fast.modelDurationMs}`);
-          return res.status(200).json({ ...fast, unreadableOriginalLanguage });
+          res.setHeader(
+            "Server-Timing",
+            `model;dur=${fast.payload.modelDurationMs}`,
+          );
+          return res
+            .status(200)
+            .json({ ...fast.payload, unreadableOriginalLanguage });
         }
       } catch (fastError) {
         console.warn(
@@ -358,117 +504,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] =
-      effectiveText
-        ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${effectiveText}\n</SCRIPT>`
-        : [
-            {
-              type: "document",
-              source: {
-                type: "base64",
-                media_type: "application/pdf",
-                data: pdfData!,
-              },
-            },
-            {
-              type: "text",
-              text: "Process this script PDF as instructed and return the JSON result.",
-            },
-          ];
-    const modelStartedAt = performance.now();
-    const stream = client.messages.stream({
-      model: "claude-sonnet-5",
-      // Sonnet 5's streamed output ceiling — long scripts need the headroom
-      // since the full parse echoes every line back as JSON.
-      max_tokens: 64000,
-      // Sonnet 5 runs adaptive thinking by default, which roughly triples output
-      // tokens and latency on this task (measured: ~53s/6.4K tokens with thinking
-      // vs ~16s/2K tokens without, for near-identical visible output) with no
-      // measurable quality gain on this well-specified extraction/formatting task.
-      thinking: { type: "disabled" },
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
-    });
-
-    const response = await stream.finalMessage();
-    const modelDurationMs = performance.now() - modelStartedAt;
-
-    if (response.stop_reason === "max_tokens") {
-      console.error(
-        `parse-script: output truncated at max_tokens (input=${response.usage.input_tokens}, output=${response.usage.output_tokens})`,
-      );
-      return res
-        .status(500)
-        .json({
-          error:
-            "This script is too long to process. Try uploading only the pages you need.",
-        });
+    const full = await parseFull(
+      effectiveText ? { scriptText: effectiveText } : { pdfData: pdfData! },
+    );
+    if (!full.ok) {
+      return res.status(500).json({ error: full.error });
     }
-
-    // A `thinking` block can precede the `text` block — don't assume content[0].
-    const textBlock = response.content.find((b) => b.type === "text");
-    const raw = textBlock?.type === "text" ? textBlock.text : "";
-
-    const json = extractJson(raw);
-    if (!json) {
-      return res.status(500).json({ error: "Script parsing failed" });
-    }
-
-    type RawStep = {
-      speaker: string;
-      verbalLine: string;
-      content: { kind: string; text: string }[];
-    };
-    let parsed: {
-      characters?: string[];
-      languageCode?: string;
-      languageName?: string;
-      steps?: RawStep[];
-    };
-    try {
-      parsed = JSON.parse(json) as typeof parsed;
-    } catch {
-      console.error("parse-script: malformed JSON from model");
-      return res.status(500).json({ error: "Script parsing failed" });
-    }
-
-    const validSteps =
-      Array.isArray(parsed.steps) &&
-      parsed.steps.every(
-        (step) =>
-          step &&
-          typeof step.speaker === "string" &&
-          typeof step.verbalLine === "string" &&
-          Array.isArray(step.content) &&
-          step.content.every(
-            (line) =>
-              line &&
-              (line.kind === "verbal" || line.kind === "nonverbal") &&
-              typeof line.text === "string",
-          ),
-      );
-    if (!validSteps || !isValidCharacters(parsed.characters)) {
-      return res.status(500).json({ error: "Script parsing failed" });
-    }
-
-    res.setHeader("Server-Timing", `model;dur=${modelDurationMs.toFixed(1)}`);
-    return res.status(200).json({
-      characters: parsed.characters ?? [],
-      languageCode:
-        typeof parsed.languageCode === "string" ? parsed.languageCode : "en",
-      languageName:
-        typeof parsed.languageName === "string"
-          ? parsed.languageName
-          : "English",
-      steps: parsed.steps,
-      processingMode: effectiveText ? "text-full" : "pdf-fallback",
-      modelDurationMs: Math.round(modelDurationMs),
-    });
+    res.setHeader(
+      "Server-Timing",
+      `model;dur=${full.payload.modelDurationMs.toFixed(1)}`,
+    );
+    return res.status(200).json(full.payload);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Claude API error:", message);
