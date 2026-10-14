@@ -65,7 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? await requireAuth(req, res)
     : await requireAuthRateLimited(req, res, {
         bucket: "scribe",
-        maxPerWindow: 120,
+        // One token per actor line (each line opens its own Scribe socket),
+        // so a 25-line role burns ~25 per take. Sized for a dozen-plus takes
+        // an hour; ElevenLabs bills audio streamed, not tokens minted.
+        maxPerWindow: 600,
       });
   if (!auth) return;
 
