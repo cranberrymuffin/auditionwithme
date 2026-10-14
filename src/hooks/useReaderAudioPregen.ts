@@ -122,14 +122,20 @@ export function useReaderAudioPregen({
 
   // Untagged once the wait for the director runs out. Tags that land after
   // that leave the lines already rendered untagged as they are — those reads
-  // are paid for — and direct only the rest.
+  // are paid for — and direct only the rest. "Already rendered" includes
+  // reads Rehearsal fetched itself before this job reached them: they're in
+  // the in-memory cache (in flight or done; failures leave it), and nothing
+  // fetches untagged reads unless the wait ran out.
   const effectiveTags = useMemo(() => {
     if (deliveryTags === null) return tagsWaitExpired ? [] : null;
+    // The wait only expires while tags are missing, so this means they're late.
+    if (!tagsWaitExpired) return deliveryTags;
     const paid = untaggedKeysRef.current;
-    if (!paid.size) return deliveryTags;
     const keep = readerLineIndices(steps, selectedRole).filter((index) => {
       const line = buildReaderLine(steps, index, characterVoices, [], characterEmotions, coachTakes, languageCode);
-      return line !== null && paid.has(cacheKey(line, intensity));
+      if (!line) return false;
+      const key = cacheKey(line, intensity);
+      return paid.has(key) || peekTtsCache(key) !== undefined;
     });
     return keep.length ? keepUntaggedReads(steps, deliveryTags, keep) : deliveryTags;
   }, [deliveryTags, tagsWaitExpired, steps, selectedRole, characterVoices, characterEmotions, coachTakes, intensity, languageCode]);
