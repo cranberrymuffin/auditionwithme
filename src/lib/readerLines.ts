@@ -112,3 +112,24 @@ export function buildReaderLine(
       ?.line ?? null
   );
 }
+
+/** Director tags for the lines in `keepUntagged` stripped back to the read
+ * already rendered without them: when the director answers after
+ * pre-generation gave up waiting (useReaderAudioPregen.ts), those lines are
+ * paid for, and re-rendering them with markup would bill them twice. A
+ * leading beat survives — it's client-side timing, not part of the audio or
+ * its key. */
+export function keepUntaggedReads(
+  steps: Step[],
+  deliveryTags: (string | null)[],
+  keepUntagged: Iterable<number>,
+): (string | null)[] {
+  const tags = [...deliveryTags];
+  for (const index of keepUntagged) {
+    const step = steps[index];
+    if (!step || index >= tags.length) continue;
+    const { beat } = splitLeadingBeat(tags[index] ?? "");
+    tags[index] = beat ? `[${beat} pause] ${step.verbalLine}` : null;
+  }
+  return tags;
+}

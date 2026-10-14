@@ -15,6 +15,7 @@ import { cacheKey, RENDER_VERSION } from "../../src/lib/ttsCacheKey";
 import {
   buildReaderCue,
   buildReaderLine,
+  keepUntaggedReads,
   LONG_BEAT_MS,
   readerLineIndices,
   SHORT_BEAT_MS,
@@ -398,6 +399,22 @@ check("emotion moves stability, but never a script's big delivery", () => {
   assert.equal(v3Stability(true, -1), 0);
   assert.equal(parseEmotion("1"), 0);
   assert.equal(parseEmotion(-9), -1);
+});
+
+check("late director tags keep already-rendered reads, beat and all", () => {
+  const tags = [null, "[long pause] [sighs] Out.", null, null, null, "[cold] It always matters."];
+  const kept = keepUntaggedReads(steps, tags, [1]);
+  const untaggedKey = (index: number) => cacheKey(buildReaderLine(steps, index, voices, [])!, "natural");
+  const keptKey = (index: number) => cacheKey(buildReaderLine(steps, index, voices, kept)!, "natural");
+  // The kept line plays the read already generated, still after its beat…
+  assert.equal(keptKey(1), untaggedKey(1));
+  assert.equal(buildReaderCue(steps, 1, voices, kept)!.beatMs, LONG_BEAT_MS);
+  // …and the rest still get the director's markup.
+  assert.notEqual(keptKey(5), untaggedKey(5));
+  assert.equal(kept[5], tags[5]);
+  // Untouched input, and indices past a truncated tag list are ignored.
+  assert.equal(tags[1], "[long pause] [sighs] Out.");
+  assert.deepEqual(keepUntaggedReads(steps, [null], [4]), [null]);
 });
 
 check("only per-request failures fall back from v4 to v3", () => {

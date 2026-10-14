@@ -1280,7 +1280,9 @@ function PracticeFlow({
       characterEmotions={characterEmotions}
       characterPaces={characterPaces}
       coachTakes={coachTakes}
-      deliveryTags={deliveryTags ?? []}
+      // Pre-generation's view of the tags, so a line it rendered before a
+      // late director answer plays that read instead of paying for another.
+      deliveryTags={pregen.deliveryTags ?? []}
       onBack={() =>
         stepBack(() => {
           if (voiceableSpeakers.length > 0) {

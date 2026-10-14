@@ -10,7 +10,7 @@ import {
   type TtsIntensity,
   type TtsLine,
 } from "./useTtsPlayer";
-import { buildReaderLine, readerLineIndices } from "../lib/readerLines";
+import { buildReaderLine, keepUntaggedReads, readerLineIndices } from "../lib/readerLines";
 import { enforceReaderAudioCap, loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
 import {
   canStartTake,
@@ -51,6 +51,10 @@ export type ReaderAudioPregenState = {
 /** What useReaderAudioPregen returns: its state plus the playhead setter. */
 export type ReaderAudioPregen = ReaderAudioPregenState & {
   setPlayhead: (index: number, takeActive: boolean) => void;
+  /** The tags Rehearsal must read with so playback hits what was generated:
+   * the director's, minus lines already rendered untagged before they came
+   * (see keepUntaggedReads). Null while still waiting on the director. */
+  deliveryTags: (string | null)[] | null;
 };
 
 const IDLE: ReaderAudioPregenState = {
@@ -109,21 +113,40 @@ export function useReaderAudioPregen({
     return () => clearTimeout(timer);
   }, [enabled, deliveryTags, tagsWaitExpired]);
 
-  // The exact requests Rehearsal will make, keyed the same way. Untagged
-  // once the wait for the director runs out, as Rehearsal reads them.
+  // Keys of reads generated (or found) untagged while the director was late.
+  // Only grows while tags are missing, so it's settled by the time they land.
+  const untaggedKeysRef = useRef(new Set<string>());
+
+  // Untagged once the wait for the director runs out. Tags that land after
+  // that leave the lines already rendered untagged as they are — those reads
+  // are paid for — and direct only the rest.
+  const effectiveTags = useMemo(() => {
+    if (deliveryTags === null) return tagsWaitExpired ? [] : null;
+    const paid = untaggedKeysRef.current;
+    if (!paid.size) return deliveryTags;
+    const keep = readerLineIndices(steps, selectedRole).filter((index) => {
+      const line = buildReaderLine(steps, index, characterVoices, [], characterEmotions, coachTakes);
+      return line !== null && paid.has(cacheKey(line, intensity));
+    });
+    return keep.length ? keepUntaggedReads(steps, deliveryTags, keep) : deliveryTags;
+  }, [deliveryTags, tagsWaitExpired, steps, selectedRole, characterVoices, characterEmotions, coachTakes, intensity]);
+
+  // The exact requests Rehearsal will make, keyed the same way.
   const lines = useMemo(() => {
-    const tags = deliveryTags ?? (tagsWaitExpired ? [] : null);
+    const tags = effectiveTags;
     if (!enabled || tags === null) return null;
     return readerLineIndices(steps, selectedRole).flatMap((index) => {
       const line = buildReaderLine(steps, index, characterVoices, tags, characterEmotions, coachTakes);
       return line ? [{ index, line, key: cacheKey(line, intensity) }] : [];
     });
-  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, coachTakes, deliveryTags, tagsWaitExpired, intensity]);
+  }, [enabled, steps, selectedRole, characterVoices, characterEmotions, coachTakes, effectiveTags, intensity]);
   // Restart only when the set of keys actually changes, not on every new
   // array identity (e.g. a re-render that rebuilt equal tags).
   const signature = lines ? JSON.stringify(lines.map((item) => item.key)) : null;
   const linesRef = useRef(lines);
   linesRef.current = lines;
+  const untaggedRef = useRef(deliveryTags === null);
+  untaggedRef.current = deliveryTags === null;
 
   // Where the actor is, and whether a take is under way; read by the job.
   const playheadRef = useRef({ index: 0, takeActive: false });
@@ -145,6 +168,11 @@ export function useReaderAudioPregen({
       return;
     }
     const items = linesRef.current ?? [];
+    // Running on the timed-out, untagged reads: remember each one touched.
+    const untagged = untaggedRef.current;
+    const noteUntagged = (key: string) => {
+      if (untagged) untaggedKeysRef.current.add(key);
+    };
     let cancelled = false;
     // Only gates the WAIT between retry/backoff attempts (threaded into
     // fetchTtsBlobWithRetry below) and the rate-limit hold wait in the loop
@@ -184,6 +212,7 @@ export function useReaderAudioPregen({
     };
 
     const generate = async (index: number, line: TtsLine, key: string) => {
+      noteUntagged(key);
       // Something (playback, its prefetch) already has this line.
       const existing = peekTtsCache(key);
       if (existing) {
@@ -252,6 +281,7 @@ export function useReaderAudioPregen({
           if (peekTtsCache(key)) return; // generate() settles it in order
           const stored = await loadReaderAudio(key).catch(() => null);
           if (stored && !cancelled) {
+            noteUntagged(key);
             seedTtsCache(key, stored);
             markReady(index);
           }
@@ -305,5 +335,5 @@ export function useReaderAudioPregen({
     };
   }, [enabled, signature, intensity, scriptId]);
 
-  return { ...state, setPlayhead };
+  return { ...state, setPlayhead, deliveryTags: effectiveTags };
 }
