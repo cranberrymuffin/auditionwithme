@@ -33,6 +33,18 @@ const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no char
 const EXPRESSIVE_MODEL = "eleven_v4";
 const FALLBACK_MODEL = "eleven_v3";
 
+// Account-level refusals: a bad key or exhausted quota (401/402) and a full
+// concurrency slot or rate limit (429). v3 runs on the same account, so
+// retrying there would only spend another request — and under a 429 add load
+// at the worst moment, or render the line on v3 and cache it as v4. These go
+// straight back to the client, which honors Retry-After.
+const ACCOUNT_LEVEL_STATUSES = new Set([401, 402, 429]);
+
+/** Whether a failed v4 request is worth retrying on the v3 fallback. */
+export function shouldFallBack(status: number): boolean {
+  return status >= 400 && status < 500 && !ACCOUNT_LEVEL_STATUSES.has(status);
+}
+
 // The client still sends `intensity` (pinned to "natural" and kept in its
 // cache key) and the neighbouring lines as previousText/nextText; both are
 // ignored here. A global intensity knob made every line louder at once, which
@@ -161,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     let servedModel = EXPRESSIVE_MODEL;
     let upstream = await synthesize(EXPRESSIVE_MODEL);
-    if (!upstream.ok && upstream.status >= 400 && upstream.status < 500) {
+    if (!upstream.ok && shouldFallBack(upstream.status)) {
       const detail = await upstream.text();
       console.warn(
         `ElevenLabs ${EXPRESSIVE_MODEL} request failed (${upstream.status}); retrying with ${FALLBACK_MODEL}:`,

@@ -32,6 +32,7 @@ import {
 } from "../../src/lib/pregenSchedule";
 import {
   parseEmotion,
+  shouldFallBack,
   shouldHoldPregen as serverShouldHold,
   v3Stability,
 } from "../../api/tts";
@@ -397,6 +398,15 @@ check("emotion moves stability, but never a script's big delivery", () => {
   assert.equal(v3Stability(true, -1), 0);
   assert.equal(parseEmotion("1"), 0);
   assert.equal(parseEmotion(-9), -1);
+});
+
+check("only per-request failures fall back from v4 to v3", () => {
+  assert.equal(shouldFallBack(400), true);
+  assert.equal(shouldFallBack(422), true);
+  assert.equal(shouldFallBack(401), false); // bad key / quota: same account
+  assert.equal(shouldFallBack(402), false);
+  assert.equal(shouldFallBack(429), false); // concurrency: client honors Retry-After
+  assert.equal(shouldFallBack(500), false);
 });
 
 console.log(`\n${passed} checks passed`);
