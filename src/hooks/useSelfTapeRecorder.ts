@@ -134,7 +134,13 @@ export function useSelfTapeRecorder() {
           height: { ideal: 1080 },
           aspectRatio: { ideal: 16 / 9 },
         },
-        audio: true,
+        // The same mic feeds the tape and live line tracking
+        // (useScribeTracking.ts) while the scene partner plays out of the
+        // speaker. Echo cancellation keeps that playback out of both: the
+        // tape mixes the partner in directly, and Scribe shouldn't transcribe
+        // it. Noise suppression and auto gain stay at the browser's defaults
+        // — forcing them on would flatten the actor's dynamics on the tape.
+        audio: { echoCancellation: true },
       });
     } catch (err) {
       console.error("Self-tape camera unavailable:", err);
@@ -153,6 +159,15 @@ export function useSelfTapeRecorder() {
         `opened ${settings.width}x${settings.height}, aspectRatio=${settings.aspectRatio?.toFixed(3) ?? "?"}, facingMode=${settings.facingMode ?? "?"}`,
       );
       await applyFrontCameraZoom(videoTrack);
+    }
+    const audioTrack = media.getAudioTracks()[0];
+    if (audioTrack) {
+      // Like the camera's, these are only hints: log what the browser applied.
+      const settings = audioTrack.getSettings();
+      logAudioEvent(
+        "mic",
+        `opened echoCancellation=${settings.echoCancellation ?? "?"}, noiseSuppression=${settings.noiseSuppression ?? "?"}, autoGainControl=${settings.autoGainControl ?? "?"}`,
+      );
     }
     // Asked again (Try again, or StrictMode's double mount): one camera at a time.
     streamRef.current?.getTracks().forEach((track) => track.stop());
