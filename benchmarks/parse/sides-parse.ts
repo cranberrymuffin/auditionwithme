@@ -151,6 +151,8 @@ const EXPECTATIONS: Expectation[] = [
       // column, so it stays Ethan's line instead of becoming a direction.
       "We are here to sell not soil ourselves",
       "You think you can just sit there",
+      // Dialogue sharing a row with a leading parenthetical stays spoken.
+      "Wrong! Your job is to sell cans",
     ],
     characters: ["ETHAN", "CARL", "SECRETARY"],
   },

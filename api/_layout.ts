@@ -49,6 +49,17 @@ function isCapsShort(text: string): boolean {
   return /\p{Lu}/u.test(stripped) && !/\p{Ll}/u.test(stripped);
 }
 
+/**
+ * A parenthetical line ("(beat)", or the opening of one that wraps). A line
+ * that closes its parenthetical and keeps going — "(makes a buzzer sound)
+ * Wrong! Your" — is dialogue; splitSpeech pulls the cue out inline.
+ */
+function isParenLine(text: string): boolean {
+  if (!text.startsWith("(")) return false;
+  const close = text.indexOf(")");
+  return close === -1 || !text.slice(close + 1).replace(/\(.*?\)/g, "").trim();
+}
+
 // ── Step builder shared by all layout variants ──
 
 type LineClass =
@@ -256,7 +267,7 @@ function classifyFixed(lines: Line[], minSpeeches: number): Classifier | null {
         return { type: "speaker", label, contd: CONTD_SUFFIX.test(line.text) };
     }
     if (
-      line.text.startsWith("(") &&
+      isParenLine(line.text) &&
       (near(line.x, parenX) ||
         (line.x > dialogueX - X_TOLERANCE && line.x < speakerX))
     ) {
@@ -307,7 +318,7 @@ function classifyCentered(lines: Line[]): Classifier | null {
       // heading, or artifact — never dialogue.
       return { type: "skip" };
     }
-    if (text.startsWith("(")) return { type: "paren" };
+    if (isParenLine(text)) return { type: "paren" };
     return { type: "dialogue" };
   };
 }
