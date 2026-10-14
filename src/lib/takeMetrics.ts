@@ -103,7 +103,9 @@ export class TakeMetrics {
    * successful detections. */
   linesBacktrackedAfterAuto = 0;
   // Copied from reader-audio pre-generation (useReaderAudioPregen) when the
-  // take ends. null = unmeasured, never a stand-in 0.
+  // take ends. null = unmeasured, never a stand-in 0. Since pre-generation
+  // renders a lookahead window rather than the whole script, pregenMs is the
+  // time to first fill that window; takes before that measured the script.
   pregenMs: number | null = null;
   pregenFailedLines: number | null = null;
   // TTS fetches the take had to make, or wait on, because pre-generation

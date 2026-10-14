@@ -8,6 +8,27 @@
 // the rest of the job after any 429, and pauses whenever the account is one
 // request from its limit — that last slot is reserved for live playback.
 
+/** How many reader lines, from the actor's current step on, are generated
+ * ahead of them. Nothing past that is rendered until the actor gets closer:
+ * a take that stops after the first scene — or never starts — doesn't pay
+ * for the rest of the script. One worker renders a line in a second or
+ * two, far faster than a scene plays, so this stays well ahead; a line the
+ * actor reaches unrendered (a jump ahead) fetches live, as before. */
+export const PREGEN_LOOKAHEAD_LINES = 10;
+
+/** The reader lines to have ready now: the next PREGEN_LOOKAHEAD_LINES of
+ * them at or after the playhead. Lines behind it have already played or
+ * been skipped; going back to one fetches it live (or from cache). */
+export function lookaheadWindow(readerIndices: number[], playhead: number): number[] {
+  const window: number[] = [];
+  for (const index of readerIndices) {
+    if (index < playhead) continue;
+    window.push(index);
+    if (window.length >= PREGEN_LOOKAHEAD_LINES) break;
+  }
+  return window;
+}
+
 /** Start is enabled once this many opening reader lines are ready. */
 export const START_EARLY_LINES = 3;
 /** Hard per-client cap on concurrent pre-generation requests. */
@@ -54,28 +75,24 @@ export function targetWorkers(opts: {
 }
 
 /**
- * The next reader line to generate, in script order starting from the
- * playhead, so the actor's upcoming lines come first (and stay ahead of
- * them); lines already behind the playhead only once nothing ahead is left.
- * `readerIndices` is in script order; `pending` holds the step indices still
- * needing audio and not already being fetched.
+ * The next reader line to generate: the first one in the lookahead window
+ * (lookaheadWindow) still needing audio, in script order, so the actor's
+ * upcoming lines come first. Null when the window is covered — the job then
+ * waits for the playhead to move. `readerIndices` is in script order;
+ * `pending` holds the step indices still needing audio and not already
+ * being fetched.
  */
 export function nextLineToGenerate(
   readerIndices: number[],
   pending: ReadonlySet<number>,
   playhead: number,
 ): number | null {
-  let behind: number | null = null;
-  for (const index of readerIndices) {
-    if (!pending.has(index)) continue;
-    if (index >= playhead) return index;
-    if (behind === null) behind = index;
-  }
-  return behind;
+  return lookaheadWindow(readerIndices, playhead).find((index) => pending.has(index)) ?? null;
 }
 
-/** Start gate: every reader line is settled (ready or given up on), or the
- * first START_EARLY_LINES of them (all, if the script has fewer) are ready. */
+/** Start gate: every line in `readerIndices` — the lookahead window, as
+ * useReaderAudioPregen.ts passes it — is settled (ready or given up on), or
+ * the first START_EARLY_LINES of them (all, if there are fewer) are ready. */
 export function canStartTake(
   readerIndices: number[],
   ready: ReadonlySet<number>,

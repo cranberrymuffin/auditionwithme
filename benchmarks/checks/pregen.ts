@@ -24,8 +24,10 @@ import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../
 import { normalizeTag, sanitizePerformance } from "../../api/_direction";
 import {
   canStartTake,
+  lookaheadWindow,
   MAX_PREGEN_WORKERS,
   nextLineToGenerate,
+  PREGEN_LOOKAHEAD_LINES,
   parseConcurrency,
   shouldHoldPregen,
   START_EARLY_LINES,
@@ -291,15 +293,39 @@ check("mid-take pregen never runs more than one worker", () => {
   assert.equal(targetWorkers({ takeActive: true, rateLimited: false, concurrency: { current: 0, max: 5 } }), 1);
 });
 
-check("next line follows script order from the playhead, behind-lines last", () => {
+check("next line follows script order from the playhead, never behind it", () => {
   const reader = [1, 4, 6, 9, 12];
   assert.equal(nextLineToGenerate(reader, new Set(reader), 0), 1);
   assert.equal(nextLineToGenerate(reader, new Set([4, 6, 9]), 0), 4);
   // Actor jumped ahead to step 7: 9 is the next upcoming reader line.
   assert.equal(nextLineToGenerate(reader, new Set([4, 9, 12]), 7), 9);
-  // Nothing left ahead: go back for the line behind (for a replay).
-  assert.equal(nextLineToGenerate(reader, new Set([4]), 7), 4);
+  // Nothing left ahead: a line behind waits — going back fetches it live.
+  assert.equal(nextLineToGenerate(reader, new Set([4]), 7), null);
   assert.equal(nextLineToGenerate(reader, new Set(), 0), null);
+});
+
+check(`pregen renders only the next ${PREGEN_LOOKAHEAD_LINES} reader lines from the playhead`, () => {
+  const reader = Array.from({ length: 40 }, (_, i) => i * 2 + 1); // 1, 3, 5, …
+  const window = lookaheadWindow(reader, 0);
+  assert.equal(window.length, PREGEN_LOOKAHEAD_LINES);
+  assert.equal(window[0], 1);
+  // Everything in the window ready: nothing past it is rendered yet…
+  const pending = new Set(reader.filter((index) => !window.includes(index)));
+  assert.equal(nextLineToGenerate(reader, pending, 0), null);
+  // …until the actor moves on, and the window with them.
+  const moved = lookaheadWindow(reader, 10);
+  assert.equal(moved[0], 11);
+  assert.equal(nextLineToGenerate(reader, pending, 10), window.at(-1)! + 2);
+  // Near the end the window just runs out.
+  assert.deepEqual(lookaheadWindow(reader, 76), [77, 79]);
+  assert.deepEqual(lookaheadWindow(reader, 200), []);
+});
+
+check("start gates on the window's opening lines, so a long script isn't held up", () => {
+  const reader = Array.from({ length: 40 }, (_, i) => i * 2 + 1);
+  const window = lookaheadWindow(reader, 0);
+  assert.equal(canStartTake(window, new Set(window.slice(0, START_EARLY_LINES)), false), true);
+  assert.equal(canStartTake(window, new Set(window.slice(1, START_EARLY_LINES + 1)), false), false);
 });
 
 check(`start opens once the first ${START_EARLY_LINES} reader lines are ready`, () => {

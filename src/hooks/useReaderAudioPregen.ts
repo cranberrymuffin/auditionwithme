@@ -14,6 +14,7 @@ import { buildReaderLine, keepUntaggedReads, readerLineIndices } from "../lib/re
 import { enforceReaderAudioCap, loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
 import {
   canStartTake,
+  lookaheadWindow,
   nextLineToGenerate,
   parseConcurrency,
   PREGEN_HOLD_MS,
@@ -34,17 +35,20 @@ const PREGEN_HEADERS = { "X-TTS-Purpose": "pregen" };
 export type ReaderAudioPregenState = {
   /** Waiting on the AI director's tags before generating anything. */
   waitingForDirection: boolean;
-  /** Reader lines with audio ready (cached in memory/on-device or generated). */
+  /** Reader lines in the lookahead window (lib/pregenSchedule.ts) with audio
+   * ready — cached in memory/on-device or generated — out of `total`, the
+   * window's size. The window, not the script: lines past it aren't
+   * generated yet, so they'd never count towards a whole-script total. */
   ready: number;
   total: number;
   failed: number;
-  /** Every reader line is either ready or given up on. */
+  /** Every line in the window is either ready or given up on. */
   done: boolean;
-  /** Start gate: done, or the opening reader lines are ready. */
+  /** Start gate: done, or the window's opening lines are ready. */
   canStart: boolean;
   /** Client time the current generation job started (null before it has). */
   startedAt: number | null;
-  /** Client time the current job finished (null while still running). */
+  /** Client time the window was first all settled (null until then). */
   finishedAt: number | null;
 };
 
@@ -71,8 +75,11 @@ const IDLE: ReaderAudioPregenState = {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Generates every reader line's audio ahead of the take, in script order, so
- * the scene partner answers without an ElevenLabs round trip. Lines already
+ * Generates reader lines' audio ahead of the actor, in script order, so the
+ * scene partner answers without an ElevenLabs round trip — only the next
+ * PREGEN_LOOKAHEAD_LINES of them from the actor's current step, moving on as
+ * the actor does, so a take that stops early never pays for the rest of the
+ * script. Lines already
  * in memory or the on-device store cost nothing (a Recast with unchanged
  * voices is free); changed voices or direction are different cache keys and
  * regenerate. Keeps running through the take — one worker only — prioritizing
@@ -201,17 +208,21 @@ export function useReaderAudioPregen({
     let concurrency: Concurrency | null = null;
     let holdUntil = 0;
 
-    const publish = (finished: boolean) => {
+    let finishedAt: number | null = null;
+    const publish = () => {
       if (cancelled) return;
+      const window = lookaheadWindow(readerIndices, playheadRef.current.index);
+      const done = window.every((index) => ready.has(index) || failed.has(index));
+      if (done) finishedAt ??= Date.now();
       setState({
         waitingForDirection: false,
-        ready: ready.size,
-        total: readerIndices.length,
+        ready: window.filter((index) => ready.has(index)).length,
+        total: window.length,
         failed: failed.size,
-        done: finished,
-        canStart: canStartTake(readerIndices, ready, finished),
+        done,
+        canStart: canStartTake(window, ready, done),
         startedAt,
-        finishedAt: finished ? Date.now() : null,
+        finishedAt,
       });
     };
 
@@ -297,10 +308,24 @@ export function useReaderAudioPregen({
         }),
       );
       if (cancelled) return;
-      publish(pending.size === 0);
+      publish();
+
+      // Generation adds to the on-device store; trim it back under its caps,
+      // never touching the script being rehearsed except over its own cap.
+      // Run whenever the job goes idle with something new stored, since a
+      // job waiting on the playhead may not end until the take does.
+      let trimmedAt = ready.size;
+      const trimStore = () => {
+        if (cancelled || ready.size === trimmedAt) return;
+        trimmedAt = ready.size;
+        void enforceReaderAudioCap(scriptId).catch((err) =>
+          console.warn("Reader audio eviction failed:", err),
+        );
+      };
 
       const running = new Map<number, Promise<void>>();
-      while (!cancelled && (pending.size > running.size || running.size > 0)) {
+      // `running` lines are still in `pending`, so this is "work left".
+      while (!cancelled && pending.size > 0) {
         const now = Date.now();
         if (now < holdUntil) {
           const wake = new Promise<void>((resolve) => { wakeRef.current = resolve; });
@@ -317,22 +342,23 @@ export function useReaderAudioPregen({
           const item = byIndex.get(next)!;
           const job = generate(next, item.line, item.key).finally(() => {
             running.delete(next);
-            publish(pending.size === 0 && running.size === 0);
+            publish();
           });
           running.set(next, job);
         }
-        if (running.size === 0) break;
         const wake = new Promise<void>((resolve) => { wakeRef.current = resolve; });
+        if (running.size === 0) {
+          // The window is covered: wait for the actor to move (setPlayhead)
+          // or for cleanup, rather than render past it.
+          publish();
+          trimStore();
+          await wake;
+          continue;
+        }
         await Promise.race([wake, ...running.values()]);
       }
-      publish(true);
-      // Generation just added to the store; trim it back under its caps,
-      // never touching the script being rehearsed except over its own cap.
-      if (!cancelled) {
-        void enforceReaderAudioCap(scriptId).catch((err) =>
-          console.warn("Reader audio eviction failed:", err),
-        );
-      }
+      publish();
+      trimStore();
     };
 
     void run();

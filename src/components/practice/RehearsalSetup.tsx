@@ -15,8 +15,9 @@ type RecorderStatus =
 // account, a slow network), offer to start anyway — those lines then fetch
 // live during the take instead of keeping the actor waiting here.
 const START_ANYWAY_AFTER_MS = 20_000;
-// Share of the scene partner's lines pre-generated before Start rehearsal
-// opens up (the opening lines must be ready too).
+// Share of the scene partner's upcoming lines (the pre-generation window,
+// lib/pregenSchedule.ts) ready before Start rehearsal opens up (the opening
+// lines must be ready too).
 const READY_TO_START_SHARE = 0.25;
 // Bars in the microphone's level meter, and the level (RMS of the waveform,
 // 0–1) that lights them all: ordinary speaking sits around 0.05–0.15.
