@@ -37,7 +37,9 @@ let heldToken: { token: Promise<string>; fetchedAt: number } | null = null;
 async function fetchScribeToken(): Promise<string> {
   const tokenRes = await apiFetch("/api/eleven-account", { method: "POST" });
   const tokenData = await tokenRes.json();
-  if (!tokenRes.ok || !tokenData.token) throw new Error(tokenData.error || "No Scribe token");
+  if (!tokenRes.ok || !tokenData.token) {
+    throw new Error(`token request failed (${tokenRes.status}): ${tokenData.error || "no token"}`);
+  }
   return tokenData.token;
 }
 
@@ -380,6 +382,8 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
           pending.length = 0;
         };
       } catch (err) {
+        // The actor is left on manual advance; say why in the audio log.
+        logAudioEvent("scribe", `unavailable: ${err instanceof Error ? err.message : err}`);
         console.error("Scribe tracking unavailable:", err);
         cleanup();
       }
@@ -388,6 +392,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     try {
       startCapture();
     } catch (err) {
+      logAudioEvent("scribe", `mic capture unavailable: ${err instanceof Error ? err.message : err}`);
       console.error("Scribe mic capture unavailable:", err);
       cleanup();
       return;
