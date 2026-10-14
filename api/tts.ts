@@ -27,9 +27,7 @@ const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku"; // Lily — fallback if no char
 // more than lines it left alone, and stability 0.2–0.5 made no measurable
 // difference. v4 adds about half a semitone of pitch movement on most lines
 // and was preferred for naturalness on 59% of blind pairs (fit on 57%).
-// Unlike v3, v4 accepts previous_text/next_text, but that isn't sent yet: the
-// AI director already works from scene context, and per-line context on v4
-// hasn't been listened to.
+// Unlike v3, v4 accepts previous_text/next_text: see LINE_CONTEXT_CHARS.
 const EXPRESSIVE_MODEL = "eleven_v4";
 const FALLBACK_MODEL = "eleven_v3";
 
@@ -46,13 +44,28 @@ export function shouldFallBack(status: number): boolean {
 }
 
 // The client still sends `intensity` (pinned to "natural" and kept in its
-// cache key) and the neighbouring lines as previousText/nextText; both are
-// ignored here. A global intensity knob made every line louder at once, which
-// beta testers heard as over-acting — emotion comes from the director's
-// per-line audio tags plus each character's own Emotion setting. Line context
-// isn't sent because v3 rejects previous_text/next_text (unsupported_model)
-// and on v4 it hasn't been listened to; the director already works from the
-// scene.
+// cache key); it's ignored here. A global intensity knob made every line
+// louder at once, which beta testers heard as over-acting — emotion comes
+// from the director's per-line audio tags plus each character's own Emotion
+// setting.
+
+// The neighbouring lines go to v4 as previous_text/next_text, which ElevenLabs
+// recommends for prosody that flows across separate requests: the line reads
+// as a reply to what was just said, not a cold open. Clipped to the words
+// nearest the line — that's the context that shapes its delivery, and it
+// bounds the request whatever ElevenLabs counts. Not sent to v3, which
+// rejects both (unsupported_model).
+const LINE_CONTEXT_CHARS = 300;
+
+/** A neighbouring line made safe to send: trimmed, clipped to the end nearest
+ * this line (`keep: "end"` for the line before, "start" for the line after),
+ * or null when there's nothing usable. */
+export function lineContext(value: unknown, keep: "start" | "end"): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const text = value.trim();
+  if (text.length <= LINE_CONTEXT_CHARS) return text;
+  return keep === "end" ? text.slice(-LINE_CONTEXT_CHARS) : text.slice(0, LINE_CONTEXT_CHARS);
+}
 
 // How far a character's Emotion setting (-1 very reserved … 1 very
 // expressive, src/lib/characterDelivery.ts) moves stability off its natural
@@ -129,6 +142,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     performance,
     emotion: rawEmotion,
     languageCode: rawLanguageCode,
+    previousText: rawPreviousText,
+    nextText: rawNextText,
   } = (req.body ?? {}) as {
       text?: string;
       voiceId?: string;
@@ -139,9 +154,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       emotion?: unknown;
       /** The script's language (ISO 639-1); sent only off English. */
       languageCode?: unknown;
+      /** The lines spoken just before and after this one. */
+      previousText?: unknown;
+      nextText?: unknown;
     };
   const emotion = parseEmotion(rawEmotion);
   const languageCode = parseLanguageCode(rawLanguageCode);
+  const previousText = lineContext(rawPreviousText, "end");
+  const nextText = lineContext(rawNextText, "start");
   if (!text?.trim()) {
     return res.status(400).json({ error: "No text provided" });
   }
@@ -163,10 +183,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // markup never makes a line "big".
   const stability = v3Stability(tag != null && BIG_DELIVERY_TAGS.has(tag), emotion);
 
-  // language_code goes on the v4 request only. The fallback exists for
-  // requests v4 rejected, and an unsupported language code is one way to get
-  // there — so v3 gets the request as it was before the code was sent.
-  const synthesize = (modelId: string, withLanguage: boolean) =>
+  // language_code and the line context go on the v4 request only. The
+  // fallback exists for requests v4 rejected, and an unsupported language
+  // code is one way to get there; v3 rejects the context outright. So v3
+  // gets the plain request.
+  const synthesize = (modelId: string, isExpressive: boolean) =>
     fetchElevenLabs(
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId || DEFAULT_VOICE_ID)}`,
       {
@@ -175,12 +196,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           "xi-api-key": apiKey,
           "Content-Type": "application/json",
         },
-        // v4 and the v3 fallback take the same request: both read the tags.
+        // Both models read the tags; only v4 gets the language and context.
         body: JSON.stringify({
           text: expressiveText,
           model_id: modelId,
           voice_settings: { stability },
-          ...(withLanguage && languageCode ? { language_code: languageCode } : {}),
+          ...(isExpressive && languageCode ? { language_code: languageCode } : {}),
+          ...(isExpressive && previousText ? { previous_text: previousText } : {}),
+          ...(isExpressive && nextText ? { next_text: nextText } : {}),
         }),
       },
     );

@@ -33,6 +33,7 @@ import {
 } from "../../src/lib/pregenSchedule";
 import {
   parseEmotion,
+  lineContext,
   parseLanguageCode,
   shouldFallBack,
   shouldHoldPregen as serverShouldHold,
@@ -449,6 +450,17 @@ check("the server takes only a plausible language code", () => {
   assert.equal(parseLanguageCode("spanish"), null);
   assert.equal(parseLanguageCode(7), null);
   assert.equal(parseLanguageCode(undefined), null);
+});
+
+check("line context is clipped to the words nearest the line", () => {
+  assert.equal(lineContext("  Did you get the results? ", "end"), "Did you get the results?");
+  assert.equal(lineContext("", "end"), null);
+  assert.equal(lineContext("   ", "start"), null);
+  assert.equal(lineContext(undefined, "start"), null);
+  const long = `${"a".repeat(400)}END`;
+  assert.equal(lineContext(long, "end")!.length, 300);
+  assert.ok(lineContext(long, "end")!.endsWith("END")); // the line before: its last words
+  assert.ok(lineContext(`START${"b".repeat(400)}`, "start")!.startsWith("START"));
 });
 
 console.log(`\n${passed} checks passed`);

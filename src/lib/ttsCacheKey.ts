@@ -37,9 +37,11 @@ export type TtsIntensity = "subtle" | "natural" | "dramatic";
  * audio generated under an older default miss the cache instead of playing
  * on. Bump it whenever api/tts.ts changes the model or the stability rules.
  * A bump orphans every stored read anyway, so make it the moment to drop
- * the key's dead slots too: previousText/nextText (api/tts.ts ignores them,
- * so a neighbouring line's edit re-bills an identical read), the old pause
- * flag and intensity.
+ * the key's dead slots too: the old pause flag and intensity.
+ * previousText/nextText aren't dead: api/tts.ts sends them to v4 as line
+ * context. That change didn't bump this — reads stored before it keep
+ * playing, rendered without context, rather than every saved script
+ * re-billing at once; new reads get it.
  *   (absent) — eleven_v3 at 0.3
  *   "eleven_v4@0.3" — the first v4 default (benchmarks/voice/emotion.ts) */
 export const RENDER_VERSION = "eleven_v4@0.3";
