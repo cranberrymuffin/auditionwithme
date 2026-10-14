@@ -74,6 +74,8 @@ type Expectation = {
   includes?: string[];
   /** Substrings that must NOT appear (cut/hidden/out-of-selection content). */
   excludes?: string[];
+  /** Substrings that must be parsed as spoken lines, not stage directions. */
+  verbalIncludes?: string[];
   /** Speaking characters the layout parse must find (subset match). */
   characters?: string[];
   expectSidesDetected?: boolean;
@@ -143,6 +145,12 @@ const EXPECTATIONS: Expectation[] = [
       "should be celebrating", // struck sentence (SC 2)
       "no one is saying you", // struck speech after SC 2's END
       "PG 1 OF 7", // sides furniture
+    ],
+    verbalIncludes: [
+      // Speech whose first row opens with struck text keeps its dialogue
+      // column, so it stays Ethan's line instead of becoming a direction.
+      "We are here to sell not soil ourselves",
+      "You think you can just sit there",
     ],
     characters: ["ETHAN", "CARL", "SECRETARY"],
   },
@@ -236,6 +244,13 @@ for (const expectation of EXPECTATIONS) {
       expectation.file,
       !parsed.text.includes(needle),
       `excludes "${needle}"`,
+    );
+  }
+  for (const needle of expectation.verbalIncludes ?? []) {
+    report(
+      expectation.file,
+      parsed.verbal.includes(needle),
+      `speaks "${needle}"`,
     );
   }
   for (const character of expectation.characters ?? []) {

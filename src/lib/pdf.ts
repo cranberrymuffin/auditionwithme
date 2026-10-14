@@ -87,20 +87,26 @@ function rowExcluded(row: Row, exclusions: Exclusion[]): boolean {
   return false;
 }
 
-/** Drop glyphs crossed by a strikethrough stroke; keeps the rest of the row. */
-function dropStruckItems(row: Row, strikes: ContentMarkup["strikes"]): Item[] {
+/**
+ * Blank glyphs crossed by a strikethrough stroke; keeps the rest of the row.
+ * Struck items stay as empty placeholders so the row keeps its original left
+ * edge — a speech whose first words are cut ("way. We are here…") must still
+ * sit in the dialogue column, not read as an indented action line.
+ */
+function blankStruckItems(row: Row, strikes: ContentMarkup["strikes"]): Item[] {
   if (!strikes.length) return row.items;
-  return row.items.filter((item) => {
+  return row.items.map((item) => {
     const centerX = item.x + item.width / 2;
     // Strike sits in the glyph body near the baseline; the tolerance covers
     // varied strike placement without matching strokes a full line away.
-    return !strikes.some(
+    const struck = strikes.some(
       (strike) =>
         centerX >= strike.x0 - 1 &&
         centerX <= strike.x1 + 1 &&
         Math.abs(strike.y - (row.y + item.height * 0.3)) <=
           Math.max(item.height * 0.55, 5),
     );
+    return struck ? { ...item, text: "" } : item;
   });
 }
 
@@ -272,9 +278,9 @@ export async function extractPdfLayout(
       rows = rows
         .map((row) => ({
           y: row.y,
-          items: dropStruckItems(row, content.strikes),
+          items: blankStruckItems(row, content.strikes),
         }))
-        .filter((row) => row.items.length > 0);
+        .filter((row) => row.items.some((item) => item.text.trim()));
     }
 
     const pageChars = rows.reduce(
