@@ -279,3 +279,52 @@ export function quietAdvance(inputs: QuietInputs): "ending" | "patient" | null {
   }
   return null;
 }
+
+// Scribe's keyterm limits for one session.
+const MAX_KEYTERMS = 50;
+const MAX_KEYTERM_CHARS = 20;
+// Short capitalized words that open a line or sit in front of a name, but
+// aren't the kind of word Scribe mishears: interjections ("Oh, …") and titles.
+const COMMON_SHORT_CAPITALIZED = new Set([
+  "yes", "no", "oh", "so", "now", "hey", "ah", "aw", "eh", "uh", "um", "hi",
+  "yo", "ok", "wow", "yep", "nah", "huh", "mr", "mrs", "ms", "dr", "st",
+]);
+// Abbreviations whose period doesn't end the sentence ("Mr. Lee").
+const TITLE_ABBREVIATION = /^(mr|mrs|ms|dr|st)\.$/i;
+const CLOSING_PUNCTUATION = /["'”’)\]]+$/;
+
+/** A short word (2–3 letters) still worth biasing toward: a capitalized one
+ * like "Ben", "Ana" or "Liv" that reads as a name — mid-sentence, or at a
+ * sentence's start only as a direct address ("Ben, wait."), since otherwise
+ * that's where every ordinary word ("The", "But") is capitalized too. */
+function isShortName(word: string, raw: string, previousRaw: string | undefined): boolean {
+  if (!/^\p{Lu}\p{Ll}+$/u.test(word)) return false; // not "I", "OK", "TV"
+  if (COMMON_SHORT_CAPITALIZED.has(word.toLowerCase())) return false;
+  const previous = previousRaw?.replace(CLOSING_PUNCTUATION, "");
+  const sentenceStart =
+    previous === undefined || (/[.!?…:]$/.test(previous) && !TITLE_ABBREVIATION.test(previous));
+  return !sentenceStart || raw.replace(CLOSING_PUNCTUATION, "").endsWith(",");
+}
+
+/**
+ * Words to bias Scribe toward for this line (its `keyterms`): the line's
+ * distinctive vocabulary — character names, unusual script words — which a
+ * generic model is most likely to mishear. Short words are skipped as
+ * ordinary vocabulary, except short names (isShortName). Letters of any
+ * script count, so names like "José" or "Zoë" keep their accents.
+ */
+export function extractKeyterms(line: string): string[] {
+  const seen = new Set<string>();
+  const terms: string[] = [];
+  const raws = line.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < raws.length && terms.length < MAX_KEYTERMS; i++) {
+    const word = raws[i].replace(/[^\p{L}'-]/gu, "");
+    if (word.length > MAX_KEYTERM_CHARS || word.length < 2) continue;
+    if (word.length < 4 && !isShortName(word, raws[i], raws[i - 1])) continue;
+    const key = word.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push(word);
+  }
+  return terms;
+}

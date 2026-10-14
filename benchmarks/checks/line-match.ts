@@ -12,6 +12,7 @@ import {
   assessLine,
   countMatchedWords,
   ENDING_HEARD_QUIET_MS,
+  extractKeyterms,
   PATIENT_HOLD_MS,
   quietAdvance,
   type QuietInputs,
@@ -175,6 +176,27 @@ check("no Scribe text yet, or mic level unmeasured -> no advance", () => {
 
 check("already fully matched -> nothing to do", () => {
   assert.equal(quietAdvance(at(LINE.length, true, 3000)), null);
+});
+
+check("keyterms keep long words and drop ordinary short ones", () => {
+  assert.deepEqual(extractKeyterms("The dragon was on the hill"), ["dragon", "hill"]);
+  assert.deepEqual(extractKeyterms("Wait, wait. WAIT!"), ["Wait"]);
+});
+
+check("keyterms keep short names mid-sentence and in direct address", () => {
+  assert.deepEqual(extractKeyterms("I told Ben the truth"), ["told", "Ben", "truth"]);
+  assert.deepEqual(extractKeyterms("Ana, listen to me."), ["Ana", "listen"]);
+  assert.deepEqual(extractKeyterms("Thank you, Mr. Lee."), ["Thank", "Lee"]);
+  assert.deepEqual(extractKeyterms("“Liv,” he said."), ["Liv", "said"]);
+});
+
+check("keyterms skip capitalized short words that aren't names", () => {
+  // Sentence starts, interjections, "I", initialisms.
+  assert.deepEqual(extractKeyterms("But she left. Now what? Oh, OK. I saw TV."), ["left", "what"]);
+});
+
+check("keyterms keep accented letters", () => {
+  assert.deepEqual(extractKeyterms("Where is José going, Zoë?"), ["Where", "José", "going", "Zoë"]);
 });
 
 console.log(`\n${passed} checks passed`);

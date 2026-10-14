@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { checkSemanticLineMatch } from "../lib/script";
 import {
   assessLine,
+  extractKeyterms,
   PATIENT_HOLD_MS,
   quietAdvance,
   quietFor,
@@ -54,25 +55,6 @@ function prefetchScribeToken(): void {
   const token = fetchScribeToken();
   token.catch(() => {}); // takeScribeToken retries; nothing to report here
   heldToken = { token, fetchedAt: Date.now() };
-}
-
-// Bias Scribe toward this line's distinctive vocabulary (character names,
-// unusual script words) — the words most likely to be misheard by a generic
-// model. Common short words are skipped since biasing them wastes budget
-// (max 50 keyterms, 20 chars each) without helping.
-function extractKeyterms(line: string): string[] {
-  const seen = new Set<string>();
-  const terms: string[] = [];
-  for (const raw of line.split(/\s+/)) {
-    const word = raw.replace(/[^A-Za-z'-]/g, "");
-    if (word.length < 4 || word.length > 20) continue;
-    const key = word.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    terms.push(word);
-    if (terms.length >= 50) break;
-  }
-  return terms;
 }
 
 function floatTo16BitPcmBase64(input: Float32Array): string {
