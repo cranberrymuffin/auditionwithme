@@ -360,16 +360,19 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     .join("\n");
 
   try {
-    // Opus 5.5: newer than Opus 5 and cheaper per token ($4/$20 vs $5/$25
-    // per MTok), and at least as good on the director audit
-    // (benchmarks/voice/emotion.ts, run director-models-2). It always thinks
-    // adaptively; effort is the only control, and it's set explicitly below
-    // (this model defaults to medium). `fallbacks: "default"` re-runs a
-    // request its safety classifiers decline on the model Anthropic
-    // recommends for that category, inside the same call, instead of handing
-    // back a refusal — dark scenes are ordinary script material.
+    // Sonnet 5.5: half Opus 5.5's price per token ($2/$10 vs $4/$20 per
+    // MTok). In a blind listen against Opus 5.5 and Opus 5 (benchmarks/voice/
+    // emotion.ts, run director-listen-1) the three directors' reads sounded
+    // the same; it directs somewhat fewer lines, but never tagged a neutral
+    // line. Structured output (below) is what makes it reliable — as free
+    // text it wrapped about a third of its answers in prose. Effort is set
+    // explicitly (this model defaults to high). `fallbacks: "default"`
+    // re-runs a request its safety classifiers decline on the model
+    // Anthropic recommends for that category, inside the same call; it
+    // covers only some of Sonnet 5.5's categories, and a script still
+    // declined reads unadorned (the refusal check after the call).
     const stream = client.beta.messages.stream({
-      model: "claude-opus-5-5",
+      model: "claude-sonnet-5-5",
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       // The model echoes each directed line back with markup, so the output
