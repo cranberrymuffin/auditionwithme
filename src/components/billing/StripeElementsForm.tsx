@@ -4,7 +4,49 @@ import {
   PaymentElement,
   useCheckoutElements,
 } from "@stripe/react-stripe-js/checkout";
+import type { Appearance } from "@stripe/stripe-js";
 import { stripePromise } from "../../lib/stripe";
+
+// Matches the app's night palette (index.css .modal-content) so the card
+// fields read as part of the modal rather than a white box dropped into it.
+const appearance: Appearance = {
+  theme: "night",
+  variables: {
+    colorPrimary: "#f4a583",
+    colorBackground: "#0f1b2b",
+    colorText: "#f8f1e6",
+    colorTextSecondary: "rgba(248, 241, 230, 0.68)",
+    colorTextPlaceholder: "rgba(248, 241, 230, 0.38)",
+    colorDanger: "#ffb1a0",
+    fontFamily: '"Britti Sans", ui-sans-serif, system-ui, sans-serif',
+    fontSizeBase: "15px",
+    borderRadius: "9px",
+    spacingUnit: "4px",
+  },
+  rules: {
+    ".Input": {
+      border: "1px solid rgba(255, 255, 255, 0.17)",
+      boxShadow: "none",
+    },
+    ".Input:focus": {
+      border: "1px solid #ef9a78",
+      boxShadow: "0 0 0 3px rgba(239, 154, 120, 0.18)",
+    },
+    ".Label": { fontWeight: "600" },
+    ".AccordionItem": {
+      border: "1px solid rgba(255, 255, 255, 0.14)",
+      backgroundColor: "rgba(255, 255, 255, 0.02)",
+      boxShadow: "none",
+    },
+  },
+};
+
+function formatDay(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+  });
+}
 
 type Props = {
   clientSecret: string;
@@ -16,13 +58,64 @@ type Props = {
   showTotal?: boolean;
 };
 
+type Checkout = Extract<
+  ReturnType<typeof useCheckoutElements>,
+  { type: "success" }
+>["checkout"];
+
+// Sourced from the live session (not hardcoded) so this stays correct under
+// Adaptive Pricing currency conversion and future price changes — and shows
+// $0 today only when Stripe actually attached a trial to this session.
+function OrderSummary({ checkout }: { checkout: Checkout }) {
+  const recurring = checkout.recurring;
+  const trial = recurring?.trial ?? null;
+  const per = recurring ? `/${recurring.interval}` : "";
+  const renewal = recurring?.dueNext.total.amount ?? checkout.total.total.amount;
+
+  return (
+    <div className="checkout-summary">
+      <dl>
+        <div>
+          <dt>Audition Plus</dt>
+          <dd>
+            {renewal}
+            {per}
+          </dd>
+        </div>
+        {trial && (
+          <div>
+            <dt>{trial.trialPeriodDays}-day free trial</dt>
+            <dd>Until {formatDay(trial.trialEnd)}</dd>
+          </div>
+        )}
+        <div className="checkout-summary-total">
+          <dt>Due today</dt>
+          <dd>{checkout.total.total.amount}</dd>
+        </div>
+      </dl>
+      {trial && (
+        <p className="checkout-summary-note">
+          Then {renewal}
+          {per} starting {formatDay(trial.trialEnd)}. Cancel before then and
+          you won't be charged.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function InnerForm({ submitLabel, onConfirmed, onCancel, showTotal }: Omit<Props, "clientSecret">) {
   const checkoutState = useCheckoutElements();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (checkoutState.type === "loading") {
-    return <p className="stripe-elements-loading">Loading…</p>;
+    return (
+      <div className="stripe-elements-loading" aria-live="polite">
+        <span className="billing-spinner" aria-hidden="true" />
+        Loading secure checkout…
+      </div>
+    );
   }
 
   if (checkoutState.type === "error") {
@@ -55,19 +148,7 @@ function InnerForm({ submitLabel, onConfirmed, onCancel, showTotal }: Omit<Props
   return (
     <form className="stripe-elements-form" onSubmit={handleSubmit}>
       <div className="stripe-elements-form-fields">
-        {showTotal && (
-          // Sourced from the live session (not hardcoded) so this stays correct
-          // under Adaptive Pricing currency conversion and future price changes.
-          <p
-            className="plan-price"
-            aria-label={`${checkout.total.total.amount}${
-              checkout.recurring ? ` per ${checkout.recurring.interval}` : ""
-            }`}
-          >
-            <strong>{checkout.total.total.amount}</strong>
-            {checkout.recurring && <span>/{checkout.recurring.interval}</span>}
-          </p>
-        )}
+        {showTotal && <OrderSummary checkout={checkout} />}
         <PaymentElement
           options={{
             wallets: { applePay: "auto", googlePay: "auto", link: "never" },
@@ -99,7 +180,10 @@ function InnerForm({ submitLabel, onConfirmed, onCancel, showTotal }: Omit<Props
 
 export default function StripeElementsForm({ clientSecret, ...rest }: Props) {
   return (
-    <CheckoutElementsProvider stripe={stripePromise} options={{ clientSecret }}>
+    <CheckoutElementsProvider
+      stripe={stripePromise}
+      options={{ clientSecret, elementsOptions: { appearance } }}
+    >
       <InnerForm {...rest} />
     </CheckoutElementsProvider>
   );

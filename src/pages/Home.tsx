@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { useToast } from "../lib/toast";
 import { IS_BETA_TESTING } from "../lib/beta";
+import { TRIAL_DAYS, hasPlanAccess } from "../lib/plan";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
 
 type HomeState = { intent?: string } | null;
@@ -20,27 +21,12 @@ export default function Home() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { entitlement } = useEntitlement();
   const startRehearsal = useStartRehearsal();
-  const freeSessionsRemaining = entitlement
-    ? Math.max(
-        entitlement.free_sessions_limit - entitlement.free_sessions_used,
-        0,
-      )
-    : 0;
-  const isSubscribed = entitlement?.subscription_status === "active";
+  const isSubscribed = hasPlanAccess(entitlement?.subscription_status);
   // No paywall during beta — rehearsals are unlimited (see src/lib/beta.ts
-  // and api/_entitlement.ts), so the free-session counter never blocks.
-  const isOutOfFreeSessions =
-    !IS_BETA_TESTING &&
-    !!entitlement &&
-    !isSubscribed &&
-    freeSessionsRemaining === 0;
-
-  const sessionsStatus =
-    !IS_BETA_TESTING && entitlement
-      ? `${freeSessionsRemaining} free sessions left`
-      : null;
-  // The hero trust line right below the CTA carries the session count, so
-  // the button hint stays minimal to avoid saying it twice.
+  // and api/_entitlement.ts). Otherwise a rehearsal needs a plan or trial.
+  const needsPlan = !IS_BETA_TESTING && !!entitlement && !isSubscribed;
+  // A past subscription means the trial's been used (api/billing.ts).
+  const trialAvailable = !entitlement?.stripe_subscription_id;
   const uploadHint = "PDF supported";
 
   // A visitor who clicked the upload CTA while signed out lands back here
@@ -97,7 +83,7 @@ export default function Home() {
         description={
           IS_BETA_TESTING
             ? "Free during beta."
-            : "3 free sessions, no credit card required."
+            : `Try it free for ${TRIAL_DAYS} days.`
         }
         path="/"
       />
@@ -118,15 +104,23 @@ export default function Home() {
 
           <div className="hero-actions">
             {user ? (
-              isOutOfFreeSessions ? (
+              needsPlan ? (
                 <button
                   type="button"
                   className="upload-cta"
                   onClick={() => navigate("/pricing")}
                 >
                   <span className="upload-copy">
-                    <strong>Subscribe to keep rehearsing</strong>
-                    <small>{sessionsStatus}</small>
+                    <strong>
+                      {trialAvailable
+                        ? "Start your free trial"
+                        : "Subscribe to keep rehearsing"}
+                    </strong>
+                    <small>
+                      {trialAvailable
+                        ? `${TRIAL_DAYS} days free · Cancel anytime`
+                        : "Your saved scripts are waiting"}
+                    </small>
                   </span>
                 </button>
               ) : (
@@ -177,7 +171,11 @@ export default function Home() {
                 </span>
                 <span className="upload-copy">
                   <strong>Start rehearsing free</strong>
-                  <small>Upload a script to begin</small>
+                  <small>
+                    {IS_BETA_TESTING
+                      ? "Upload a script to begin"
+                      : `${TRIAL_DAYS}-day free trial`}
+                  </small>
                 </span>
               </button>
             )}
@@ -191,11 +189,12 @@ export default function Home() {
             )}
           </div>
 
-          {!isSubscribed && (
+          {/* The trial CTA already says this when the paywall is showing. */}
+          {!isSubscribed && !needsPlan && (
             <p className="hero-trust">
               {IS_BETA_TESTING
                 ? "Now in beta · Free for testers"
-                : sessionsStatus || "3 free sessions · No credit card required"}
+                : `${TRIAL_DAYS}-day free trial · Cancel anytime`}
             </p>
           )}
 

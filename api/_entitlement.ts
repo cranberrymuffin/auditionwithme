@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import type { Entitlement } from "../src/types.js";
 import { IS_BETA_TESTING } from "../src/lib/beta.js";
+import { hasPlanAccess } from "../src/lib/plan.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -56,9 +57,41 @@ const DEFAULT_RATE_LIMIT = {
 };
 
 /**
- * requireAuth, plus a per-user, per-feature sliding-window rate limit. Keeping
- * buckets separate prevents normal TTS playback from blocking casting or
- * Scribe token creation. Sends 401/429 and returns null on rejection.
+ * Outside beta, sends 402 and returns false unless the user has an active
+ * subscription or trial. The webhook caches Stripe's "trialing" as "active".
+ */
+async function requirePlan(userId: string, res: VercelResponse): Promise<boolean> {
+  if (IS_BETA_TESTING) return true;
+  const { data, error } = await serviceClient()
+    .from("entitlements")
+    .select("subscription_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.error("entitlements read failed:", error.message);
+    // Fail closed (Principle 4), same as the rate limit below.
+    res.status(500).json({ error: "Could not check entitlement" });
+    return false;
+  }
+  const status = (data as Pick<Entitlement, "subscription_status"> | null)?.subscription_status;
+  if (!hasPlanAccess(status)) {
+    res.status(402).json({
+      error: "An active subscription or free trial is required",
+      reason: "subscription_required",
+    });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * requireAuth, plus — outside beta — an active subscription or trial, plus a
+ * per-user, per-feature sliding-window rate limit. Every caller is a paid
+ * rehearsal API (TTS, STS, casting, Scribe), and rehearsing a saved script
+ * never goes through issueRehearsalGrant, so this is what keeps a lapsed
+ * user from rehearsing old scripts. Keeping buckets separate prevents normal
+ * TTS playback from blocking casting or Scribe token creation. Sends
+ * 401/402/429 and returns null on rejection.
  */
 export async function requireAuthRateLimited(
   req: VercelRequest,
@@ -67,6 +100,8 @@ export async function requireAuthRateLimited(
 ): Promise<{ userId: string } | null> {
   const auth = await requireAuth(req, res);
   if (!auth) return null;
+  // Before the rate limit, so a rejected call doesn't use up the bucket.
+  if (!(await requirePlan(auth.userId, res))) return null;
 
   const bucket = options.bucket ?? DEFAULT_RATE_LIMIT.bucket;
   const maxPerWindow = options.maxPerWindow ?? DEFAULT_RATE_LIMIT.maxPerWindow;
@@ -122,35 +157,19 @@ function verifyGrant(token: string): GrantPayload | null {
 }
 
 /**
- * The single point of free-session/subscription consumption. Called once
- * per upload (api/start-rehearsal.ts), never per API call — see plan
- * Decision 2. Returns a signed grant on success, or null (with 402 already
- * sent) if the user has no free sessions left and no active subscription.
+ * The single point of subscription enforcement. Called once per upload
+ * (api/start-rehearsal.ts), never per API call — see plan Decision 2.
+ * Returns a signed grant on success, or null (with 402 already sent) if the
+ * user has no active subscription. A free trial counts as active — the
+ * webhook caches Stripe's "trialing" as "active".
  */
 export async function issueRehearsalGrant(
   userId: string,
   res: VercelResponse
 ): Promise<string | null> {
-  // Beta: rehearsals are unlimited and the free-session counter is never
-  // consulted or incremented, so nothing needs unwinding once beta ends —
-  // see src/lib/beta.ts and FeedbackGate.tsx for what replaces the paywall.
-  if (IS_BETA_TESTING) {
-    return signGrant({ userId, exp: Math.floor(Date.now() / 1000) + GRANT_TTL_SECONDS });
-  }
-  const { data, error } = await serviceClient().rpc("issue_rehearsal_grant", { p_user_id: userId });
-  if (error) {
-    console.error("issue_rehearsal_grant RPC failed:", error.message);
-    res.status(500).json({ error: "Could not check entitlement" });
-    return null;
-  }
-  const rows = (data ?? []) as Entitlement[];
-  if (rows.length === 0) {
-    res.status(402).json({
-      error: "No free sessions remaining and no active subscription",
-      reason: "entitlement_exhausted",
-    });
-    return null;
-  }
+  // Beta: requirePlan lets everyone through — see src/lib/beta.ts and
+  // FeedbackGate.tsx for what replaces the paywall.
+  if (!(await requirePlan(userId, res))) return null;
   return signGrant({ userId, exp: Math.floor(Date.now() / 1000) + GRANT_TTL_SECONDS });
 }
 

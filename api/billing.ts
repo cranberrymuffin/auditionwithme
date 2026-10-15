@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { requireAuth } from "./_entitlement.js";
+import { TRIAL_DAYS, hasPlanAccess, type Plan } from "../src/lib/plan.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,6 +23,54 @@ function serviceClient() {
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
   apiVersion: "2026-07-29.dahlia",
 });
+
+// The price is read from Stripe rather than hardcoded so the pricing page
+// always shows what checkout will actually charge. Cached per instance —
+// it only changes when STRIPE_PRICE_ID does, which means a redeploy.
+let cachedPlan: Plan | null = null;
+
+async function loadPlan(): Promise<Plan> {
+  if (cachedPlan) return cachedPlan;
+  const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID ?? "");
+  if (price.unit_amount == null || !price.recurring) {
+    throw new Error(`price ${price.id} is not a fixed recurring price`);
+  }
+  const plan: Plan = {
+    amount: price.unit_amount,
+    currency: price.currency,
+    interval: price.recurring.interval,
+    trialDays: TRIAL_DAYS,
+  };
+  cachedPlan = plan;
+  return plan;
+}
+
+// Public (no auth) — the pricing page shows the price to signed-out visitors.
+async function getPlan(res: VercelResponse) {
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PRICE_ID) {
+    console.error("STRIPE_SECRET_KEY and STRIPE_PRICE_ID must be set");
+    return res.status(500).json({ error: "Billing is not configured" });
+  }
+  try {
+    res.setHeader("Cache-Control", "public, s-maxage=300, stale-while-revalidate=3600");
+    return res.status(200).json(await loadPlan());
+  } catch (error) {
+    console.error("plan lookup failed:", error);
+    return res.status(500).json({ error: "Could not load pricing" });
+  }
+}
+
+// Whether this customer has ever had a subscription, in any state. The free
+// trial is for a customer's first subscription only — otherwise canceling
+// during the trial and resubscribing would restart it indefinitely.
+async function hasHadSubscription(customerId: string): Promise<boolean> {
+  const previous = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 1,
+  });
+  return previous.data.length > 0;
+}
 
 // Read-only view of the caller's Stripe billing state, fetched live so the
 // account/billing page can never drift from what Stripe actually has —
@@ -49,7 +98,9 @@ async function getBillingSummary(
 
     const customerId = row?.stripe_customer_id ?? null;
     if (!customerId) {
-      return res.status(200).json({ subscription: null, invoices: [] });
+      return res
+        .status(200)
+        .json({ subscription: null, invoices: [], trialEligible: true });
     }
 
     const subscriptionId = row?.stripe_subscription_id ?? null;
@@ -96,11 +147,30 @@ async function getBillingSummary(
       limit: 12,
     });
 
+    const price = subscription?.items.data[0]?.price;
+
     return res.status(200).json({
+      // A subscription row exists once checkout completes, so a customer
+      // with no row may still have had one (e.g. it was deleted in Stripe).
+      trialEligible: !subscription && !(await hasHadSubscription(customerId)),
       subscription: subscription
         ? {
             status: subscription.status,
             cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            trialEnd: subscription.trial_end
+              ? new Date(subscription.trial_end * 1000).toISOString()
+              : null,
+            endedAt: subscription.ended_at
+              ? new Date(subscription.ended_at * 1000).toISOString()
+              : null,
+            plan:
+              price?.unit_amount != null
+                ? {
+                    amount: price.unit_amount,
+                    currency: price.currency,
+                    interval: price.recurring?.interval ?? "month",
+                  }
+                : null,
             currentPeriodEnd: subscription.items.data[0]?.current_period_end
               ? new Date(subscription.items.data[0].current_period_end * 1000).toISOString()
               : null,
@@ -127,7 +197,8 @@ async function getBillingSummary(
   }
 }
 
-// Starts a subscription checkout for the single $11/month plan and returns a
+// Starts a subscription checkout for the single Audition Plus plan — with a
+// free trial if this is the customer's first subscription — and returns a
 // Checkout Session client secret for the embedded Payment Element to confirm.
 // Never writes subscription_status — only the webhook does that (plan
 // Principle 3).
@@ -155,12 +226,19 @@ async function createSubscription(
     const db = serviceClient();
     const { data: row, error } = await db
       .from("entitlements")
-      .select("stripe_customer_id")
+      .select("stripe_customer_id, subscription_status")
       .eq("user_id", auth.userId)
       .maybeSingle();
     if (error) {
       console.error("entitlements read failed:", error.message);
       return res.status(500).json({ error: "Could not load billing account" });
+    }
+    // Stops a double-click, or a second tab, from starting a second
+    // subscription for someone who already has one.
+    if (hasPlanAccess(row?.subscription_status)) {
+      return res
+        .status(409)
+        .json({ error: "You already have an active subscription." });
     }
 
     let customerId: string | null = row?.stripe_customer_id ?? null;
@@ -190,6 +268,8 @@ async function createSubscription(
       );
     }
 
+    const trialEligible = !(await hasHadSubscription(customerId));
+
     // A Checkout Session doesn't create a Subscription until it completes, so
     // an abandoned attempt just expires on its own — no dedup/reuse needed.
     //
@@ -202,6 +282,12 @@ async function createSubscription(
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
+      // The card is still collected up front (payment_method_collection
+      // defaults to "always"), so the subscription bills automatically when
+      // the trial ends unless it's canceled first.
+      ...(trialEligible
+        ? { subscription_data: { trial_period_days: TRIAL_DAYS } }
+        : {}),
       ui_mode: "elements",
       // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
       // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
@@ -335,13 +421,15 @@ async function cancelSubscription(
   }
 }
 
-// Combines billing-summary, create-subscription, create-setup-intent, and
+// Combines plan, billing-summary, create-subscription, create-setup-intent, and
 // cancel-subscription under one route — Vercel's Hobby plan caps deployments
 // at 12 Serverless Functions.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  if (req.method === "GET" && req.query.action === "plan") return getPlan(res);
 
   const auth = await requireAuth(req, res);
   if (!auth) return;

@@ -3,6 +3,7 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { IS_BETA_TESTING } from "../lib/beta";
+import { TRIAL_DAYS } from "../lib/plan";
 
 const faqs = [
   [
@@ -37,7 +38,7 @@ const faqs = [
     "Is AuditionWithMe free to use?",
     IS_BETA_TESTING
       ? "AuditionWithMe is in beta, and rehearsals are unlimited and free with feedback for every account during this period."
-      : "Your first three rehearsal sessions are free, no credit card required. After that, Audition Plus is $11 per month for unlimited rehearsals.",
+      : `Audition Plus starts with a ${TRIAL_DAYS}-day free trial with unlimited rehearsals. Cancel before it ends and you won't be charged; otherwise it continues as a monthly subscription — see Pricing for the current price.`,
   ],
 ] as const;
 
@@ -115,7 +116,7 @@ export default function Faq() {
               <>
                 <strong>Start rehearsing free</strong>
                 <small>
-                  {IS_BETA_TESTING ? "Free during beta" : "Three rehearsals for free"}
+                  {IS_BETA_TESTING ? "Free during beta" : `${TRIAL_DAYS} days free`}
                 </small>
               </>
             )}

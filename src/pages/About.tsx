@@ -3,6 +3,7 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
 import { IS_BETA_TESTING } from "../lib/beta";
+import { TRIAL_DAYS } from "../lib/plan";
 
 const steps = [
   ["01", "Upload", "Add your PDF sides."],
@@ -57,7 +58,7 @@ export default function About() {
               ) : (
                 <>
                   <strong>Start rehearsing free</strong>
-                  <small>{IS_BETA_TESTING ? "Free during beta" : "Three rehearsals for free"}</small>
+                  <small>{IS_BETA_TESTING ? "Free during beta" : `${TRIAL_DAYS} days free`}</small>
                 </>
               )}
             </span>

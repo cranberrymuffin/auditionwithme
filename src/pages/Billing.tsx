@@ -5,12 +5,18 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
+import { useToast } from "../lib/toast";
+import { TRIAL_DAYS, formatPlanPrice } from "../lib/plan";
 
 type BillingSummary = {
+  trialEligible: boolean;
   subscription: {
     status: string;
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: string | null;
+    trialEnd: string | null;
+    endedAt: string | null;
+    plan: { amount: number; currency: string; interval: string } | null;
     card: { brand: string; last4: string } | null;
   } | null;
   invoices: {
@@ -23,21 +29,33 @@ type BillingSummary = {
   }[];
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "Active",
-  trialing: "Active",
-  past_due: "Past due",
-  unpaid: "Past due",
-  canceled: "Canceled",
-  incomplete: "Awaiting payment",
-  incomplete_expired: "Canceled",
+type Tone = "trial" | "active" | "warning" | "ended";
+
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  trialing: { label: "Free trial", tone: "trial" },
+  active: { label: "Active", tone: "active" },
+  past_due: { label: "Payment failed", tone: "warning" },
+  unpaid: { label: "Payment failed", tone: "warning" },
+  incomplete: { label: "Awaiting payment", tone: "warning" },
+  canceled: { label: "Ended", tone: "ended" },
+  incomplete_expired: { label: "Ended", tone: "ended" },
+};
+
+const BRAND_LABEL: Record<string, string> = {
+  amex: "American Express",
+  diners: "Diners Club",
+  discover: "Discover",
+  jcb: "JCB",
+  mastercard: "Mastercard",
+  unionpay: "UnionPay",
+  visa: "Visa",
 };
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString(undefined, {
     year: "numeric",
-    month: "short",
+    month: "long",
     day: "numeric",
   });
 }
@@ -57,17 +75,17 @@ const CONFIRM_TIMEOUT_MS = 10000;
 
 export default function Billing() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [updatingCard, setUpdatingCard] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [setupClientSecret, setSetupClientSecret] = useState<string | null>(
     null,
   );
 
   const load = useCallback(async (): Promise<BillingSummary | null> => {
-    setLoading(true);
     try {
       const response = await apiFetch("/api/billing");
       const payload = await response.json().catch(() => null);
@@ -105,10 +123,11 @@ export default function Billing() {
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         setError(payload?.error ?? "Could not update your subscription.");
-        setBusy(false);
         return;
       }
+      setConfirmingCancel(false);
       await load();
+      toast(resume ? "Your plan will keep renewing." : "Your plan is canceled.");
     } catch {
       setError("Could not update your subscription.");
     } finally {
@@ -122,18 +141,14 @@ export default function Billing() {
     try {
       const response = await apiFetch(
         "/api/billing?action=create-setup-intent",
-        {
-          method: "POST",
-        },
+        { method: "POST" },
       );
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.clientSecret) {
         setError(payload?.error ?? "Could not start payment method update.");
-        setBusy(false);
         return;
       }
       setSetupClientSecret(payload.clientSecret);
-      setUpdatingCard(true);
     } catch {
       setError("Could not start payment method update.");
     } finally {
@@ -145,7 +160,6 @@ export default function Billing() {
   // method id — the webhook (checkout.session.completed) attaches it as the
   // default asynchronously, so poll briefly until the new card shows up.
   async function confirmCardUpdate() {
-    setUpdatingCard(false);
     setSetupClientSecret(null);
     setBusy(true);
     const previousCard = summary?.subscription?.card ?? null;
@@ -162,12 +176,46 @@ export default function Billing() {
       latest = await load();
     }
     setBusy(false);
+    toast("Payment method updated.");
   }
 
   const subscription = summary?.subscription ?? null;
-  const statusLabel = subscription
-    ? (STATUS_LABEL[subscription.status] ?? subscription.status)
+  const status = subscription
+    ? (STATUS[subscription.status] ?? {
+        label: subscription.status,
+        tone: "warning" as Tone,
+      })
     : null;
+  const isTrial = subscription?.status === "trialing";
+  const hasEnded = status?.tone === "ended";
+  const price = subscription?.plan
+    ? `${formatPlanPrice(subscription.plan)}/${subscription.plan.interval}`
+    : null;
+  const amount = subscription?.plan ? formatPlanPrice(subscription.plan) : "your plan price";
+  const periodEnd = formatDate(
+    isTrial ? subscription?.trialEnd ?? null : subscription?.currentPeriodEnd ?? null,
+  );
+  const card = subscription?.card
+    ? `${BRAND_LABEL[subscription.card.brand] ?? subscription.card.brand} ending in ${subscription.card.last4}`
+    : null;
+
+  let headline: string | null = null;
+  if (subscription && status) {
+    if (hasEnded) {
+      headline = `Your plan ended on ${formatDate(subscription.endedAt ?? subscription.currentPeriodEnd)}.`;
+    } else if (status.tone === "warning") {
+      headline =
+        "We couldn't charge your card. Update your payment method to keep rehearsing.";
+    } else if (isTrial && subscription.cancelAtPeriodEnd) {
+      headline = `Your free trial ends ${periodEnd}, and you won't be charged.`;
+    } else if (isTrial) {
+      headline = `Your free trial ends ${periodEnd}. After that it's ${amount} a month${card ? `, charged to your ${card}` : ""}.`;
+    } else if (subscription.cancelAtPeriodEnd) {
+      headline = `Your plan ends ${periodEnd}. You won't be charged again.`;
+    } else {
+      headline = `Your plan renews ${periodEnd} for ${amount}.`;
+    }
+  }
 
   return (
     <main className="account-page billing-page">
@@ -182,70 +230,139 @@ export default function Billing() {
       <section className="account-main">
         <header className="account-header">
           <h1>Billing</h1>
+          <p className="account-email">
+            Your plan, payment method, and receipts.
+          </p>
         </header>
 
         {loading ? (
-          <p className="account-empty">Loading your billing information…</p>
+          <div className="billing-card is-loading" aria-busy="true">
+            <span className="billing-skeleton is-wide" />
+            <span className="billing-skeleton" />
+            <span className="billing-skeleton is-short" />
+          </div>
         ) : !subscription ? (
-          <div className="account-empty">
-            <p>You don't have an active subscription yet.</p>
+          <div className="billing-empty">
+            <p className="billing-empty-eyebrow">No plan yet</p>
+            <h2>
+              {summary?.trialEligible === false
+                ? "Pick up where you left off."
+                : `Rehearse free for ${TRIAL_DAYS} days.`}
+            </h2>
+            <p>
+              Audition Plus gives you unlimited rehearsals with AI scene
+              partners. Cancel anytime from this page.
+            </p>
             <button type="button" onClick={() => navigate("/pricing")}>
-              View plans <span>→</span>
+              {summary?.trialEligible === false
+                ? "See the plan"
+                : "Start your free trial"}{" "}
+              <span aria-hidden="true">→</span>
             </button>
+            {error && (
+              <p className="plan-error" role="alert">
+                {error}
+              </p>
+            )}
           </div>
         ) : (
           <>
-            <div className="billing-card">
-              <div className="billing-card-row">
+            <article className={`billing-card tone-${status?.tone}`}>
+              <header className="billing-card-header">
                 <div>
-                  <span className="billing-card-label">Plan</span>
-                  <strong>Audition Plus — $11/month</strong>
+                  <span className="billing-card-label">Your plan</span>
+                  <h2>Audition Plus</h2>
+                  {price && <p className="billing-card-price">{price}</p>}
                 </div>
-                <span className="billing-status-pill">{statusLabel}</span>
-              </div>
+                <span className={`billing-status-pill tone-${status?.tone}`}>
+                  {subscription.cancelAtPeriodEnd && !hasEnded
+                    ? "Canceling"
+                    : status?.label}
+                </span>
+              </header>
 
-              <div className="billing-card-row">
-                <div>
-                  <span className="billing-card-label">
-                    {subscription.cancelAtPeriodEnd
-                      ? "Access ends"
-                      : "Next renewal"}
-                  </span>
-                  <strong>{formatDate(subscription.currentPeriodEnd)}</strong>
-                </div>
-              </div>
+              {headline && (
+                <p
+                  className={`billing-headline ${status?.tone === "warning" ? "is-warning" : ""}`}
+                  role={status?.tone === "warning" ? "alert" : undefined}
+                >
+                  {headline}
+                </p>
+              )}
 
-              <div className="billing-card-row">
-                <div>
-                  <span className="billing-card-label">Payment method</span>
-                  <strong>
-                    {subscription.card
-                      ? `${subscription.card.brand.replace(/^\w/, (c) => c.toUpperCase())} •••• ${subscription.card.last4}`
-                      : "No card on file"}
-                  </strong>
-                </div>
-              </div>
+              {!hasEnded && (
+                <dl className="billing-facts">
+                  <div>
+                    <dt>
+                      {subscription.cancelAtPeriodEnd
+                        ? "Access until"
+                        : isTrial
+                          ? "First charge"
+                          : "Next charge"}
+                    </dt>
+                    <dd>{periodEnd}</dd>
+                  </div>
+                  <div>
+                    <dt>Payment method</dt>
+                    <dd className="billing-card-number">
+                      {subscription.card ? (
+                        <>
+                          <span className="billing-brand" aria-hidden="true">
+                            {(BRAND_LABEL[subscription.card.brand] ??
+                              subscription.card.brand)
+                              .slice(0, 4)
+                              .toUpperCase()}
+                          </span>
+                          <span>•••• {subscription.card.last4}</span>
+                        </>
+                      ) : (
+                        "No card on file"
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              )}
 
               <div className="billing-card-actions">
-                <button type="button" onClick={startCardUpdate} disabled={busy}>
-                  Update payment method
-                </button>
-                {subscription.cancelAtPeriodEnd ? (
+                {hasEnded ? (
                   <button
                     type="button"
-                    onClick={() => toggleCancel(true)}
-                    disabled={busy}
+                    className="is-primary"
+                    onClick={() => navigate("/pricing")}
                   >
-                    Resume plan
+                    Resubscribe <span aria-hidden="true">→</span>
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => toggleCancel(false)}
-                    disabled={busy}
-                  >
-                    Cancel plan
-                  </button>
+                  <>
+                    {subscription.cancelAtPeriodEnd ? (
+                      <button
+                        type="button"
+                        className="is-primary"
+                        onClick={() => toggleCancel(true)}
+                        disabled={busy}
+                      >
+                        {isTrial ? "Keep my plan after the trial" : "Resume plan"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={status?.tone === "warning" ? "is-primary" : ""}
+                      onClick={startCardUpdate}
+                      disabled={busy}
+                    >
+                      Update payment method
+                    </button>
+                    {!subscription.cancelAtPeriodEnd && (
+                      <button
+                        type="button"
+                        className="is-quiet"
+                        onClick={() => setConfirmingCancel(true)}
+                        disabled={busy}
+                      >
+                        {isTrial ? "Cancel trial" : "Cancel plan"}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -254,14 +371,47 @@ export default function Billing() {
                   {error}
                 </p>
               )}
-            </div>
+            </article>
 
-            {updatingCard && setupClientSecret && (
+            {confirmingCancel && (
               <Modal
-                onClose={() => {
-                  setUpdatingCard(false);
-                  setSetupClientSecret(null);
-                }}
+                onClose={() => setConfirmingCancel(false)}
+                labelledBy="cancel-modal-title"
+                className="is-compact"
+              >
+                <h2 id="cancel-modal-title" className="modal-title">
+                  {isTrial ? "Cancel your free trial?" : "Cancel Audition Plus?"}
+                </h2>
+                <p className="modal-copy">
+                  {isTrial
+                    ? `You can keep rehearsing until ${periodEnd}. You won't be charged.`
+                    : `You can keep rehearsing until ${periodEnd}. You won't be charged again.`}{" "}
+                  You can change your mind anytime before then.
+                </p>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="modal-secondary"
+                    onClick={() => setConfirmingCancel(false)}
+                    data-autofocus
+                  >
+                    Keep my plan
+                  </button>
+                  <button
+                    type="button"
+                    className="modal-danger"
+                    onClick={() => toggleCancel(false)}
+                    disabled={busy}
+                  >
+                    {busy ? "Canceling…" : isTrial ? "Cancel trial" : "Cancel plan"}
+                  </button>
+                </div>
+              </Modal>
+            )}
+
+            {setupClientSecret && (
+              <Modal
+                onClose={() => setSetupClientSecret(null)}
                 labelledBy="update-card-modal-title"
               >
                 <h2 id="update-card-modal-title" className="modal-title">
@@ -270,26 +420,27 @@ export default function Billing() {
                 <StripeElementsForm
                   clientSecret={setupClientSecret}
                   submitLabel="Save card"
-                  onCancel={() => {
-                    setUpdatingCard(false);
-                    setSetupClientSecret(null);
-                  }}
+                  onCancel={() => setSetupClientSecret(null)}
                   onConfirmed={confirmCardUpdate}
                 />
               </Modal>
             )}
 
             {summary && summary.invoices.length > 0 && (
-              <div className="billing-history">
-                <h2>Billing history</h2>
+              <section className="billing-history" aria-labelledby="billing-history-title">
+                <h2 id="billing-history-title">Billing history</h2>
                 <ul>
                   {summary.invoices.map((invoice) => (
                     <li key={invoice.id}>
                       <span>{formatDate(invoice.created)}</span>
-                      <span>
-                        {formatMoney(invoice.amountPaid, invoice.currency)}
+                      <span className="billing-history-amount">
+                        {invoice.amountPaid === 0 && invoice.status === "paid"
+                          ? "Free trial"
+                          : formatMoney(invoice.amountPaid, invoice.currency)}
                       </span>
-                      <span className="billing-history-status">
+                      <span
+                        className={`billing-history-status is-${invoice.status ?? "unknown"}`}
+                      >
                         {invoice.status ?? "—"}
                       </span>
                       {invoice.hostedInvoiceUrl ? (
@@ -298,7 +449,7 @@ export default function Billing() {
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          Receipt
+                          Receipt<span className="sr-only"> (opens in a new tab)</span>
                         </a>
                       ) : (
                         <span />
@@ -306,7 +457,7 @@ export default function Billing() {
                     </li>
                   ))}
                 </ul>
-              </div>
+              </section>
             )}
           </>
         )}

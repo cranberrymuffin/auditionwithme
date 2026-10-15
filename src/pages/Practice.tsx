@@ -770,7 +770,7 @@ function PracticeFlow({
       if (!grant) {
         const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
         if (res.status === 402) {
-          toast("You're out of free sessions — subscribe to keep rehearsing.");
+          toast("Start your free trial or subscribe to keep rehearsing.");
           navigate("/pricing");
           return;
         }

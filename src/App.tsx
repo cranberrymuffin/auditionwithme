@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import ResetPassword, { ForgotPassword } from "./pages/ResetPassword";
 import RequireAuth from "./components/RequireAuth";
 import RequireAdmin from "./components/RequireAdmin";
+import RequirePlan from "./components/RequirePlan";
 import ToastProvider from "./components/ToastProvider";
 import FeedbackGate from "./components/FeedbackGate";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -34,7 +35,9 @@ function App() {
               path="/practice/*"
               element={
                 <RequireAuth>
-                  <Practice />
+                  <RequirePlan>
+                    <Practice />
+                  </RequirePlan>
                 </RequireAuth>
               }
             />

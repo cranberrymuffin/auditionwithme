@@ -6,6 +6,7 @@ import NdaModal from "../components/NdaModal";
 import PasswordField from "../components/PasswordField";
 import { friendlyAuthError } from "../lib/authErrors";
 import { IS_BETA_TESTING } from "../lib/beta";
+import { TRIAL_DAYS } from "../lib/plan";
 import { supabase } from "../lib/supabase";
 
 export default function Signup() {
@@ -101,7 +102,7 @@ export default function Signup() {
         description={
           IS_BETA_TESTING
             ? "Create a free AuditionWithMe account and start rehearsing your scripts today. Free during beta."
-            : "Create a free AuditionWithMe account and start rehearsing your scripts today. 3 free sessions, no credit card required."
+            : `Create an AuditionWithMe account and rehearse your scripts free for ${TRIAL_DAYS} days.`
         }
         path="/signup"
       />
@@ -150,7 +151,7 @@ export default function Signup() {
           ) : (
             <>
               <header>
-                <p>{IS_BETA_TESTING ? "Free during beta" : "Three free sessions"}</p>
+                <p>{IS_BETA_TESTING ? "Free during beta" : `${TRIAL_DAYS}-day free trial`}</p>
                 <h1>Create your account</h1>
               </header>
               <label htmlFor="signup-email">Email</label>

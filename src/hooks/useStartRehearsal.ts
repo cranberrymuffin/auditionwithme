@@ -57,14 +57,13 @@ export function useStartRehearsal() {
         return;
       }
 
-      // Consumes exactly one free session (or confirms an active subscription)
-      // for this upload. Every downstream parse call reuses this grant
+      // Confirms an active subscription or trial for this upload. Every downstream parse call reuses this grant
       // read-only — see api/_entitlement.ts and the auth-subscriptions plan.
       let grant: string;
       try {
         const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
         if (res.status === 402) {
-          toast("You're out of free sessions — subscribe to keep rehearsing.");
+          toast("Start your free trial or subscribe to keep rehearsing.");
           navigate("/pricing");
           return;
         }
