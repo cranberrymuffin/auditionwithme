@@ -5996,9 +5996,9 @@ header .flow-back:hover {
   font-variant-numeric: tabular-nums;
 }
 /* Manual advance for the actor's own lines on touch screens: always on
-   screen (the footer's Next can be scrolled out of view on a long speech),
-   and a thumb-sized target well over the 48px minimum. Sits under the
-   header (z 30) and the start overlay (z 50). */
+   screen (the footer's Next can be scrolled out of view on a long speech).
+   Styled to match the footer's Next. Sits under the header (z 30) and the
+   start overlay (z 50). */
 .rehearsal-floating-next {
   display: none;
 }
@@ -6011,18 +6011,17 @@ header .flow-back:hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 132px;
-    min-height: 64px;
-    padding: 0 26px;
+    min-height: 46px;
+    padding: 0 16px;
     border: 1px solid rgba(255, 205, 183, 0.58);
-    border-radius: 32px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #f4a583, #e98464);
     box-shadow:
-      0 10px 24px rgba(0, 0, 0, 0.35),
+      0 8px 18px rgba(0, 0, 0, 0.18),
       inset 0 1px 0 rgba(255, 255, 255, 0.28);
     color: #101a28;
-    font-size: 1.0625rem;
-    font-weight: 700;
+    font-size: 0.875rem;
+    font-weight: 600;
     touch-action: manipulation;
   }
   .rehearsal-floating-next:active {
@@ -6035,7 +6034,7 @@ header .flow-back:hover {
   /* Room to scroll the last lines clear of the floating button (outranks
      the phone layout's padding further down). */
   .rehearsal-page .rehearsal-center {
-    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
   }
 }
 .rehearsal-start-overlay {
