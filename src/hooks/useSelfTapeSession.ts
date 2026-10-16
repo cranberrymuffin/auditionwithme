@@ -14,7 +14,7 @@ import { useToast } from "../lib/toast";
  */
 export function useSelfTapeSession(scriptId: string | null, role: string) {
   const { user } = useAuth();
-  const { status, stream, error, requestCamera, startRecording, pause, resume, stop } =
+  const { status, stream, error, cameraInterrupted, requestCamera, startRecording, pause, resume, stop } =
     useSelfTapeRecorder();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -69,5 +69,5 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
     }
   }, [stop, stream, user, scriptId, role, toast]);
 
-  return { user, status, stream, error, saving, requestCamera, startRecording, pause, resume, finish };
+  return { user, status, stream, error, cameraInterrupted, saving, requestCamera, startRecording, pause, resume, finish };
 }

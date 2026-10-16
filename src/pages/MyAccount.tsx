@@ -4,7 +4,7 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StorageMeter from "../components/StorageMeter";
 import { useAuth } from "../contexts/AuthContext";
-import { forgetSelfTapeUrl, getSelfTapeUrl } from "../lib/selfTapeUrl";
+import { forgetSelfTapeUrl, getSelfTapeBlob, getSelfTapeUrl } from "../lib/selfTapeUrl";
 import {
   deleteTape as deleteTapeRecord,
   deleteTapesForScript,
@@ -229,7 +229,7 @@ export default function MyAccount() {
     if (downloadingRef.current) return;
     downloadingRef.current = true;
     try {
-      // getSelfTapeUrl shares its cache with ensureTapeUrl, which already
+      // getSelfTapeBlob shares its cache with ensureTapeUrl, which already
       // kicked off (and by click time, almost always finished) this same
       // lookup when the tile/modal opened — so this resolves as an
       // already-settled promise rather than a fresh IndexedDB read. That
@@ -240,10 +240,10 @@ export default function MyAccount() {
       // sheet. Reading tapeUrls state directly isn't enough on its own: it
       // can still be unset the instant the modal opens, which silently
       // no-ops the whole thing instead of erroring.
-      const url = await getSelfTapeUrl(tape.id);
-      if (!url) return;
-      const response = await fetch(url);
-      const blob = await response.blob();
+      // The cached Blob itself, not fetch(url): re-reading a long take back
+      // out of its object URL can outlast that gesture window by itself.
+      const blob = await getSelfTapeBlob(tape.id);
+      if (!blob) return;
       const extension = extensionForMimeType(blob.type);
       const filename = `self-tape-${tape.created_at.slice(0, 10)}.${extension}`;
       await shareOrDownloadBlob(blob, filename);

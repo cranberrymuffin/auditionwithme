@@ -99,6 +99,12 @@ export function useSelfTapeRecorder() {
   const mixNodesRef = useRef<AudioNode[]>([]);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // iOS mutes the camera track whenever something else takes the camera
+  // over mid-take (a call, Control Center, a notification, overheating).
+  // MediaRecorder keeps writing the mixed audio regardless, so without this
+  // the tape comes out with a frozen picture over continuing sound.
+  const [cameraInterrupted, setCameraInterrupted] = useState(false);
+  const unwatchCameraRef = useRef<(() => void) | null>(null);
 
   const disconnectMix = () => {
     mixNodesRef.current.forEach((node) => node.disconnect());
@@ -113,6 +119,7 @@ export function useSelfTapeRecorder() {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       disconnectMix();
+      unwatchCameraRef.current?.();
     };
     return cleanup;
   }, []);
@@ -204,14 +211,46 @@ export function useSelfTapeRecorder() {
     }
     recordingStreamRef.current = recordingStream;
 
+    const videoTrack = media.getVideoTracks()[0];
+    if (videoTrack) {
+      const onMute = () => {
+        logAudioEvent("camera", "video track muted mid-take");
+        setCameraInterrupted(true);
+      };
+      const onUnmute = () => {
+        logAudioEvent("camera", "video track unmuted");
+        setCameraInterrupted(false);
+      };
+      const onEnded = () => {
+        logAudioEvent("camera", "video track ended mid-take");
+        setCameraInterrupted(true);
+      };
+      videoTrack.addEventListener("mute", onMute);
+      videoTrack.addEventListener("unmute", onUnmute);
+      videoTrack.addEventListener("ended", onEnded);
+      unwatchCameraRef.current = () => {
+        videoTrack.removeEventListener("mute", onMute);
+        videoTrack.removeEventListener("unmute", onUnmute);
+        videoTrack.removeEventListener("ended", onEnded);
+        unwatchCameraRef.current = null;
+      };
+    }
+
     chunksRef.current = [];
     const mimeType = pickMimeType();
     const recorder = new MediaRecorder(recordingStream, mimeType ? { mimeType } : undefined);
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
+    recorder.onerror = (event) => {
+      logAudioEvent("recorder", `MediaRecorder error: ${(event as ErrorEvent).error ?? event.type}`);
+    };
     recorderRef.current = recorder;
-    recorder.start();
+    // A one-second timeslice hands the take over as it records instead of
+    // all at once on stop(), so a recorder that dies mid-take still leaves
+    // everything up to that point. Safari 26 returns empty chunks for
+    // timeslices of ~100ms or less; a second is safely clear of that.
+    recorder.start(1000);
     logAudioEvent("recorder", `MediaRecorder.start() called, mimeType=${mimeType ?? "(default)"}`);
     setStatus("recording");
   };
@@ -241,6 +280,11 @@ export function useSelfTapeRecorder() {
           resolve(new Blob(chunksRef.current, { type: recorder.mimeType }));
         recorder.stop();
       });
+    } else if (recorder && chunksRef.current.length > 0) {
+      // The recorder already stopped itself (an error, or the camera ending
+      // under it) — keep whatever it captured before that.
+      logAudioEvent("recorder", "recorder was already inactive; saving the chunks it left");
+      blob = new Blob(chunksRef.current, { type: recorder.mimeType });
     }
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -248,6 +292,8 @@ export function useSelfTapeRecorder() {
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     recordingStreamRef.current = null;
     disconnectMix();
+    unwatchCameraRef.current?.();
+    setCameraInterrupted(false);
     recorderRef.current = null;
     chunksRef.current = [];
     setStream(null);
@@ -255,5 +301,5 @@ export function useSelfTapeRecorder() {
     return blob;
   };
 
-  return { status, stream, error, requestCamera, startRecording, pause, resume, stop };
+  return { status, stream, error, cameraInterrupted, requestCamera, startRecording, pause, resume, stop };
 }

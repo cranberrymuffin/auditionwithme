@@ -59,6 +59,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     status: recorderStatus,
     stream: cameraStream,
     error: recorderError,
+    cameraInterrupted,
     saving: recorderSaving,
     requestCamera,
     startRecording,
@@ -388,6 +389,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     });
   }, [stop, pauseRecording, resumeRecording]);
 
+  // The camera dropped out mid-take (see useSelfTapeRecorder): pause the
+  // scene and the tape together, so the take holds still instead of
+  // recording a frozen picture under the audio. Resuming while it's still
+  // out just pauses again.
+  useEffect(() => {
+    if (cameraInterrupted && recording && !paused && startPhase === "active") togglePause();
+  }, [cameraInterrupted, recording, paused, startPhase, togglePause]);
+
   const stopRecordingManually = useCallback(() => {
     stop();
     setPaused(true);
@@ -504,6 +513,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
   const status = complete
     ? { title: "Rehearsal complete", detail: "Saving your take…", kind: "complete" }
+    : paused && cameraInterrupted
+      ? { title: "Camera interrupted", detail: "Your phone paused the camera, so we paused your take. Resume once it’s back, or end the take to keep what you have.", kind: "paused" }
     : paused
       ? { title: "Rehearsal paused", detail: "Resume when you’re ready.", kind: "paused" }
       : playbackState === "error"
