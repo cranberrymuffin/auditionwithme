@@ -99,12 +99,6 @@ export default function RehearsalLineList({
     pane.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }, [currentIndex]);
 
-  const isLastStep = currentIndex >= steps.length - 1;
-  // Touch screens get a big Next pinned above the thumb for the actor's own
-  // lines (see .rehearsal-floating-next): on a long speech the footer's Next
-  // sits below the fold, exactly when detection is most likely to stall.
-  const showFloatingNext = isMyLine && !isLastStep;
-
   return (
     <div className="rehearsal-lines">
       {steps.map((step, index) => {
@@ -194,7 +188,7 @@ export default function RehearsalLineList({
                     </div>
                   </>
                 )}
-                <footer className={showFloatingNext ? "has-floating-next" : undefined}>
+                <footer>
                   <button onClick={onPrev} disabled={index === 0}>← Previous</button>
                   <span>Line {index + 1} of {steps.length}</span>
                   {index >= steps.length - 1
@@ -206,11 +200,6 @@ export default function RehearsalLineList({
           </div>
         );
       })}
-      {showFloatingNext && (
-        <button type="button" className="rehearsal-floating-next" onClick={onNext} aria-label="Next line">
-          Next →
-        </button>
-      )}
     </div>
   );
 }
