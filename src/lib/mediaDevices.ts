@@ -59,6 +59,26 @@ export async function resolvePreferredDevice(kind: DeviceKind): Promise<string |
   return choice.id;
 }
 
+const ZOOM_KEY = "awm:zoom";
+
+/** The camera zoom the actor last framed themselves at, if any. */
+export function preferredZoom(): number | null {
+  try {
+    const value = Number(localStorage.getItem(ZOOM_KEY));
+    return value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setPreferredZoom(value: number): void {
+  try {
+    localStorage.setItem(ZOOM_KEY, String(value));
+  } catch {
+    // Storage blocked: the zoom still applies to this take.
+  }
+}
+
 /** Chrome and Edge only; Safari and iOS play through the system output. */
 export const canChooseSpeaker =
   typeof AudioContext !== "undefined" && "setSinkId" in AudioContext.prototype;

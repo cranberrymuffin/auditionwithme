@@ -4885,6 +4885,28 @@ header .flow-back:hover {
   background: rgba(7, 14, 24, 0.62);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
 }
+/* Step 4's camera zoom, under the preview: frame the take before it starts. */
+.camera-zoom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 3.5em;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  color: rgba(248, 241, 230, 0.85);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.camera-zoom input {
+  width: 100%;
+  accent-color: #f4a583;
+  cursor: pointer;
+}
+.camera-zoom output {
+  color: rgba(248, 241, 230, 0.7);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 /* Step 4's camera and microphone, each ticked once it's on. */
 .rehearsal-setup-devices {
   display: grid;

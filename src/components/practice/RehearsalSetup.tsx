@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
-import { isIpad } from "../../hooks/useSelfTapeRecorder";
+import { isIpad, type ZoomRange } from "../../hooks/useSelfTapeRecorder";
 import {
   canChooseSpeaker,
   deviceName,
@@ -226,6 +226,8 @@ export default function RehearsalSetup({
   cameraError,
   onRetryCamera,
   onSwitchDevice,
+  cameraZoom,
+  onZoom,
   scriptSaved,
   onStart,
   onPracticeRun,
@@ -243,6 +245,9 @@ export default function RehearsalSetup({
   onRetryCamera: () => void;
   /** Reopens the camera and mic with a different camera or mic. */
   onSwitchDevice: (kind: "videoinput" | "audioinput", choice: DeviceChoice | null) => void;
+  /** The camera's zoom range and level, null where it can't zoom. */
+  cameraZoom: { range: ZoomRange; value: number } | null;
+  onZoom: (value: number) => void;
   /** The take is saved under the script's record, so it must exist. */
   scriptSaved: boolean;
   onStart: () => void;
@@ -442,6 +447,21 @@ export default function RehearsalSetup({
               </p>
             )}
           </div>
+          {/* Only where the camera itself zooms: no digital crop. */}
+          {cameraStream && cameraZoom && (
+            <label className="camera-zoom">
+              <span>Zoom</span>
+              <input
+                type="range"
+                min={cameraZoom.range.min}
+                max={cameraZoom.range.max}
+                step={cameraZoom.range.step}
+                value={cameraZoom.value}
+                onChange={(event) => onZoom(Number(event.target.value))}
+              />
+              <output>{cameraZoom.value.toFixed(1)}×</output>
+            </label>
+          )}
         </div>
       )}
       <ul className="rehearsal-setup-devices" aria-label="Your devices">

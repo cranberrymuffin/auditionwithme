@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { logAudioEvent } from "../lib/audioDiagnostics";
-import { resolvePreferredDevice, setPreferredDevice, type DeviceChoice } from "../lib/mediaDevices";
+import {
+  preferredZoom,
+  resolvePreferredDevice,
+  setPreferredDevice,
+  setPreferredZoom,
+  type DeviceChoice,
+} from "../lib/mediaDevices";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -18,26 +24,43 @@ function pickMimeType(): string | undefined {
 
 // Not in lib.dom's MediaTrackCapabilities/Constraints yet — `zoom` is part of
 // the Image Capture extensions, supported only on some browsers/devices.
-type ZoomCapabilities = MediaTrackCapabilities & { zoom?: { min: number; max: number } };
+type ZoomCapabilities = MediaTrackCapabilities & {
+  zoom?: { min: number; max: number; step?: number };
+};
+
+export type ZoomRange = { min: number; max: number; step: number };
+
+const clamp = (value: number, { min, max }: { min: number; max: number }) =>
+  Math.min(Math.max(value, min), max);
+
+function applyZoom(track: MediaStreamTrack, value: number): Promise<void> {
+  return track.applyConstraints({
+    advanced: [{ zoom: value } as MediaTrackConstraintSet],
+  });
+}
 
 /**
- * Narrows an ultra-wide front camera's field of view toward a normal
- * self-tape framing, where the browser exposes a zoom control at all. Purely
- * best-effort: many browsers lack getCapabilities() or the zoom constraint,
- * and a failure here must never block recording.
+ * Sets the camera's zoom where the browser exposes a zoom control at all:
+ * the actor's last chosen level, else 1.5× to narrow an ultra-wide front
+ * camera toward a normal self-tape framing. Resolves with the camera's zoom
+ * range and the level applied, or null where zoom isn't available (most
+ * laptop webcams; browsers without getCapabilities() or the constraint).
+ * Purely best-effort: a failure here must never block recording.
  */
-async function applyFrontCameraZoom(track: MediaStreamTrack): Promise<void> {
+async function applyInitialZoom(
+  track: MediaStreamTrack,
+): Promise<{ range: ZoomRange; value: number } | null> {
   try {
-    if (typeof track.getCapabilities !== "function") return;
+    if (typeof track.getCapabilities !== "function") return null;
     const zoom = (track.getCapabilities() as ZoomCapabilities).zoom;
-    if (!zoom) return;
-    const target = Math.min(Math.max(1.5, zoom.min), zoom.max);
-    await track.applyConstraints({
-      advanced: [{ zoom: target } as MediaTrackConstraintSet],
-    });
-    logAudioEvent("camera", `zoom applied: ${target} (range ${zoom.min}-${zoom.max})`);
+    if (!zoom || !(zoom.max > zoom.min)) return null;
+    const value = clamp(preferredZoom() ?? 1.5, zoom);
+    await applyZoom(track, value);
+    logAudioEvent("camera", `zoom applied: ${value} (range ${zoom.min}-${zoom.max})`);
+    return { range: { min: zoom.min, max: zoom.max, step: zoom.step || 0.1 }, value };
   } catch (err) {
     logAudioEvent("camera", `zoom not applied: ${err}`);
+    return null;
   }
 }
 
@@ -122,6 +145,8 @@ function openCameraAndMic(cameraId: string | null, micId: string | null): Promis
 
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
+  // The camera's zoom range and current level; null where it has none.
+  const [zoom, setZoomState] = useState<{ range: ZoomRange; value: number } | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -157,6 +182,7 @@ export function useSelfTapeRecorder() {
   const requestCamera = async ({ releaseFirst = false } = {}) => {
     setError(null);
     setStatus("requesting");
+    setZoomState(null);
     // Switching devices: some cameras (and iOS) can't be open twice, so the
     // old one goes before the new one is asked for.
     if (releaseFirst) {
@@ -195,7 +221,7 @@ export function useSelfTapeRecorder() {
         "camera",
         `opened ${settings.width}x${settings.height}, aspectRatio=${settings.aspectRatio?.toFixed(3) ?? "?"}, facingMode=${settings.facingMode ?? "?"}`,
       );
-      await applyFrontCameraZoom(videoTrack);
+      setZoomState(await applyInitialZoom(videoTrack));
     }
     const audioTrack = media.getAudioTracks()[0];
     if (audioTrack) {
@@ -211,6 +237,20 @@ export function useSelfTapeRecorder() {
     streamRef.current = media;
     setStream(media);
     setStatus("ready");
+  };
+
+  /** Zooms the live camera (the preview and the take alike) and remembers
+   * the level for next time. Mid-take changes would show on the tape, so
+   * this is only offered on the setup step. */
+  const setZoom = (value: number) => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !zoom) return;
+    const next = clamp(value, zoom.range);
+    setZoomState({ ...zoom, value: next });
+    setPreferredZoom(next);
+    void applyZoom(track, next).catch((err) => {
+      logAudioEvent("camera", `zoom change failed: ${err}`);
+    });
   };
 
   /** Picks a different camera or mic on the setup step (null: the
@@ -336,9 +376,10 @@ export function useSelfTapeRecorder() {
     recorderRef.current = null;
     chunksRef.current = [];
     setStream(null);
+    setZoomState(null);
     setStatus("idle");
     return blob;
   };
 
-  return { status, stream, error, cameraInterrupted, requestCamera, switchDevice, startRecording, pause, resume, stop };
+  return { status, stream, error, cameraInterrupted, zoom, setZoom, requestCamera, switchDevice, startRecording, pause, resume, stop };
 }
