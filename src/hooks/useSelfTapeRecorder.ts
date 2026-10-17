@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import { resolvePreferredDevice, setPreferredDevice, type DeviceChoice } from "../lib/mediaDevices";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -90,6 +91,35 @@ export function cameraErrorMessage(err: unknown): string {
   }
 }
 
+/** Opens the camera and mic, the chosen ones where the actor picked them
+ * (`exact`, so a missing device fails rather than silently swapping in
+ * another), otherwise the front camera and the default mic. */
+function openCameraAndMic(cameraId: string | null, micId: string | null): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    // `video: true` lets iPad Safari hand back its native front-camera
+    // format, which on ultra-wide front cameras records a distorted,
+    // wide-FOV tape instead of a standard 16:9 self-tape frame. The size
+    // hints are all `ideal`, never `exact`: a device that can't match falls
+    // back to its closest format rather than failing getUserMedia outright.
+    video: {
+      ...(cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "user" }),
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      aspectRatio: { ideal: 16 / 9 },
+    },
+    // The same mic feeds the tape and live line tracking
+    // (useScribeTracking.ts) while the scene partner plays out of the
+    // speaker. Echo cancellation keeps that playback out of both: the
+    // tape mixes the partner in directly, and Scribe shouldn't transcribe
+    // it. Noise suppression and auto gain stay at the browser's defaults
+    // — forcing them on would flatten the actor's dynamics on the tape.
+    audio: {
+      echoCancellation: true,
+      ...(micId ? { deviceId: { exact: micId } } : {}),
+    },
+  });
+}
+
 export function useSelfTapeRecorder() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -124,30 +154,30 @@ export function useSelfTapeRecorder() {
     return cleanup;
   }, []);
 
-  const requestCamera = async () => {
+  const requestCamera = async ({ releaseFirst = false } = {}) => {
     setError(null);
     setStatus("requesting");
+    // Switching devices: some cameras (and iOS) can't be open twice, so the
+    // old one goes before the new one is asked for.
+    if (releaseFirst) {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    const cameraId = await resolvePreferredDevice("videoinput");
+    const micId = await resolvePreferredDevice("audioinput");
     let media: MediaStream;
     try {
-      // `video: true` lets iPad Safari hand back its native front-camera
-      // format, which on ultra-wide front cameras records a distorted,
-      // wide-FOV tape instead of a standard 16:9 self-tape frame. All
-      // `ideal`, never `exact`: a device that can't match falls back to its
-      // closest format rather than failing getUserMedia outright.
-      media = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          aspectRatio: { ideal: 16 / 9 },
-        },
-        // The same mic feeds the tape and live line tracking
-        // (useScribeTracking.ts) while the scene partner plays out of the
-        // speaker. Echo cancellation keeps that playback out of both: the
-        // tape mixes the partner in directly, and Scribe shouldn't transcribe
-        // it. Noise suppression and auto gain stay at the browser's defaults
-        // — forcing them on would flatten the actor's dynamics on the tape.
-        audio: { echoCancellation: true },
+      media = await openCameraAndMic(cameraId, micId).catch((err) => {
+        // A remembered device that's since been unplugged: forget it and
+        // take the browser's default rather than failing the whole step.
+        const missing =
+          err instanceof DOMException &&
+          (err.name === "OverconstrainedError" || err.name === "NotFoundError");
+        if (!missing || (!cameraId && !micId)) throw err;
+        logAudioEvent("camera", "remembered device missing; using defaults");
+        setPreferredDevice("videoinput", null);
+        setPreferredDevice("audioinput", null);
+        return openCameraAndMic(null, null);
       });
     } catch (err) {
       console.error("Self-tape camera unavailable:", err);
@@ -181,6 +211,15 @@ export function useSelfTapeRecorder() {
     streamRef.current = media;
     setStream(media);
     setStatus("ready");
+  };
+
+  /** Picks a different camera or mic on the setup step (null: the
+   * browser's default) and reopens the stream with it. Never mid-take: the
+   * recorder holds the current tracks. */
+  const switchDevice = async (kind: "videoinput" | "audioinput", choice: DeviceChoice | null) => {
+    if (recorderRef.current) return;
+    setPreferredDevice(kind, choice);
+    await requestCamera({ releaseFirst: true });
   };
 
   const startRecording = (ttsStream?: MediaStream | null, sharedContext?: AudioContext | null) => {
@@ -301,5 +340,5 @@ export function useSelfTapeRecorder() {
     return blob;
   };
 
-  return { status, stream, error, cameraInterrupted, requestCamera, startRecording, pause, resume, stop };
+  return { status, stream, error, cameraInterrupted, requestCamera, switchDevice, startRecording, pause, resume, stop };
 }

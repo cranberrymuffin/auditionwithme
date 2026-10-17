@@ -6,6 +6,7 @@ import { loadReaderAudio, saveReaderAudio } from "../lib/readerAudioStore";
 import { loadCoachTakeBlob } from "../lib/coachTakeStore";
 import { toBase64, toPcm16kMono } from "../lib/pcm";
 import { clampCharacterVolume } from "../lib/characterVolume";
+import { routeToPreferredSpeaker } from "../lib/mediaDevices";
 
 export { cacheKey } from "../lib/ttsCacheKey";
 export type { TtsIntensity, TtsLine } from "../lib/ttsCacheKey";
@@ -443,13 +444,18 @@ export function useTtsPlayer(options?: {
   const gainNodeRef = useRef<GainNode | null>(null);
 
   const ensureAudioElement = useCallback(() => {
-    if (!audioRef.current) audioRef.current = new Audio();
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      routeToPreferredSpeaker(audioRef.current);
+    }
     return audioRef.current;
   }, []);
 
   const ensureTap = useCallback(() => {
     if (!audioContextRef.current) {
       const context = new AudioContext();
+      // The actor's chosen output from the setup step, where supported.
+      routeToPreferredSpeaker(context);
       logAudioEvent(
         "ctx",
         `created, initial state=${context.state}, sampleRate=${context.sampleRate}`,

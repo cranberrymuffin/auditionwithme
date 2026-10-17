@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ReaderAudioPregenState } from "../../hooks/useReaderAudioPregen";
 import { isIpad } from "../../hooks/useSelfTapeRecorder";
+import {
+  canChooseSpeaker,
+  deviceName,
+  preferredDevice,
+  routeToPreferredSpeaker,
+  setPreferredDevice,
+  type DeviceChoice,
+} from "../../lib/mediaDevices";
 import SetupStep from "./SetupStep";
 
 type RecorderStatus =
@@ -27,54 +35,113 @@ const MIC_FULL_SCALE = 0.2;
 // long still waiting on it, point the actor at it.
 const PERMISSION_NUDGE_AFTER_MS = 5_000;
 
-/** Strips Chrome's "Default - " prefix from the default output's label. */
-const speakerName = (label: string) => label.replace(/^Default - /, "");
+/** Phones only have a front camera worth taping with; iPads take USB ones. */
+const isPhone =
+  typeof navigator !== "undefined" &&
+  /iPhone|iPod|Android.*Mobile/.test(navigator.userAgent);
 
-// Only browsers that can route audio to a chosen output (Chrome, Edge) list
-// outputs at all; elsewhere an empty list says nothing, so assume one.
-const listsAudioOutputs =
-  typeof AudioContext !== "undefined" && "setSinkId" in AudioContext.prototype;
+type DeviceOption = DeviceChoice;
 
-/** The output the scene partner will play through, by name where the
- * browser says (Chrome, once mic access has unlocked device labels), and
- * whether there is one at all. */
-function useSpeaker(refreshKey: unknown): { label: string; found: boolean } {
-  const [speaker, setSpeaker] = useState({
-    label: "System default",
-    found: true,
-  });
+/** "System default (MacBook Pro Microphone)": Chrome names the device the
+ * OS currently routes "default" to; other browsers don't list it. */
+function systemDefault(all: MediaDeviceInfo[], kind: MediaDeviceKind): DeviceOption {
+  const entry = all.find((d) => d.kind === kind && d.deviceId === "default");
+  return {
+    id: "",
+    label: entry?.label ? `System default (${deviceName(entry.label)})` : "System default",
+  };
+}
+
+/** The cameras, mics and speakers the browser lists, by name once camera
+ * and mic access has unlocked labels. Each list starts with the system
+ * default (id "") — following the OS setting is a choice of its own —
+ * and leaves out Chrome's "default" and "communications" aliases, which
+ * name real devices also listed. */
+function useDevices(refreshKey: unknown) {
+  const [devices, setDevices] = useState<{
+    cameras: DeviceOption[];
+    mics: DeviceOption[];
+    speakers: DeviceOption[];
+    speakerFound: boolean;
+  }>({ cameras: [], mics: [], speakers: [], speakerFound: true });
   useEffect(() => {
-    const devices = navigator.mediaDevices;
-    if (!devices?.enumerateDevices) return;
+    const media = navigator.mediaDevices;
+    if (!media?.enumerateDevices) return;
     let active = true;
     const read = () =>
-      void devices
+      void media
         .enumerateDevices()
         .then((all) => {
           if (!active) return;
+          const real = (kind: MediaDeviceKind) =>
+            all
+              .filter(
+                (d) =>
+                  d.kind === kind &&
+                  d.label &&
+                  d.deviceId !== "default" &&
+                  d.deviceId !== "communications",
+              )
+              .map((d) => ({ id: d.deviceId, label: deviceName(d.label) }));
           const outputs = all.filter((d) => d.kind === "audiooutput");
-          if (outputs.length === 0) {
-            if (listsAudioOutputs)
-              setSpeaker({ label: "No speaker detected", found: false });
-            return;
-          }
-          const labelled = outputs.filter((d) => d.label);
-          const output =
-            labelled.find((d) => d.deviceId === "default") ?? labelled[0];
-          setSpeaker({
-            label: output ? speakerName(output.label) : "System default",
-            found: true,
+          const withDefault = (kind: MediaDeviceKind) => [
+            systemDefault(all, kind),
+            ...real(kind),
+          ];
+          setDevices({
+            cameras: withDefault("videoinput"),
+            mics: withDefault("audioinput"),
+            speakers: withDefault("audiooutput"),
+            // Only browsers that can route audio to a chosen output list
+            // outputs at all; elsewhere an empty list says nothing.
+            speakerFound: outputs.length > 0 || !canChooseSpeaker,
           });
         })
         .catch(() => {});
     read();
-    devices.addEventListener?.("devicechange", read);
+    media.addEventListener?.("devicechange", read);
     return () => {
       active = false;
-      devices.removeEventListener?.("devicechange", read);
+      media.removeEventListener?.("devicechange", read);
     };
   }, [refreshKey]);
-  return speaker;
+  return devices;
+}
+
+/** The picker's value: the remembered device if it's listed, else the
+ * system default. */
+function chosenId(kind: "videoinput" | "audioinput" | "audiooutput", options: DeviceOption[]): string {
+  const id = preferredDevice(kind)?.id ?? "";
+  return options.some((o) => o.id === id) ? id : "";
+}
+
+function DevicePicker({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: DeviceOption[];
+  onChange: (choice: DeviceChoice | null) => void;
+}) {
+  return (
+    <select
+      className="device-picker"
+      aria-label={label}
+      value={value}
+      onChange={(event) =>
+        onChange(options.find((o) => o.id === event.target.value && o.id) ?? null)
+      }
+    >
+      {options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 /** Plays a short two-note chime: enough to hear, nothing to sit through. */
@@ -158,6 +225,7 @@ export default function RehearsalSetup({
   cameraStream,
   cameraError,
   onRetryCamera,
+  onSwitchDevice,
   scriptSaved,
   onStart,
   onPracticeRun,
@@ -173,6 +241,8 @@ export default function RehearsalSetup({
   cameraStream: MediaStream | null;
   cameraError: string | null;
   onRetryCamera: () => void;
+  /** Reopens the camera and mic with a different camera or mic. */
+  onSwitchDevice: (kind: "videoinput" | "audioinput", choice: DeviceChoice | null) => void;
   /** The take is saved under the script's record, so it must exist. */
   scriptSaved: boolean;
   onStart: () => void;
@@ -218,6 +288,7 @@ export default function RehearsalSetup({
     const context = new AudioContext();
     const resume = () => void context.resume().catch(() => {});
     resume();
+    routeToPreferredSpeaker(context);
     window.addEventListener("pointerdown", resume);
     setCheckAudio(context);
     return () => {
@@ -225,7 +296,20 @@ export default function RehearsalSetup({
       void context.close().catch(() => {});
     };
   }, []);
-  const speaker = useSpeaker(cameraStream);
+  const available = useDevices(cameraStream);
+  const [speakerId, setSpeakerId] = useState(
+    () => preferredDevice("audiooutput")?.id ?? "",
+  );
+  const chooseSpeaker = (choice: DeviceChoice | null) => {
+    setSpeakerId(choice?.id ?? "");
+    setPreferredDevice("audiooutput", choice);
+    // So Test plays through it straight away.
+    if (checkAudio) routeToPreferredSpeaker(checkAudio);
+  };
+  const speakerLabel =
+    available.speakers.find((s) => s.id === speakerId)?.label ??
+    available.speakers[0]?.label ??
+    "System default";
   const testSpeakers = () => {
     if (!checkAudio) return;
     void checkAudio.resume().catch(() => {});
@@ -247,7 +331,7 @@ export default function RehearsalSetup({
   const audioTrack = cameraStream?.getAudioTracks()[0];
   const deviceStatus = (track: MediaStreamTrack | undefined) =>
     track
-      ? { done: true, text: track.label || "Connected" }
+      ? { done: true, text: deviceName(track.label) || "Connected" }
       : cameraStatus === "error"
         ? { done: false, failed: true, text: "Not available" }
         : { done: false, text: "Waiting for access…" };
@@ -256,14 +340,35 @@ export default function RehearsalSetup({
     done: boolean;
     failed?: boolean;
     text: string;
+    picker?: ReactNode;
     aside?: ReactNode;
   }[] = [
     ...(willRecord
       ? [
-          { name: "Camera", ...deviceStatus(videoTrack) },
+          {
+            name: "Camera",
+            ...deviceStatus(videoTrack),
+            // Past the system default, at least two to choose between.
+            picker: videoTrack && !isPhone && available.cameras.length > 2 && (
+              <DevicePicker
+                label="Camera"
+                value={chosenId("videoinput", available.cameras)}
+                options={available.cameras}
+                onChange={(choice) => onSwitchDevice("videoinput", choice)}
+              />
+            ),
+          },
           {
             name: "Microphone",
             ...deviceStatus(audioTrack),
+            picker: audioTrack && available.mics.length > 2 && (
+              <DevicePicker
+                label="Microphone"
+                value={chosenId("audioinput", available.mics)}
+                options={available.mics}
+                onChange={(choice) => onSwitchDevice("audioinput", choice)}
+              />
+            ),
             aside: cameraStream && audioTrack && checkAudio && (
               <MicLevel stream={cameraStream} context={checkAudio} />
             ),
@@ -272,8 +377,16 @@ export default function RehearsalSetup({
       : []),
     {
       name: "Speakers",
-      done: speaker.found,
-      text: speaker.label,
+      done: available.speakerFound,
+      text: available.speakerFound ? speakerLabel : "No speaker detected",
+      picker: canChooseSpeaker && available.speakers.length > 2 && (
+        <DevicePicker
+          label="Speakers"
+          value={available.speakers.some((o) => o.id === speakerId) ? speakerId : ""}
+          options={available.speakers}
+          onChange={chooseSpeaker}
+        />
+      ),
       aside: (
         <button type="button" className="speaker-test" onClick={testSpeakers}>
           {"Test"}
@@ -347,7 +460,7 @@ export default function RehearsalSetup({
               {device.done ? "✓" : device.failed ? "✕" : "○"}
             </span>
             <strong>{device.name}</strong>
-            <small title={device.text}>{device.text}</small>
+            {device.picker || <small title={device.text}>{device.text}</small>}
             {device.aside}
           </li>
         ))}

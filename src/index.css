@@ -4944,6 +4944,35 @@ header .flow-back:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Picks a different camera, mic or speaker, in place of the device's name. */
+.device-picker {
+  min-width: 0;
+  max-width: 100%;
+  justify-self: end;
+  padding: 3px 26px 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23f8f1e6' stroke-opacity='.7' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 9px center;
+  color: rgba(248, 241, 230, 0.85);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+}
+.device-picker:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.device-picker:focus-visible {
+  outline: 2px solid #f4a583;
+  outline-offset: 2px;
+}
+.device-picker option {
+  background: #101d2c;
+  color: #f8f1e6;
+}
 /* The microphone's live level: bars light up as the actor speaks. */
 .mic-level {
   display: inline-flex;

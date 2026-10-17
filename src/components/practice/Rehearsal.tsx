@@ -62,6 +62,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     cameraInterrupted,
     saving: recorderSaving,
     requestCamera,
+    switchDevice,
     startRecording,
     pause: pauseRecording,
     resume: resumeRecording,
@@ -503,6 +504,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
         cameraStream={cameraStream}
         cameraError={recorderError}
         onRetryCamera={() => void requestCamera()}
+        onSwitchDevice={(kind, choice) => void switchDevice(kind, choice)}
         scriptSaved={scriptSaved}
         onStart={() => beginRehearsal(willRecord)}
         onPracticeRun={willRecord ? () => beginRehearsal(false) : undefined}
