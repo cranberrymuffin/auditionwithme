@@ -166,7 +166,7 @@ check("actor still speaking but Scribe lagging -> no advance", () => {
 });
 
 check("mic quiet but Scribe still producing text -> no advance", () => {
-  assert.equal(quietAdvance(at(short2, true, 3000, { msSinceTextChange: 400 })), null);
+  assert.equal(quietAdvance(at(short2, true, 3000, { msSinceTextChange: ENDING_HEARD_QUIET_MS / 2 })), null);
 });
 
 check("no Scribe text yet, or mic level unmeasured -> no advance", () => {
