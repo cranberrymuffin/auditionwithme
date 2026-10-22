@@ -249,7 +249,7 @@ export function semanticMatchMayAdvance(scriptWords: string[], transcript: strin
 //  - ending not heard: maybe a clipped last word, maybe a pause for effect.
 //    Wait much longer before guessing, and only when the line is a few
 //    words short at most.
-export const ENDING_HEARD_QUIET_MS = 600;
+export const ENDING_HEARD_QUIET_MS = 350;
 export const PATIENT_HOLD_MS = 2500;
 // RMS of the 3x-boosted mic signal useScribeTracking taps (about -40 dBFS).
 export const SILENCE_RMS = 0.01;

@@ -18,10 +18,13 @@ import type { LineCompletion } from "../lib/takeMetrics";
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
 const SAMPLE_RATE = 16000;
 // How often the mic level is sampled and the silence-advance rule re-checked.
-const MIC_LEVEL_POLL_MS = 200;
-// ScriptProcessorNode buffer: 256 ms at 16 kHz, inside the 0.1–1 s chunk
-// size ElevenLabs recommends.
-const CHUNK_SAMPLES = 4096;
+// Short, since the quiet rules can only fire on a poll: each tick of wait
+// here is added to the gap before the reader answers.
+const MIC_LEVEL_POLL_MS = 50;
+// ScriptProcessorNode buffer: 128 ms at 16 kHz, the low end of the 0.1–1 s
+// chunk size ElevenLabs recommends. Audio waits in the buffer until it
+// fills, so a line's last word reaches Scribe up to one chunk late.
+const CHUNK_SAMPLES = 2048;
 // Audio captured before the socket opens is held and sent once it does. A
 // socket that takes this long isn't coming; past it, the oldest chunks go.
 const MAX_BUFFERED_CHUNKS = Math.ceil((10 * SAMPLE_RATE) / CHUNK_SAMPLES);

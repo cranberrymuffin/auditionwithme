@@ -307,13 +307,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
-    if (!lineDetected) return;
-    // Just long enough to ride out Scribe rewriting a partial transcript;
-    // anything more is dead air before the reader answers. Only reached once
-    // the line's ending has been heard (or after the long patient hold, see
-    // lib/lineMatch.ts), so it can be short.
-    const timer = setTimeout(() => goNextRef.current(), 300);
-    return () => clearTimeout(timer);
+    // No wait: detection never regresses (the matched count only climbs, so
+    // a rewritten partial can't un-detect the line), and any delay here is
+    // dead air before the reader answers. Only reached once the line's
+    // ending has been heard (or after the long patient hold, see
+    // lib/lineMatch.ts).
+    if (lineDetected) goNextRef.current();
   }, [lineDetected]);
 
   // Both the natural end of the script and the manual Stop button end the
