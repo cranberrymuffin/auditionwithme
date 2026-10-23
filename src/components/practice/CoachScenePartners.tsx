@@ -106,7 +106,11 @@ export default function CoachScenePartners({
   // screen that's gone.
   const unmountedRef = useRef(false);
 
+  const previousSelection = useRef(activeIndex);
   useEffect(() => {
+    // Keep the introduction visible on arrival; scroll only after selection.
+    if (previousSelection.current === activeIndex) return;
+    previousSelection.current = activeIndex;
     if (activeIndex === null) return;
     rowRefs.current.get(activeIndex)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [activeIndex]);
@@ -295,31 +299,18 @@ export default function CoachScenePartners({
     setActiveIndex(index);
   };
 
-  const recording = busy?.phase === "recording";
   // Free to switch lines (or hear one) while a read plays; not mid-take, or
   // while a take is still being turned into the character's voice.
   const switchLocked = busy !== null && busy.phase !== "playing";
 
   return (
-    <SetupStep step={3} scriptName={scriptName} onGoToStep={onGoToStep}>
-      <div className="role-intro">
+    <SetupStep className="processing-page coaching-page" step={3} scriptName={scriptName} onGoToStep={switchLocked ? undefined : onGoToStep}>
+      <header className="coach-intro">
         <h1>Coach your scene partners</h1>
-      </div>
-      <p className="processing-explanation">
-        Read each of your scene partners’ lines the way you want to hear it.
-        We’ll turn your read into that character’s voice, keeping your timing,
-        emphasis and emotion. Any line you skip keeps its AI read.
-      </p>
-      <p className="coach-privacy">
-        Your recordings stay on this device. To make a character’s read, each
-        one is sent to ElevenLabs, our voice provider. Pace and Volume still
-        apply to coached lines; Emotion doesn’t.
-      </p>
-      <p className="coach-progress" role="status">
-        {coachedCount} of {partnerLines.length} lines coached
-      </p>
+        <p>Read each of your scene partners’ lines the way you want to hear it. We’ll turn your read into that character’s voice, keeping your timing, emphasis and emotion. Any line you skip keeps its AI read.</p>
+      </header>
 
-      <ol className="coach-script">
+      <ol className="coach-script" aria-label="Scene dialogue">
         {steps.map((step, index) => {
           if (!step.verbalLine.trim()) return null;
           const speaker = normalizeSpeaker(step.speaker);
@@ -327,7 +318,7 @@ export default function CoachScenePartners({
           if (!partnerSet.has(index)) {
             return (
               <li key={index} className="coach-line coach-line--yours">
-                <span className="coach-speaker">{name} (you)</span>
+                <span className="coach-speaker">{name}<span className="coach-you-label">you</span></span>
                 <span className="coach-text">{step.verbalLine}</span>
               </li>
             );
@@ -349,7 +340,6 @@ export default function CoachScenePartners({
                 {name}
                 {takeId && (
                   <>
-                    <span className="coach-badge">Coached</span>
                     <button
                       type="button"
                       className="coach-hear"
@@ -411,6 +401,12 @@ export default function CoachScenePartners({
                           ? `Waiting for ${name}’s voice…`
                           : ""}
                   </span>
+                  {lineBusy === "playing" && (
+                    <button type="button" className="coach-text-button" onClick={() => { stop(); setBusy(null); }}>Stop playback</button>
+                  )}
+                  {!switchLocked && partnerLines.indexOf(index) < partnerLines.length - 1 && (
+                    <button type="button" className="coach-next-line" onClick={() => selectLine(partnerLines[partnerLines.indexOf(index) + 1])}>Next line <span aria-hidden="true">↓</span></button>
+                  )}
                   {error?.index === index && (
                     <p className="coach-error" role="alert">
                       {error.message}
@@ -423,19 +419,25 @@ export default function CoachScenePartners({
         })}
       </ol>
 
-      <div className="script-accordion-actions role-actions">
+      <details className="coach-help">
+        <summary>About your recordings</summary>
+        <p>Takes are saved on this device and sent to ElevenLabs for voice conversion when played. Pace and Volume still apply; your delivery sets the emotion.</p>
+      </details>
+      {partnerLines.length === 0 && <p className="coach-empty">There are no scene partner lines to coach. Head back to choose your voices.</p>}
+      <footer className="coach-footer">
+        <span className="coach-count" role="status">{coachedCount ? `${coachedCount} of ${partnerLines.length} lines coached` : "Coaching is optional"}</span>
         <button
           type="button"
           className="setup-next"
-          disabled={recording}
+          disabled={switchLocked}
           onClick={() => {
             stop();
             onDone();
           }}
         >
-          Done coaching <span aria-hidden="true">→</span>
+          Done <span aria-hidden="true">→</span>
         </button>
-      </div>
+      </footer>
     </SetupStep>
   );
 }
