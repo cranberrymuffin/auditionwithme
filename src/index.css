@@ -6916,3 +6916,65 @@ header .flow-back:hover {
     padding: 8px 14px;
   }
 }
+
+/* Coaching reads like a rehearsal script, with controls in the margins. */
+.coaching-page { overflow-x: clip; overflow-y: visible; }
+.coaching-page .processing-layout {
+  grid-template-columns: minmax(0, 740px);
+  align-items: start;
+  padding-top: 32px;
+  padding-bottom: 0;
+}
+.coaching-page .processing-status { max-width: 740px; }
+.coach-intro { margin: 32px 0 36px; }
+.coaching-page .coach-intro h1 { max-width: none; font-size: clamp(2.5rem, 4.2vw, 3.5rem); font-weight: 700; line-height: 1.12; letter-spacing: -.025em; }
+.coach-intro > p { max-width: 66ch; margin: 20px 0 0; color: #c5cbd3; font-size: 1rem; line-height: 1.7; text-wrap: pretty; }
+.coaching-page .coach-script { gap: 0; margin: 0; padding: 0 0 24px; border-top: 1px solid #ffffff26; }
+.coaching-page .coach-line,
+.coaching-page .coach-line.is-active,
+.coaching-page .coach-line--yours {
+  margin: 0; padding: 28px 28px 30px; border: 0;
+  border-bottom: 1px solid #ffffff14; border-radius: 0;
+  background: transparent; box-shadow: none; opacity: 1;
+  scroll-margin-block: 100px;
+}
+.coaching-page .coach-script:has(> .coach-line.is-active:first-child) { border-top-color: #f7d5be; }
+.coaching-page .coach-line:has(+ .coach-line.is-active) { border-bottom-color: #f7d5be; }
+.coaching-page .coach-line.is-active { border-bottom-color: #f7d5be; }
+.coaching-page .coach-line:not(.coach-line--yours) > .coach-speaker { padding: 0; }
+.coaching-page .coach-speaker { gap: 10px; color: #bdc6d2; font-size: .75rem; letter-spacing: .09em; line-height: 1.4; }
+.coaching-page .is-active > .coach-speaker { color: #f4a583; }
+.coach-you-label { color: #96a3b4; font-size: .6875rem; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.coaching-page .coach-line-select { padding: 10px 0 0; border-radius: 0; }
+.coaching-page .coach-line-select::before { border-radius: 0; }
+.coaching-page .coach-line-select:hover:not(:disabled)::before { background: #ffffff05; }
+.coaching-page .coach-line-select:focus-visible::before { outline: 2px solid #f7d5be; outline-offset: -4px; }
+.coaching-page .coach-text { margin: 0; font-family: inherit; font-size: 1.0625rem; line-height: 1.7; color: #f0eae2; }
+.coaching-page .coach-line--yours { padding-block: 22px; }
+.coaching-page .coach-line--yours .coach-text { margin-top: 8px; color: #acb6c4; }
+.coaching-page .coach-line-actions { padding: 22px 0 0; gap: 14px; }
+.coaching-page .coach-record { min-height: 46px; padding-inline: 18px; }
+.coaching-page .coach-record:hover:not(:disabled):not(.is-recording) { background: #f7b292; }
+.coaching-page .coach-status:empty { display: none; }
+.coaching-page .coach-hear { min-height: 44px; margin: -12px 0 -12px auto; padding: 0 4px; border: 0; border-radius: 0; background: transparent; font-size: .75rem; letter-spacing: 0; text-transform: none; }
+.coach-next-line, .coach-text-button { min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: #bdc6d2; font-size: .8125rem; cursor: pointer; }
+.coach-next-line { margin-left: auto; }
+.coach-next-line span { margin-left: 10px; }
+.coach-next-line:hover, .coach-text-button:hover { color: #f8f1e6; }
+.coach-help { padding: 0 28px 28px; }
+.coach-help summary { width: fit-content; color: #a6b0be; font-size: .75rem; cursor: pointer; }
+.coach-help p { margin: 12px 0 0; max-width: 560px; color: #bfc5cc; font-size: .8125rem; line-height: 1.7; }
+.coach-footer { position: sticky; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid #ffffff26; background: #101b2a; }
+.coach-count { color: #b2bdca; font-size: .8125rem; }
+.coach-footer .setup-next { margin: 0; min-width: 108px; min-height: 46px; padding: 0 22px; border: 1px solid #ffffff40; border-radius: 999px; background: transparent; box-shadow: none; color: #f8f1e6; font-size: .875rem; }
+.coach-footer .setup-next:hover:not(:disabled) { background: #ffffff0a; }
+.coach-help summary:focus-visible, .coach-next-line:focus-visible, .coach-text-button:focus-visible { outline: 2px solid #f4a583; outline-offset: 4px; }
+.coach-empty { padding: 24px 0; color: #bfc5cc; }
+@media (max-width: 600px) {
+  .coaching-page .processing-layout { padding: 22px 22px 0; }
+  .coach-intro { margin: 28px 0 30px; }
+  .coach-intro > p { max-width: none; font-size: .9375rem; line-height: 1.7; }
+  .coaching-page .coach-line, .coaching-page .coach-line.is-active, .coaching-page .coach-line--yours { padding: 24px 4px; }
+  .coaching-page .coach-text { font-size: 1rem; }
+  .coach-help { padding: 0 4px 24px; }
+}
