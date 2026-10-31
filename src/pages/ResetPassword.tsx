@@ -4,6 +4,7 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import PasswordField from "../components/PasswordField";
 import { supabase } from "../lib/supabase";
+import { authRedirectOrigin } from "../lib/platform";
 import { friendlyAuthError } from "../lib/authErrors";
 import { useToast } from "../lib/toast";
 
@@ -22,7 +23,7 @@ export function ForgotPassword() {
     setError(null);
     setSubmitting(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${authRedirectOrigin()}/reset-password`,
     });
     setSubmitting(false);
     if (resetError) {

@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["Z9WN384MPT.slugmuffin.AuditionWithMe"],
+        "components": [
+          { "/": "/login*" },
+          { "/": "/reset-password*" },
+          { "/": "/account/settings*" }
+        ]
+      }
+    ]
+  }
+}

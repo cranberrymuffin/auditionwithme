@@ -11,6 +11,7 @@ import { applySidesMarkup } from "./_sides.js";
 import { detectLanguage } from "./_language.js";
 import { requireRehearsalGrant } from "./_entitlement.js";
 import { extractJson, isValidCharacters } from "./_response.js";
+import { handleCors } from "./_cors.js";
 
 export const config = {
   api: {
@@ -392,6 +393,7 @@ export async function parseFull(
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

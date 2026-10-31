@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Plan } from "../lib/plan";
+import { apiUrl } from "../lib/platform";
 
 // One fetch per page load, shared by every caller — the price only changes
 // on a redeploy.
 let planRequest: Promise<Plan | null> | null = null;
 
 function fetchPlan(): Promise<Plan | null> {
-  planRequest ??= fetch("/api/billing?action=plan")
+  planRequest ??= fetch(apiUrl("/api/billing?action=plan"))
     .then((response) => (response.ok ? (response.json() as Promise<Plan>) : null))
     .catch(() => null)
     .then((plan) => {
