@@ -3,10 +3,12 @@ import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import NdaModal from "../components/NdaModal";
+import TermsModal from "../components/TermsModal";
 import PasswordField from "../components/PasswordField";
 import { friendlyAuthError } from "../lib/authErrors";
 import { IS_BETA_TESTING } from "../lib/beta";
 import { TRIAL_DAYS } from "../lib/plan";
+import { TERMS_VERSION } from "../lib/termsText";
 import { supabase } from "../lib/supabase";
 
 export default function Signup() {
@@ -47,8 +49,9 @@ export default function Signup() {
   }
 
   // The form itself just validates email/password and opens the NDA modal
-  // -- account creation happens from there, in handleAcceptAndCreateAccount,
-  // so agreeing to the NDA and creating the account are one step.
+  // (beta) or the Terms modal -- account creation happens from there, in
+  // handleAcceptAndCreateAccount, so agreeing and creating the account are
+  // one step.
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -65,11 +68,16 @@ export default function Signup() {
       options: {
         emailRedirectTo: `${window.location.origin}/login`,
         // Read by the handle_new_user trigger (see
-        // supabase/migrations/20260916120000_nda_acceptance.sql) and
-        // written straight to entitlements.nda_accepted_at -- there's no
-        // session yet at this point (email confirmation is pending) for a
-        // client-side write gated by RLS.
-        data: { nda_accepted_at: new Date().toISOString() },
+        // supabase/migrations/20261101120000_terms_acceptance.sql) and
+        // written straight to entitlements -- there's no session yet at this
+        // point (email confirmation is pending) for a client-side write.
+        data: IS_BETA_TESTING
+          ? { nda_accepted_at: new Date().toISOString() }
+          : {
+              terms_version: TERMS_VERSION,
+              terms_accepted_at: new Date().toISOString(),
+              auto_renew_consent_at: new Date().toISOString(),
+            },
       },
     });
 
@@ -199,13 +207,22 @@ export default function Signup() {
         </form>
       </section>
 
-      {showNda && (
-        <NdaModal
-          submitting={submitting}
-          onCancel={() => setShowNda(false)}
-          onAccept={() => void handleAcceptAndCreateAccount()}
-        />
-      )}
+      {showNda &&
+        (IS_BETA_TESTING ? (
+          <NdaModal
+            submitting={submitting}
+            onCancel={() => setShowNda(false)}
+            onAccept={() => void handleAcceptAndCreateAccount()}
+          />
+        ) : (
+          <TermsModal
+            submitting={submitting}
+            acceptLabel="Accept and create account"
+            submittingLabel="Creating account…"
+            onCancel={() => setShowNda(false)}
+            onAccept={() => void handleAcceptAndCreateAccount()}
+          />
+        ))}
     </main>
   );
 }

@@ -6978,3 +6978,41 @@ header .flow-back:hover {
   .coaching-page .coach-text { font-size: 1rem; }
   .coach-help { padding: 0 4px 24px; }
 }
+
+/* Terms and Conditions (TermsContent), in TermsModal and on /terms. */
+.terms-body h3 {
+  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #f8f1e6;
+}
+.terms-body p {
+  margin: 0 0 12px;
+}
+.terms-body ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+.terms-body li {
+  margin-bottom: 6px;
+}
+.terms-body strong {
+  color: #f8f1e6;
+}
+.terms-body address {
+  display: flex;
+  flex-direction: column;
+  font-style: normal;
+}
+.terms-updated {
+  color: rgba(248, 241, 230, 0.6);
+  font-size: 0.8125rem;
+}
+.terms-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 16px 72px;
+  color: rgba(248, 241, 230, 0.85);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}

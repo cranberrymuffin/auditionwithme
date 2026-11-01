@@ -59,4 +59,7 @@ export type Entitlement = {
   current_period_end: string | null;
   free_sessions_used: number;
   free_sessions_limit: number;
+  terms_version: string | null;
+  terms_accepted_at: string | null;
+  auto_renew_consent_at: string | null;
 };

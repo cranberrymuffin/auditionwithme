@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import Practice from "./pages/Practice";
 import About from "./pages/About";
 import Faq from "./pages/Faq";
+import Terms from "./pages/Terms";
 import Pricing from "./pages/Pricing";
 import Billing from "./pages/Billing";
 import Login from "./pages/Login";
@@ -79,6 +80,7 @@ function App() {
               element={<Navigate to="/how-it-works" replace />}
             />
             <Route path="/faq" element={<Faq />} />
+            <Route path="/terms" element={<Terms />} />
             {/* Pricing/billing are off for the beta — flip IS_BETA_TESTING
                 in src/lib/beta.ts to bring them back. */}
             <Route

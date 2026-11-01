@@ -14,6 +14,7 @@ type AdminUser = {
   subscription_status: string | null;
   free_sessions_used: number | null;
   nda_accepted_at: string | null;
+  terms_accepted_at: string | null;
 };
 
 /** A self_tape_feedback row — see supabase/migrations/*_self_tape_feedback_*.sql.
@@ -184,7 +185,7 @@ export default function Admin() {
       users: allUsers.length,
       newThisWeek: allUsers.filter((user) => withinDays(user.created_at, 7)).length,
       activeThisWeek: allUsers.filter((user) => withinDays(user.last_sign_in_at, 7)).length,
-      onboarded: allUsers.filter((user) => user.email_confirmed_at && user.nda_accepted_at).length,
+      onboarded: allUsers.filter((user) => user.email_confirmed_at && (user.nda_accepted_at || user.terms_accepted_at)).length,
       feedback: allFeedback.length,
       feedbackThisWeek: allFeedback.filter((row) => withinDays(row.submitted_at, 7)).length,
       reviewers: new Set(allFeedback.map((row) => row.user_id)).size,
@@ -406,8 +407,8 @@ export default function Admin() {
                               {!user.email_confirmed_at && (
                                 <span className="admin-badge admin-badge--muted">Unconfirmed</span>
                               )}
-                              {!user.nda_accepted_at && (
-                                <span className="admin-badge admin-badge--muted">No NDA</span>
+                              {!user.nda_accepted_at && !user.terms_accepted_at && (
+                                <span className="admin-badge admin-badge--muted">No agreement</span>
                               )}
                               {user.subscription_status && user.subscription_status !== "free" && (
                                 <span className="admin-badge admin-badge--muted">{user.subscription_status}</span>

@@ -4,11 +4,13 @@ import Modal from "../components/Modal";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
+import TermsModal from "../components/TermsModal";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { usePlan } from "../hooks/usePlan";
 import { TRIAL_DAYS, formatPlanPrice, hasPlanAccess } from "../lib/plan";
+import { TERMS_VERSION } from "../lib/termsText";
 
 const features = [
   "Unlimited rehearsals of any script or sides",
@@ -45,8 +47,14 @@ export default function Pricing() {
     searchParams.get("redirect_status") === "succeeded",
   );
   const [justSubscribed, setJustSubscribed] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const isSubscribed = hasPlanAccess(entitlement?.subscription_status);
+  // Checkout requires the current Terms and auto-renewal consent; the
+  // server enforces this too (api/billing.ts create-subscription).
+  const hasAcceptedTerms =
+    entitlement?.terms_version === TERMS_VERSION &&
+    Boolean(entitlement?.auto_renew_consent_at);
   // The trial is for a first subscription only (api/billing.ts enforces it;
   // this just keeps the copy honest). Any past subscription leaves its ID.
   const trialEligible = !entitlement?.stripe_subscription_id;
@@ -90,6 +98,14 @@ export default function Pricing() {
       navigate("/signup", { state: { from: { pathname: "/pricing" } } });
       return;
     }
+    if (!hasAcceptedTerms) {
+      setShowTerms(true);
+      return;
+    }
+    await openCheckout();
+  }
+
+  async function openCheckout() {
     setBusy(true);
     setError(null);
     try {
@@ -98,6 +114,10 @@ export default function Pricing() {
         { method: "POST" },
       );
       const payload = await response.json().catch(() => null);
+      if (response.status === 403 && payload?.reason === "terms_required") {
+        setShowTerms(true);
+        return;
+      }
       if (!response.ok || !payload?.clientSecret) {
         setError(
           payload?.error ?? "Could not start checkout. Please try again.",
@@ -110,6 +130,35 @@ export default function Pricing() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Records acceptance server-side, then continues straight to checkout so
+  // agreeing and subscribing stay one flow.
+  async function acceptTermsAndCheckout() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await apiFetch("/api/billing?action=accept-terms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: TERMS_VERSION, autoRenew: true }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setError(payload?.error ?? "Could not save your agreement. Please try again.");
+        setShowTerms(false);
+        setBusy(false);
+        return;
+      }
+    } catch {
+      setError("Could not save your agreement. Please try again.");
+      setShowTerms(false);
+      setBusy(false);
+      return;
+    }
+    setShowTerms(false);
+    refresh();
+    await openCheckout();
   }
 
   const offerTrial = !isSubscribed && trialEligible;
@@ -296,6 +345,16 @@ export default function Pricing() {
           )}
         </article>
       </section>
+
+      {showTerms && (
+        <TermsModal
+          submitting={busy}
+          acceptLabel="Accept and continue"
+          submittingLabel="Saving…"
+          onCancel={() => setShowTerms(false)}
+          onAccept={() => void acceptTermsAndCheckout()}
+        />
+      )}
 
       {clientSecret && (
         <Modal

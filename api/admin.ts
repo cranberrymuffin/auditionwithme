@@ -56,6 +56,7 @@ type EntitlementRow = {
   subscription_status: string;
   free_sessions_used: number;
   nda_accepted_at: string | null;
+  terms_accepted_at: string | null;
 };
 
 // Everything the admin portal (src/pages/Admin.tsx) shows, in one response:
@@ -68,7 +69,7 @@ async function adminOverview(res: VercelResponse) {
     selectAll<EntitlementRow>(
       db,
       "entitlements",
-      "user_id, subscription_status, free_sessions_used, nda_accepted_at",
+      "user_id, subscription_status, free_sessions_used, nda_accepted_at, terms_accepted_at",
       "user_id",
     ),
     selectAll<{ user_id: string }>(db, "admins", "user_id", "user_id"),
@@ -92,6 +93,7 @@ async function adminOverview(res: VercelResponse) {
         subscription_status: entitlement?.subscription_status ?? null,
         free_sessions_used: entitlement?.free_sessions_used ?? null,
         nda_accepted_at: entitlement?.nda_accepted_at ?? null,
+        terms_accepted_at: entitlement?.terms_accepted_at ?? null,
       };
     }),
     feedback,
