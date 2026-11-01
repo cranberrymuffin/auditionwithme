@@ -13,6 +13,9 @@ const listeners = new Set<() => void>();
 
 export function logAudioEvent(tag: string, message: string) {
   entries = [...entries, { time: Date.now(), tag, message }].slice(-MAX_ENTRIES);
+  // Also to the console, which the iOS app's debug builds forward to the
+  // Xcode / devicectl device console — readable without the on-screen panel.
+  console.info(`[audio] ${tag}: ${message}`);
   listeners.forEach((listener) => listener());
 }
 
