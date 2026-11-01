@@ -73,6 +73,47 @@ async function hasHadSubscription(customerId: string): Promise<boolean> {
   return previous.data.length > 0;
 }
 
+// Saved Stripe IDs can belong to a different Stripe account or mode than the
+// current key -- e.g. sandbox customers left over after production switched
+// to live keys. Stripe answers those lookups with "resource_missing".
+//
+// Only a live key may treat a missing customer as stale: preview and local
+// dev run the sandbox key against the same database, where a real subscriber's
+// live customer would look missing and get wiped.
+const CAN_RESET_STALE_BILLING =
+  process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ?? false;
+
+async function customerExists(customerId: string): Promise<boolean> {
+  if (!CAN_RESET_STALE_BILLING) return true;
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return !("deleted" in customer && customer.deleted);
+  } catch (error) {
+    if ((error as { code?: unknown } | null)?.code === "resource_missing") return false;
+    throw error;
+  }
+}
+
+// Clears billing state that doesn't exist in this Stripe account, so the user
+// starts over as free and checkout creates a fresh customer. Matching on the
+// stale customer ID keeps this from clobbering a row the webhook just updated.
+async function resetStaleBilling(userId: string, customerId: string) {
+  console.warn(
+    `stripe customer ${customerId} not found in this account; resetting billing for user ${userId}`,
+  );
+  const { error } = await serviceClient()
+    .from("entitlements")
+    .update({
+      stripe_customer_id: null,
+      stripe_subscription_id: null,
+      current_period_end: null,
+      subscription_status: "free",
+    })
+    .eq("user_id", userId)
+    .eq("stripe_customer_id", customerId);
+  if (error) throw new Error(`stale billing reset failed: ${error.message}`);
+}
+
 // Read-only view of the caller's Stripe billing state, fetched live so the
 // account/billing page can never drift from what Stripe actually has —
 // nothing here is cached in Supabase.
@@ -99,6 +140,12 @@ async function getBillingSummary(
 
     const customerId = row?.stripe_customer_id ?? null;
     if (!customerId) {
+      return res
+        .status(200)
+        .json({ subscription: null, invoices: [], trialEligible: true });
+    }
+    if (!(await customerExists(customerId))) {
+      await resetStaleBilling(auth.userId, customerId);
       return res
         .status(200)
         .json({ subscription: null, invoices: [], trialEligible: true });
@@ -242,15 +289,23 @@ async function createSubscription(
         reason: "terms_required",
       });
     }
+    // A customer saved from another Stripe account (e.g. sandbox) would
+    // otherwise block checkout with a stale "active" status.
+    let customerId: string | null = row?.stripe_customer_id ?? null;
+    let status = row?.subscription_status;
+    if (customerId && !(await customerExists(customerId))) {
+      await resetStaleBilling(auth.userId, customerId);
+      customerId = null;
+      status = "free";
+    }
     // Stops a double-click, or a second tab, from starting a second
     // subscription for someone who already has one.
-    if (hasPlanAccess(row?.subscription_status)) {
+    if (hasPlanAccess(status)) {
       return res
         .status(409)
         .json({ error: "You already have an active subscription." });
     }
 
-    let customerId: string | null = row?.stripe_customer_id ?? null;
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: auth.email,
