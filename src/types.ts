@@ -54,6 +54,7 @@ export type SelfTape = {
 export type Entitlement = {
   user_id: string;
   subscription_status: "free" | "active" | "past_due" | "canceled";
+  subscription_source: "stripe" | "apple" | null;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   current_period_end: string | null;

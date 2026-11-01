@@ -13,6 +13,8 @@ import { useToast } from "../lib/toast";
 import { deleteScript, listScripts } from "../lib/scriptStore";
 import { deleteTape, listTapes } from "../lib/selfTapeStore";
 import { forgetSelfTapeUrl } from "../lib/selfTapeUrl";
+import { hasPlanAccess } from "../lib/plan";
+import { useEntitlement } from "../hooks/useEntitlement";
 
 // Changing the email or password re-checks the current password first, the
 // same way the login form does, so a session someone left open on a shared
@@ -270,6 +272,12 @@ function DeleteAccount({ email, userId }: { email: string; userId: string }) {
   const toast = useToast();
   const [password, setPassword] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const { entitlement } = useEntitlement();
+  // Apple bills App Store subscriptions and only the subscriber can cancel
+  // them, so deleting the account here can't stop the charges.
+  const appleSubscriptionActive =
+    entitlement?.subscription_source === "apple" &&
+    hasPlanAccess(entitlement.subscription_status);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -359,6 +367,13 @@ function DeleteAccount({ email, userId }: { email: string; userId: string }) {
             <strong>{email}</strong> and everything saved under it will be gone
             for good, including any subscription.
           </p>
+          {appleSubscriptionActive && (
+            <p className="modal-copy">
+              Your subscription is billed by Apple, so it keeps renewing until
+              you cancel it in Settings on your iPhone → your name →
+              Subscriptions. Cancel it there first.
+            </p>
+          )}
           <div className="modal-actions">
             <button
               type="button"

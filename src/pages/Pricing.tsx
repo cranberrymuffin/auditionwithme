@@ -9,6 +9,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { usePlan } from "../hooks/usePlan";
 import { TRIAL_DAYS, formatPlanPrice, hasPlanAccess } from "../lib/plan";
+import { IS_NATIVE } from "../lib/platform";
+import { loadOffer, purchase, restore, type AppStoreOffer } from "../lib/appStore";
 
 const features = [
   "Unlimited rehearsals of any script or sides",
@@ -17,6 +19,10 @@ const features = [
   "Self-tape recording on camera",
   "Your scripts and setups saved on your device",
 ];
+
+// Apple's standard licence agreement, which App Store subscriptions fall
+// under unless an app supplies its own.
+const APPLE_EULA_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 
 // The webhook, not the redirect back from Stripe, is what flips
 // subscription_status — so poll briefly before showing the final state.
@@ -45,13 +51,40 @@ export default function Pricing() {
     searchParams.get("redirect_status") === "succeeded",
   );
   const [justSubscribed, setJustSubscribed] = useState(false);
+  // In the iOS app the plan is an App Store subscription: Apple sets the
+  // localized price and decides who gets the free trial.
+  const [offer, setOffer] = useState<AppStoreOffer | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!IS_NATIVE || !userId) return;
+    let active = true;
+    loadOffer(userId)
+      .then((loaded) => {
+        if (active) setOffer(loaded);
+      })
+      .catch((err) => {
+        console.error("App Store offer failed to load:", err);
+        if (active) setError("Couldn't load App Store pricing. Check your connection and try again.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   const isSubscribed = hasPlanAccess(entitlement?.subscription_status);
   // The trial is for a first subscription only (api/billing.ts enforces it;
   // this just keeps the copy honest). Any past subscription leaves its ID.
-  const trialEligible = !entitlement?.stripe_subscription_id;
-  const trialDays = plan?.trialDays ?? TRIAL_DAYS;
-  const price = plan ? formatPlanPrice(plan) : null;
+  const trialEligible = IS_NATIVE
+    ? offer?.trialDays != null
+    : !entitlement?.stripe_subscription_id;
+  const trialDays = (IS_NATIVE ? offer?.trialDays : plan?.trialDays) ?? TRIAL_DAYS;
+  const price = IS_NATIVE
+    ? (offer?.priceString ?? null)
+    : plan
+      ? formatPlanPrice(plan)
+      : null;
   const interval = plan?.interval ?? "month";
   const trialEndLabel = dayFromNow(trialDays);
 
@@ -90,6 +123,7 @@ export default function Pricing() {
       navigate("/signup", { state: { from: { pathname: "/pricing" } } });
       return;
     }
+    if (IS_NATIVE) return startAppStoreSubscription(user.id);
     setBusy(true);
     setError(null);
     try {
@@ -109,6 +143,37 @@ export default function Pricing() {
       setError("Could not start checkout. Please try again.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function startAppStoreSubscription(id: string) {
+    if (!offer) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // purchase() has already written the plan server-side; confirming just
+      // re-reads the entitlement until it shows.
+      if (await purchase(id, offer.pkg)) setConfirming(true);
+    } catch (err) {
+      console.error("App Store purchase failed:", err);
+      setError("The App Store purchase didn't go through. You haven't been charged — please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restorePurchases() {
+    if (!user) return;
+    setRestoring(true);
+    setError(null);
+    try {
+      if (await restore(user.id)) setConfirming(true);
+      else setError("No App Store subscription was found for this Apple ID.");
+    } catch (err) {
+      console.error("App Store restore failed:", err);
+      setError("Couldn't restore purchases. Please try again.");
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -135,7 +200,9 @@ export default function Pricing() {
         ? {
             eyebrow: "Almost there",
             title: "Confirming your plan…",
-            sub: "Stripe is confirming your subscription — this usually takes a few seconds.",
+            sub: IS_NATIVE
+              ? "The App Store is confirming your subscription — this usually takes a few seconds."
+              : "Stripe is confirming your subscription — this usually takes a few seconds.",
           }
         : offerTrial
           ? {
@@ -169,12 +236,20 @@ export default function Pricing() {
               <li>
                 <span className="trial-timeline-dot" aria-hidden="true" />
                 <strong>Today</strong>
-                <p>Full access starts the moment you add a card.</p>
+                <p>
+                  {IS_NATIVE
+                    ? "Full access starts as soon as you confirm with your Apple ID."
+                    : "Full access starts the moment you add a card."}
+                </p>
               </li>
               <li>
                 <span className="trial-timeline-dot" aria-hidden="true" />
                 <strong>Anytime before {trialEndLabel}</strong>
-                <p>Cancel from Billing in two clicks — you won't be charged.</p>
+                <p>
+                  {IS_NATIVE
+                    ? "Cancel in your Apple ID subscriptions at least a day before — you won't be charged."
+                    : "Cancel from Billing in two clicks — you won't be charged."}
+                </p>
               </li>
               <li>
                 <span className="trial-timeline-dot" aria-hidden="true" />
@@ -257,7 +332,7 @@ export default function Pricing() {
             <button
               type="button"
               onClick={startSubscription}
-              disabled={busy || confirming}
+              disabled={busy || confirming || restoring || (IS_NATIVE && !!user && !offer)}
             >
               {confirming ? (
                 <>
@@ -283,10 +358,38 @@ export default function Pricing() {
                 <rect x="3" y="7" width="10" height="7" rx="1.5" />
                 <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
               </svg>
-              {offerTrial
-                ? "$0 due today · Secure checkout by Stripe"
-                : "Secure checkout by Stripe · Cancel anytime"}
+              {IS_NATIVE
+                ? "Billed to your Apple ID · Cancel anytime in Settings"
+                : offerTrial
+                  ? "$0 due today · Secure checkout by Stripe"
+                  : "Secure checkout by Stripe · Cancel anytime"}
             </p>
+          )}
+
+          {/* App Review requires the renewal terms, a terms link, and a way
+              to restore purchases next to the subscribe button. */}
+          {IS_NATIVE && !isSubscribed && (
+            <div className="pricing-appstore-terms">
+              <p>
+                {price ? `${price}/${interval}` : "Audition Plus"}
+                {offerTrial ? ` after a ${trialDays}-day free trial` : ""}, renewing automatically
+                until canceled. Cancel at least 24 hours before the end of the
+                current period to avoid being charged for the next one.{" "}
+                <a href={APPLE_EULA_URL} target="_blank" rel="noreferrer">
+                  Terms of Use
+                </a>
+              </p>
+              {user && (
+                <button
+                  type="button"
+                  className="pricing-restore"
+                  onClick={restorePurchases}
+                  disabled={busy || confirming || restoring}
+                >
+                  {restoring ? "Restoring…" : "Restore purchases"}
+                </button>
+              )}
+            </div>
           )}
 
           {error && (
@@ -332,11 +435,13 @@ export default function Pricing() {
           {[
             [
               "How does the free trial work?",
-              `Your first ${trialDays} days of Audition Plus are free. You add a card to start, and you're only charged ${price ? `${price}/${interval}` : "the monthly price"} if you keep your plan past the trial.`,
+              `Your first ${trialDays} days of Audition Plus are free. ${IS_NATIVE ? "You confirm with your Apple ID to start" : "You add a card to start"}, and you're only charged ${price ? `${price}/${interval}` : "the monthly price"} if you keep your plan past the trial.`,
             ],
             [
               "Will I be charged if I cancel during the trial?",
-              "No. Cancel from Billing any time before your trial ends and you won't be charged at all. You keep access until the trial's last day.",
+              IS_NATIVE
+                ? "No. Cancel in your Apple ID subscriptions at least 24 hours before your trial ends and you won't be charged at all."
+                : "No. Cancel from Billing any time before your trial ends and you won't be charged at all. You keep access until the trial's last day.",
             ],
             [
               "Can I cancel after the trial?",

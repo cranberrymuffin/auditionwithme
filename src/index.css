@@ -1518,6 +1518,35 @@ header .flow-back:hover {
   stroke: currentColor;
   stroke-width: 1.5;
 }
+.pricing-appstore-terms {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 0;
+  text-align: center;
+}
+.pricing-appstore-terms p {
+  margin: 0;
+  color: rgba(248, 241, 230, 0.5);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.pricing-appstore-terms a {
+  color: rgba(248, 241, 230, 0.78);
+  text-decoration: underline;
+}
+.pricing-restore {
+  min-height: 44px;
+  padding: 0 12px;
+  color: rgba(248, 241, 230, 0.78);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.pricing-restore:disabled {
+  opacity: 0.5;
+}
 .trial-timeline {
   position: relative;
   display: flex;

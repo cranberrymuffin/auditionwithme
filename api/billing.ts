@@ -4,6 +4,7 @@ import Stripe from "stripe";
 import { requireAuth } from "./_entitlement.js";
 import { TRIAL_DAYS, hasPlanAccess, type Plan } from "../src/lib/plan.js";
 import { handleCors } from "./_cors.js";
+import { syncAppleSubscription } from "./_revenuecat.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -422,9 +423,21 @@ async function cancelSubscription(
   }
 }
 
-// Combines plan, billing-summary, create-subscription, create-setup-intent, and
-// cancel-subscription under one route — Vercel's Hobby plan caps deployments
-// at 12 Serverless Functions.
+// Called by the iOS app right after an App Store purchase or restore, so the
+// plan unlocks without waiting on RevenueCat's webhook to arrive.
+async function syncApple(res: VercelResponse, auth: { userId: string; email: string }) {
+  try {
+    const active = await syncAppleSubscription(auth.userId);
+    return res.status(200).json({ active });
+  } catch (error) {
+    console.error("apple subscription sync failed:", error);
+    return res.status(500).json({ error: "Could not confirm your App Store purchase" });
+  }
+}
+
+// Combines plan, billing-summary, create-subscription, create-setup-intent,
+// cancel-subscription, and sync-apple under one route — Vercel's Hobby plan
+// caps deployments at 12 Serverless Functions.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleCors(req, res)) return;
   if (req.method !== "GET" && req.method !== "POST") {
@@ -442,5 +455,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (action === "create-subscription") return createSubscription(req, res, auth);
   if (action === "create-setup-intent") return createSetupIntent(req, res, auth);
   if (action === "cancel-subscription") return cancelSubscription(req, res, auth);
+  if (action === "sync-apple") return syncApple(res, auth);
   return res.status(400).json({ error: "Invalid or missing action" });
 }

@@ -6,7 +6,10 @@ import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
 import { apiFetch } from "../lib/api";
 import { useToast } from "../lib/toast";
-import { TRIAL_DAYS, formatPlanPrice } from "../lib/plan";
+import { TRIAL_DAYS, formatPlanPrice, hasPlanAccess } from "../lib/plan";
+import { IS_NATIVE } from "../lib/platform";
+import { APP_STORE_SUBSCRIPTIONS_URL } from "../lib/appStore";
+import { useEntitlement } from "../hooks/useEntitlement";
 
 type BillingSummary = {
   trialEligible: boolean;
@@ -76,6 +79,7 @@ const CONFIRM_TIMEOUT_MS = 10000;
 export default function Billing() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { entitlement, loading: entitlementLoading } = useEntitlement();
   const [summary, setSummary] = useState<BillingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -235,12 +239,35 @@ export default function Billing() {
           </p>
         </header>
 
-        {loading ? (
+        {loading || entitlementLoading ? (
           <div className="billing-card is-loading" aria-busy="true">
             <span className="billing-skeleton is-wide" />
             <span className="billing-skeleton" />
             <span className="billing-skeleton is-short" />
           </div>
+        ) : entitlement?.subscription_source === "apple" ? (
+          // Bought in the iOS app: Apple bills it, and only Apple can change
+          // or cancel it.
+          <AppStoreSubscription
+            active={hasPlanAccess(entitlement.subscription_status)}
+            periodEnd={entitlement.current_period_end}
+          />
+        ) : IS_NATIVE && subscription ? (
+          // A web (Stripe) subscription seen from the iOS app, which shows no
+          // Stripe billing: it's managed on the website.
+          <article className="billing-card">
+            <header className="billing-card-header">
+              <div>
+                <span className="billing-card-label">Your plan</span>
+                <h2>Audition Plus</h2>
+              </div>
+              <span className={`billing-status-pill tone-${status?.tone}`}>{status?.label}</span>
+            </header>
+            <p className="billing-headline">
+              You subscribed on the web. To update your card or cancel, sign in
+              at auditionwithme.com and open Billing.
+            </p>
+          </article>
         ) : !subscription ? (
           <div className="billing-empty">
             <p className="billing-empty-eyebrow">No plan yet</p>
@@ -251,7 +278,7 @@ export default function Billing() {
             </h2>
             <p>
               Audition Plus gives you unlimited rehearsals with AI scene
-              partners. Cancel anytime from this page.
+              partners. {IS_NATIVE ? "Cancel anytime in Settings." : "Cancel anytime from this page."}
             </p>
             <button type="button" onClick={() => navigate("/pricing")}>
               {summary?.trialEligible === false
@@ -463,5 +490,42 @@ export default function Billing() {
         )}
       </section>
     </main>
+  );
+}
+
+function AppStoreSubscription({ active, periodEnd }: { active: boolean; periodEnd: string | null }) {
+  return (
+    <article className={`billing-card tone-${active ? "active" : "ended"}`}>
+      <header className="billing-card-header">
+        <div>
+          <span className="billing-card-label">Your plan</span>
+          <h2>Audition Plus</h2>
+        </div>
+        <span className={`billing-status-pill tone-${active ? "active" : "ended"}`}>
+          {active ? "Active" : "Ended"}
+        </span>
+      </header>
+      <p className="billing-headline">
+        {active
+          ? `Billed through the App Store. Your current period runs until ${formatDate(periodEnd)}.`
+          : `Your App Store subscription ended on ${formatDate(periodEnd)}.`}
+      </p>
+      {IS_NATIVE ? (
+        <div className="billing-card-actions">
+          <button
+            type="button"
+            className="is-primary"
+            onClick={() => window.open(APP_STORE_SUBSCRIPTIONS_URL, "_blank")}
+          >
+            Manage in the App Store
+          </button>
+        </div>
+      ) : (
+        <p className="billing-headline">
+          To change or cancel it, open Settings on your iPhone, tap your name,
+          then Subscriptions.
+        </p>
+      )}
+    </article>
   );
 }

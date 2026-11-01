@@ -73,6 +73,9 @@ function idOf(
  * handle, unlike stripe_subscription_id. State is always derived fresh from
  * the subscription object rather than incrementally patched, so replays and
  * out-of-order deliveries converge (plan Pre-mortem 2).
+ *
+ * An active Stripe subscription claims the row; a lapsed one never ends a
+ * subscription the App Store owns (api/_revenuecat.ts).
  */
 async function writeState(
   customerId: string,
@@ -83,10 +86,18 @@ async function writeState(
     >
   >,
 ): Promise<void> {
-  const { error } = await serviceClient()
+  const active = state.subscription_status === "active";
+  const update = serviceClient()
     .from("entitlements")
-    .update({ ...state, updated_at: new Date().toISOString() })
+    .update({
+      ...state,
+      ...(active ? { subscription_source: "stripe" } : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("stripe_customer_id", customerId);
+  const { error } = active
+    ? await update
+    : await update.or("subscription_source.is.null,subscription_source.neq.apple");
   if (error) throw new Error(`entitlements update failed: ${error.message}`);
 }
 
