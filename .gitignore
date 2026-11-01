@@ -29,3 +29,5 @@ test_data/*
 !test_data/tts-tone-lines.json
 !test_data/tts-emotion-lines.json
 benchmarks/out/
+# Supabase CLI link state (per machine, changes with `supabase link`)
+supabase/.temp/
