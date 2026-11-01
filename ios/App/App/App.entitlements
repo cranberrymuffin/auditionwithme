@@ -4,6 +4,7 @@
 <dict>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>applinks:www.auditionwithme.com</string>
 		<string>applinks:auditionwithme.com</string>
 	</array>
 </dict>
