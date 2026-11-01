@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["Z9WN384MPT.slugmuffin.AuditionWithMe"],
+        "appIDs": ["Z9WN384MPT.AuditionWithMe"],
         "components": [
           { "/": "/login*" },
           { "/": "/reset-password*" },
