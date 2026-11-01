@@ -6,6 +6,7 @@ import PasswordField from "../components/PasswordField";
 import { supabase } from "../lib/supabase";
 import { authRedirectOrigin } from "../lib/platform";
 import { friendlyAuthError } from "../lib/authErrors";
+import { clearAuthLink, readAuthLink } from "../lib/authLink";
 import { useToast } from "../lib/toast";
 
 /** /forgot-password: ask for the email a reset link goes to. */
@@ -102,32 +103,34 @@ export function ForgotPassword() {
 }
 
 /** /reset-password: where the emailed link lands. Supabase signs the visitor
- * in with a recovery session from the link; this sets the new password. */
+ * in with a recovery session from the link's one-time code — only in the
+ * browser (or app) that asked for the email — and this sets the new
+ * password. */
 export default function ResetPassword() {
   const navigate = useNavigate();
   const toast = useToast();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // null while the link's session is still being read from the URL.
-  const [hasSession, setHasSession] = useState<boolean | null>(null);
+  // "checking" until supabase-js has finished with the link's code.
+  const [linkState, setLinkState] = useState<"checking" | "ready" | "otherDevice" | "expired">(
+    "checking",
+  );
 
   useEffect(() => {
+    const link = readAuthLink(window.location.href);
     let active = true;
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    // getSession() waits for the client to start, which includes trading
+    // the link's code for the recovery session. A code left with no
+    // session means this browser didn't ask for the email. The address bar
+    // is only cleared after: supabase-js reads the code from it.
+    void supabase.auth.getSession().then(({ data }) => {
+      clearAuthLink();
       if (!active) return;
-      if (event === "PASSWORD_RECOVERY" || session) setHasSession(true);
+      setLinkState(data.session ? "ready" : link.code && !link.error ? "otherDevice" : "expired");
     });
-    // The link's tokens are parsed asynchronously; give that a moment
-    // before deciding the link was bad.
-    const timer = setTimeout(async () => {
-      const { data } = await supabase.auth.getSession();
-      if (active) setHasSession((current) => current ?? Boolean(data.session));
-    }, 800);
     return () => {
       active = false;
-      clearTimeout(timer);
-      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -157,10 +160,22 @@ export default function ResetPassword() {
       <SiteNav />
       <section className="auth-layout">
         <form className="auth-card" onSubmit={handleSubmit}>
-          {hasSession === false ? (
+          {linkState === "otherDevice" || linkState === "expired" ? (
             <div className="auth-success" role="status">
-              <h1>That link has expired.</h1>
-              <p>Reset links work once and only for a short time. Request a new one and use it right away.</p>
+              {linkState === "otherDevice" ? (
+                <>
+                  <h1>Open the link where you asked for it.</h1>
+                  <p>
+                    For your security, a reset link only works in the browser or app you
+                    requested it from. Request a new one here, or open the email on that device.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h1>That link has expired.</h1>
+                  <p>Reset links work once and only for a short time. Request a new one and use it right away.</p>
+                </>
+              )}
               <div className="auth-success-actions">
                 <Link to="/forgot-password" className="auth-secondary-button auth-link-button">
                   Send a new link
@@ -187,7 +202,7 @@ export default function ResetPassword() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={submitting || hasSession === null}>
+              <button type="submit" disabled={submitting || linkState === "checking"}>
                 {submitting ? "Saving…" : "Save new password"}
               </button>
             </>

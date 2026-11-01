@@ -7,4 +7,8 @@ if (!url || !anonKey) {
   throw new Error("VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set");
 }
 
-export const supabase = createClient(url, anonKey);
+// PKCE: emailed links carry a one-time code that only signs in the browser
+// (or iOS app) that asked for the email, which holds the matching verifier.
+// The default implicit flow put tokens in the link itself, so anyone could
+// send a link that signs the reader into the sender's account.
+export const supabase = createClient(url, anonKey, { auth: { flowType: "pkce" } });

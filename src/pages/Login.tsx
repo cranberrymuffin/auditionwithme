@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import PasswordField from "../components/PasswordField";
 import { supabase } from "../lib/supabase";
 import { friendlyAuthError } from "../lib/authErrors";
+import { clearAuthLink, hasAuthLink, readAuthLink } from "../lib/authLink";
 
 type RedirectState = { from?: { pathname?: string }; intent?: string } | null;
 
@@ -14,7 +15,33 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Signup confirmation links land here. In the browser that signed up,
+  // supabase-js has already traded the link's code for a session by the
+  // time getSession() resolves; anywhere else the email is confirmed but
+  // nobody is signed in, so the visitor just logs in.
+  useEffect(() => {
+    const link = readAuthLink(window.location.href);
+    if (!hasAuthLink(link)) return;
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      // Only now: supabase-js reads the code from the address bar.
+      clearAuthLink();
+      if (!active) return;
+      if (link.code && data.session) {
+        navigate("/", { replace: true });
+      } else if (link.error) {
+        setError(link.error);
+      } else if (link.code) {
+        setNotice("Your email is confirmed. Log in to continue.");
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [navigate]);
 
   // RequireAuth forwards the page the user was originally headed to; the
   // home hero also passes an intent (e.g. "upload") so the visitor's original
@@ -56,6 +83,11 @@ export default function Login() {
           <header>
             <p>Welcome back</p>
             <h1>Log in</h1>
+            {notice && (
+              <p className="auth-notice" role="status">
+                {notice}
+              </p>
+            )}
           </header>
 
           <label htmlFor="login-email">Email</label>

@@ -7,6 +7,7 @@ import PasswordField from "../components/PasswordField";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { authRedirectOrigin } from "../lib/platform";
+import { clearAuthLink, hasAuthLink, readAuthLink } from "../lib/authLink";
 import { apiFetch } from "../lib/api";
 import { friendlyAuthError } from "../lib/authErrors";
 import { useToast } from "../lib/toast";
@@ -81,15 +82,25 @@ function ChangeEmail({ email, pendingEmail }: { email: string; pendingEmail: str
   const [submitting, setSubmitting] = useState(false);
 
   // The confirmation links land back here. Supabase reports a half-finished
-  // change (one of two links clicked) or a bad link in the URL hash.
+  // change (one of two links clicked) or a bad link alongside the link's
+  // code. The change itself is done once the link is opened, on any device;
+  // in the browser that asked for it, the code also refreshes the session
+  // so the new email shows.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.hash.slice(1));
-    const message = params.get("message");
-    const linkError = params.get("error_description");
-    if (!message && !linkError) return;
-    if (message) setNotice(message);
-    if (linkError) setError(linkError);
-    window.history.replaceState(null, "", window.location.pathname);
+    const link = readAuthLink(window.location.href);
+    if (!hasAuthLink(link)) return;
+    let active = true;
+    // Cleared only once supabase-js has read the code from the address bar.
+    void supabase.auth.getSession().then(() => {
+      clearAuthLink();
+      if (!active) return;
+      if (link.error) setError(link.error);
+      else if (link.message) setNotice(link.message);
+      else if (link.code) setNotice("Your email change is confirmed.");
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
