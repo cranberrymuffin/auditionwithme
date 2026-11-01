@@ -50,14 +50,16 @@ function isCapsShort(text: string): boolean {
 }
 
 /**
- * A parenthetical line ("(beat)", or the opening of one that wraps). A line
- * that closes its parenthetical and keeps going — "(makes a buzzer sound)
- * Wrong! Your" — is dialogue; splitSpeech pulls the cue out inline.
+ * A parenthetical or bracketed direction line ("(beat)" / "[beat]", or the
+ * opening of one that wraps). A line that closes its cue and keeps going is
+ * dialogue; splitSpeech pulls the cue out inline.
  */
 function isParenLine(text: string): boolean {
-  if (!text.startsWith("(")) return false;
-  const close = text.indexOf(")");
-  return close === -1 || !text.slice(close + 1).replace(/\(.*?\)/g, "").trim();
+  const open = text[0];
+  if (open !== "(" && open !== "[") return false;
+  const close = text.indexOf(open === "(" ? ")" : "]");
+  const remainder = close === -1 ? "" : text.slice(close + 1);
+  return close === -1 || !remainder.replace(/\([^)]*\)|\[[^\]]*\]/g, "").trim();
 }
 
 // ── Step builder shared by all layout variants ──

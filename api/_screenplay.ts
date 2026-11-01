@@ -62,28 +62,46 @@ export function collectSpeakerCandidates(lines: string[]): Map<string, number> {
   return new Map([...counts.entries()].filter(([, count]) => count >= 2));
 }
 
-/** Split a speech into interleaved verbal text and (parenthetical) nonverbal cues. */
+export function verbalLineFromContent(
+  content: readonly { kind: string; text: string }[],
+): string {
+  return content
+    .filter((line) => line.kind === "verbal")
+    .map((line) => line.text.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** Split a speech into interleaved verbal text and nonverbal cues. */
 export function splitSpeech(text: string): { content: StepContent[]; verbalLine: string } {
   const content: StepContent[] = [];
-  const verbalParts: string[] = [];
-  const parenthetical = /\(([^)]*)\)/g;
+  const cue = /\([^)]*\)|\[[^\]]*\]/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
-  while ((match = parenthetical.exec(text))) {
+  while ((match = cue.exec(text))) {
     const before = text.slice(cursor, match.index).trim();
     if (before) {
       content.push({ kind: "verbal", text: before });
-      verbalParts.push(before);
     }
-    if (match[1].trim()) content.push({ kind: "nonverbal", text: match[0].trim() });
+    if (match[0].slice(1, -1).trim()) {
+      content.push({ kind: "nonverbal", text: match[0].trim() });
+    }
     cursor = match.index + match[0].length;
   }
   const rest = text.slice(cursor).trim();
-  if (rest) {
-    content.push({ kind: "verbal", text: rest });
-    verbalParts.push(rest);
-  }
-  return { content, verbalLine: verbalParts.join(" ") };
+  if (rest) content.push({ kind: "verbal", text: rest });
+  return { content, verbalLine: verbalLineFromContent(content) };
+}
+
+export function normalizeStepContent(
+  content: readonly { kind: string; text: string }[],
+): StepContent[] {
+  return content.flatMap((line) => {
+    if (line.kind !== "verbal") {
+      return [{ kind: "nonverbal", text: line.text }];
+    }
+    return splitSpeech(line.text).content;
+  });
 }
 
 export type BuildOptions = {

@@ -12,6 +12,7 @@
     "test:metrics": "tsx benchmarks/checks/take-metrics.ts",
     "test:parse-cache": "tsx benchmarks/checks/parse-cache.ts",
     "test:pregen": "tsx benchmarks/checks/pregen.ts",
+    "test:screenplay": "tsx benchmarks/checks/screenplay.ts",
     "test:emotion": "tsx benchmarks/voice/emotion.ts --dry-run --quick",
     "bench:emotion": "tsx benchmarks/voice/emotion.ts",
     "delete-user": "node scripts/delete-user.mjs",

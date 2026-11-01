@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { buildSteps, collectSpeakerCandidates } from "./_screenplay.js";
+import {
+  buildSteps,
+  collectSpeakerCandidates,
+  normalizeStepContent,
+  verbalLineFromContent,
+} from "./_screenplay.js";
 import {
   cleanLayoutLines,
   flattenLayout,
@@ -48,7 +53,7 @@ Field rules:
 - "languageCode"/"languageName": primary language of the DIALOGUE (ISO 639-1 code + English name).
 - "characters": which of the provided candidate labels are real speaking characters. "label" must be the candidate exactly as given; "name" is the canonical display name (usually the same, with continuity suffixes like (CONT'D)/(V.O.) stripped). Exclude scene headings, sound cues, and false-positive labels.
 - "dialogueStart"/"dialogueEnd": inclusive line range of the actual performance text. Exclude title pages, cast lists, licensing/copyright text and other front matter before it, and end matter (license text, author bio, catalogs) after it.
-- "stageDirections": line numbers within [dialogueStart, dialogueEnd] that are stage directions, scene descriptions, or action lines — lines that are NOT spoken, NOT a speaker-labeled line, and NOT a wrapped continuation of the previous spoken line. List each line number individually — never compress into ranges, and never include a spoken line. Be careful: a line that continues the previous line's sentence (wrapped dialogue) must NOT be listed.
+- "stageDirections": line numbers within [dialogueStart, dialogueEnd] that are stage directions, scene descriptions, or action lines — lines that are NOT spoken, NOT a speaker-labeled line, and NOT a wrapped continuation of the previous spoken line. Parenthetical and bracketed cues are nonverbal unless clearly spoken dialogue. Do not absorb an action description into a speech just because it appears between two dialogue lines. List each line number individually — never compress into ranges, and never include a spoken line. Be careful: a line that continues the previous line's sentence (wrapped dialogue) must NOT be listed.
 - "junk": line numbers within the range that are page headers/footers or other repeated non-script noise. (Lines that are only a page number are already handled — don't list those.)
 Every non-speaker line in the range that you don't list is treated as a continuation of the previous speech.`;
 
@@ -226,6 +231,7 @@ PART 2 — Split the clean script from Part 1 into an ordered sequence of "steps
 Definitions:
 - A VERBAL line is spoken dialogue (what a character says out loud).
 - A NON-VERBAL line is anything not spoken: stage directions, action notes, parentheticals, sound cues, transitions, etc.
+- Parenthetical or bracketed cues such as "(She turns away.)", "[laughs]", or "(beat)" are non-verbal; never include their text in "verbalLine". Action descriptions are non-verbal even when they interrupt a character's speech.
 - A SPEAKER label is a character name that precedes dialogue (e.g. "JOHN" or "MARY (V.O.)").
 
 Steps rules:
@@ -236,7 +242,7 @@ Steps rules:
    - { "kind": "verbal", "text": "<verbatim spoken line>" }
    - { "kind": "nonverbal", "text": "<verbatim non-verbal line>" }
 5. Assign non-verbal lines to the step they are most semantically related to. A non-verbal line between two verbal lines goes to whichever it is contextually closer to (e.g. a reaction attaches to the prior verbal; a setup attaches to the next verbal).
-6. Also include the verbal line text as a top-level "verbalLine" field (identical to the verbal content item's text).
+6. Also include the verbal line text as a top-level "verbalLine" field, reconstructed only from the step's "verbal" content items in order. Never copy non-verbal text into it.
 7. Do not include speaker name labels in the content array — extract them as the "speaker" field only.
 8. Do not invent, rewrite, summarize, translate, or reorder any text. Copy lines verbatim from the clean script.
 9. Do not drop any non-speaker line. Every non-empty, non-speaker line must appear in content.
@@ -380,7 +386,16 @@ export async function parseFull(
         typeof parsed.languageName === "string"
           ? parsed.languageName
           : "English",
-      steps: parsed.steps ?? [],
+      // The content classification is authoritative; don't let a mismatch in
+      // the model's duplicate verbalLine field make directions playable.
+      steps: (parsed.steps ?? []).map((step) => {
+        const content = normalizeStepContent(step.content);
+        return {
+          ...step,
+          content,
+          verbalLine: verbalLineFromContent(content),
+        };
+      }),
       processingMode: "scriptText" in input ? "text-full" : "pdf-fallback",
       modelDurationMs: Math.round(modelDurationMs),
     },
