@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
-import NdaModal from "../components/NdaModal";
-import TermsModal from "../components/TermsModal";
+import ConsentCheckbox from "../components/ConsentCheckbox";
+import ExternalLink from "../components/ExternalLink";
 import PasswordField from "../components/PasswordField";
 import { friendlyAuthError } from "../lib/authErrors";
 import { IS_BETA_TESTING } from "../lib/beta";
@@ -20,7 +20,7 @@ export default function Signup() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
-  const [showNda, setShowNda] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   // Resend on the "check your email" screen, rate-limited client-side to
   // match Supabase's own per-address cooldown.
   const [resendIn, setResendIn] = useState(0);
@@ -48,17 +48,12 @@ export default function Signup() {
     setResendIn(60);
   }
 
-  // The form itself just validates email/password and opens the NDA modal
-  // (beta) or the Terms modal -- account creation happens from there, in
-  // handleAcceptAndCreateAccount, so agreeing and creating the account are
-  // one step.
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  // The required checkbox above the button is the agreement -- the NDA in
+  // beta, the Terms after -- so agreeing and creating the account are one
+  // step. Auto-renewal consent waits until checkout (Pricing.tsx).
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setShowNda(true);
-  }
-
-  async function handleAcceptAndCreateAccount() {
+    if (!agreed) return;
     setSubmitting(true);
     setError(null);
 
@@ -76,13 +71,11 @@ export default function Signup() {
           : {
               terms_version: TERMS_VERSION,
               terms_accepted_at: new Date().toISOString(),
-              auto_renew_consent_at: new Date().toISOString(),
             },
       },
     });
 
     setSubmitting(false);
-    setShowNda(false);
 
     if (signUpError) {
       setError(friendlyAuthError(signUpError, "sign up"));
@@ -159,7 +152,7 @@ export default function Signup() {
           ) : (
             <>
               <header>
-                <p>{IS_BETA_TESTING ? "Free during beta" : `${TRIAL_DAYS}-day free trial`}</p>
+                {IS_BETA_TESTING && <p>Free during beta</p>}
                 <h1>Create your account</h1>
               </header>
               <label htmlFor="signup-email">Email</label>
@@ -181,6 +174,16 @@ export default function Signup() {
                 hint="At least 6 characters."
                 onChange={setPassword}
               />
+
+              <ConsentCheckbox checked={agreed} onChange={setAgreed}>
+                I agree to the{" "}
+                {IS_BETA_TESTING ? (
+                  <ExternalLink href="/nda">Beta Tester NDA</ExternalLink>
+                ) : (
+                  <ExternalLink href="/terms">Terms and Conditions</ExternalLink>
+                )}
+                .
+              </ConsentCheckbox>
             </>
           )}
 
@@ -192,8 +195,14 @@ export default function Signup() {
 
           {!accountCreated && (
             <>
-              <button type="submit" disabled={submitting}>
-                Sign up <span aria-hidden="true">→</span>
+              <button type="submit" disabled={submitting || !agreed}>
+                {submitting ? (
+                  "Creating account…"
+                ) : (
+                  <>
+                    Sign up <span aria-hidden="true">→</span>
+                  </>
+                )}
               </button>
 
               <footer>
@@ -206,23 +215,6 @@ export default function Signup() {
           )}
         </form>
       </section>
-
-      {showNda &&
-        (IS_BETA_TESTING ? (
-          <NdaModal
-            submitting={submitting}
-            onCancel={() => setShowNda(false)}
-            onAccept={() => void handleAcceptAndCreateAccount()}
-          />
-        ) : (
-          <TermsModal
-            submitting={submitting}
-            acceptLabel="Accept and create account"
-            submittingLabel="Creating account…"
-            onCancel={() => setShowNda(false)}
-            onAccept={() => void handleAcceptAndCreateAccount()}
-          />
-        ))}
     </main>
   );
 }

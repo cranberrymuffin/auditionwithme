@@ -1,11 +1,12 @@
-// Full text of the AuditionWithMe Terms and Conditions, shown in
-// TermsModal (signup and checkout) and on /terms once beta testing is off.
+// Full text of the AuditionWithMe Terms and Conditions, shown on /terms and
+// linked from the signup and checkout checkboxes once beta testing is off.
 // Rendered verbatim from "Stephan Dweck Audition With Me Terms and
 // Conditions 10 26 26.docx", with its placeholders filled in to match the
 // app: the $12.99 monthly fee, the /billing cancel page, no annual plan or
-// PayPal, and the auto-renewal consent button as TermsModal's second
-// checkbox. Bump TERMS_VERSION whenever this text changes -- acceptance is
-// recorded against it (see api/billing.ts accept-terms).
+// PayPal, and the auto-renewal consent button dropped. Bump TERMS_VERSION
+// whenever this text changes -- acceptance is recorded against it (see
+// api/billing.ts create-subscription). Also contact email changed to
+// team@auditionwithme.com.
 export const TERMS_VERSION = "2026-10-26";
 export const TERMS_TITLE = "Terms and Conditions";
 export const TERMS_UPDATED = "October 26, 2026";
@@ -209,7 +210,7 @@ export const TERMS_BLOCKS: TermsBlock[] = [
   {
     "kind": "paragraph",
     "lead": "Notices.",
-    "text": "Any notices or other communications provided by AuditionWithMe under these Terms will be given: (i) via email to info@AuditionWithMe.com; or (ii) by posting to the Application. For notices made by email, the date of receipt will be deemed the date on which such notice is transmitted."
+    "text": "Any notices or other communications provided by AuditionWithMe under these Terms will be given: (i) via email to team@auditionwithme.com; or (ii) by posting to the Application. For notices made by email, the date of receipt will be deemed the date on which such notice is transmitted."
   },
   {
     "kind": "paragraph",
@@ -219,7 +220,7 @@ export const TERMS_BLOCKS: TermsBlock[] = [
   {
     "kind": "paragraph",
     "lead": "Contact Information.",
-    "text": "If you have any questions about these Terms or the Services, please contact AuditionWithMe at info@AuditionWithMe.com or:"
+    "text": "If you have any questions about these Terms or the Services, please contact AuditionWithMe at team@auditionwithme.com or:"
   },
   {
     "kind": "address",

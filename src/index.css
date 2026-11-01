@@ -3536,87 +3536,6 @@ header .flow-back:hover {
   opacity: 0.7;
 }
 
-.modal-content.nda-modal {
-  max-width: 520px;
-}
-.nda-modal-intro {
-  margin: -8px 0 14px;
-  color: rgba(248, 241, 230, 0.75);
-  font-size: 0.875rem;
-}
-.nda-modal-intro a {
-  color: #f3a17e;
-  font-weight: 600;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.nda-modal-body:focus-visible {
-  outline: 2px solid rgba(239, 154, 120, 0.7);
-  outline-offset: 2px;
-}
-.nda-modal-agree {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 0 0 16px;
-  color: #f8f1e6;
-  font-size: 0.875rem;
-  line-height: 1.45;
-  cursor: pointer;
-}
-.nda-modal-agree input {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  margin-top: 1px;
-  accent-color: #ef9a78;
-}
-.nda-modal-body {
-  max-height: 45vh;
-  margin-bottom: 18px;
-  padding-right: 6px;
-  overflow-y: auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.13);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
-  color: rgba(248, 241, 230, 0.82);
-  font-size: 0.8125rem;
-  line-height: 1.55;
-}
-.nda-modal-body p {
-  margin: 0 0 12px;
-}
-.nda-modal-body p:last-child {
-  margin-bottom: 0;
-}
-.nda-modal-actions {
-  display: flex;
-  gap: 10px;
-  padding-top: 4px;
-}
-.nda-modal-actions button {
-  min-height: 50px;
-  border-radius: 9px;
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-.nda-modal-actions button:last-child {
-  flex: 1;
-  border: 1px solid rgba(255, 205, 183, 0.55);
-  background: linear-gradient(135deg, #f4a583, #e98464);
-  color: #101a28;
-}
-.nda-modal-actions button:last-child:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.nda-modal-actions button:first-child {
-  padding: 0 18px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  background: transparent;
-  color: rgba(248, 241, 230, 0.85);
-  font-weight: 600;
-}
-
 .auth-layout {
   display: flex;
   height: calc(100dvh - clamp(68px, 10vh, 92px));
@@ -6979,7 +6898,7 @@ header .flow-back:hover {
   .coach-help { padding: 0 4px 24px; }
 }
 
-/* Terms and Conditions (TermsContent), in TermsModal and on /terms. */
+/* Terms and Conditions (TermsContent) on /terms, and the NDA on /nda. */
 .terms-body h3 {
   margin: 18px 0 8px;
   font-size: 0.9375rem;
@@ -7015,4 +6934,45 @@ header .flow-back:hover {
   color: rgba(248, 241, 230, 0.85);
   font-size: 0.9375rem;
   line-height: 1.65;
+}
+
+/* Required agreement checkboxes (ConsentCheckbox): the Terms/NDA at signup,
+   and the Terms and auto-renewal consent above the checkout button. */
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: rgba(248, 241, 230, 0.82);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.45;
+  cursor: pointer;
+}
+.consent-check input,
+.auth-card .consent-check input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  flex: none;
+  margin: 1px 0 0;
+  padding: 0;
+  accent-color: #ef9a78;
+  cursor: pointer;
+}
+.external-link {
+  color: #f3a17e;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.external-link:hover {
+  color: #ffc2a6;
+}
+
+.pricing-consent {
+  margin: 4px 0 14px;
+}
+.pricing-consent .consent-check:last-child {
+  margin-bottom: 0;
 }

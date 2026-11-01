@@ -4,7 +4,8 @@ import Modal from "../components/Modal";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StripeElementsForm from "../components/billing/StripeElementsForm";
-import TermsModal from "../components/TermsModal";
+import ConsentCheckbox from "../components/ConsentCheckbox";
+import ExternalLink from "../components/ExternalLink";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
@@ -47,14 +48,18 @@ export default function Pricing() {
     searchParams.get("redirect_status") === "succeeded",
   );
   const [justSubscribed, setJustSubscribed] = useState(false);
-  const [showTerms, setShowTerms] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  // Set when the server says the Terms are missing even though the cached
+  // entitlement said otherwise, so the checkbox appears.
+  const [termsRequired, setTermsRequired] = useState(false);
 
   const isSubscribed = hasPlanAccess(entitlement?.subscription_status);
-  // Checkout requires the current Terms and auto-renewal consent; the
-  // server enforces this too (api/billing.ts create-subscription).
-  const hasAcceptedTerms =
-    entitlement?.terms_version === TERMS_VERSION &&
-    Boolean(entitlement?.auto_renew_consent_at);
+  // Accounts that signed up before the Terms existed (beta, which agreed to
+  // the NDA instead) accept them here, at their first purchase; everyone else
+  // accepted them at signup. The server enforces this (api/billing.ts
+  // create-subscription).
+  const needsTerms =
+    Boolean(user) && (termsRequired || entitlement?.terms_version !== TERMS_VERSION);
   // The trial is for a first subscription only (api/billing.ts enforces it;
   // this just keeps the copy honest). Any past subscription leaves its ID.
   const trialEligible = !entitlement?.stripe_subscription_id;
@@ -98,24 +103,24 @@ export default function Pricing() {
       navigate("/signup", { state: { from: { pathname: "/pricing" } } });
       return;
     }
-    if (!hasAcceptedTerms) {
-      setShowTerms(true);
-      return;
-    }
-    await openCheckout();
-  }
-
-  async function openCheckout() {
+    if (!consentGiven) return;
     setBusy(true);
     setError(null);
     try {
       const response = await apiFetch(
         "/api/billing?action=create-subscription",
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(needsTerms ? { termsVersion: TERMS_VERSION } : {}),
+          }),
+        },
       );
       const payload = await response.json().catch(() => null);
       if (response.status === 403 && payload?.reason === "terms_required") {
-        setShowTerms(true);
+        setTermsRequired(true);
+        setError(payload.error);
         return;
       }
       if (!response.ok || !payload?.clientSecret) {
@@ -132,36 +137,8 @@ export default function Pricing() {
     }
   }
 
-  // Records acceptance server-side, then continues straight to checkout so
-  // agreeing and subscribing stay one flow.
-  async function acceptTermsAndCheckout() {
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await apiFetch("/api/billing?action=accept-terms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version: TERMS_VERSION, autoRenew: true }),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        setError(payload?.error ?? "Could not save your agreement. Please try again.");
-        setShowTerms(false);
-        setBusy(false);
-        return;
-      }
-    } catch {
-      setError("Could not save your agreement. Please try again.");
-      setShowTerms(false);
-      setBusy(false);
-      return;
-    }
-    setShowTerms(false);
-    refresh();
-    await openCheckout();
-  }
-
   const offerTrial = !isSubscribed && trialEligible;
+  const consentGiven = !needsTerms || agreeTerms;
   const ctaLabel = !user
     ? `Start your ${trialDays}-day free trial`
     : offerTrial
@@ -303,27 +280,42 @@ export default function Pricing() {
               Manage subscription <span aria-hidden="true">→</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={startSubscription}
-              disabled={busy || confirming}
-            >
-              {confirming ? (
-                <>
-                  <span className="billing-spinner" aria-hidden="true" />
-                  Confirming…
-                </>
-              ) : busy ? (
-                <>
-                  <span className="billing-spinner" aria-hidden="true" />
-                  Opening checkout…
-                </>
-              ) : (
-                <>
-                  {ctaLabel} <span aria-hidden="true">→</span>
-                </>
+            <>
+              {needsTerms && !confirming && (
+                <div className="pricing-consent">
+                  <ConsentCheckbox checked={agreeTerms} onChange={setAgreeTerms}>
+                    I agree to the{" "}
+                    <ExternalLink href="/terms">Terms and Conditions</ExternalLink>
+                    .
+                  </ConsentCheckbox>
+                </div>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={startSubscription}
+                disabled={
+                  busy ||
+                  confirming ||
+                  !consentGiven
+                }
+              >
+                {confirming ? (
+                  <>
+                    <span className="billing-spinner" aria-hidden="true" />
+                    Confirming…
+                  </>
+                ) : busy ? (
+                  <>
+                    <span className="billing-spinner" aria-hidden="true" />
+                    Opening checkout…
+                  </>
+                ) : (
+                  <>
+                    {ctaLabel} <span aria-hidden="true">→</span>
+                  </>
+                )}
+              </button>
+            </>
           )}
 
           {!isSubscribed && (
@@ -345,16 +337,6 @@ export default function Pricing() {
           )}
         </article>
       </section>
-
-      {showTerms && (
-        <TermsModal
-          submitting={busy}
-          acceptLabel="Accept and continue"
-          submittingLabel="Saving…"
-          onCancel={() => setShowTerms(false)}
-          onAccept={() => void acceptTermsAndCheckout()}
-        />
-      )}
 
       {clientSecret && (
         <Modal

@@ -1,5 +1,5 @@
-// Full text of the Beta Tester Non-Disclosure Agreement, shown in
-// NdaModal before account creation. Keep this in sync with the source
+// Full text of the Beta Tester Non-Disclosure Agreement, shown on /nda and
+// linked from the signup checkbox during beta testing. Keep this in sync with the source
 // legal document -- it's rendered verbatim, paragraph by paragraph.
 export const NDA_TITLE = "Beta Tester Non-Disclosure Agreement";
 

@@ -274,16 +274,19 @@ async function createSubscription(
     const db = serviceClient();
     const { data: row, error } = await db
       .from("entitlements")
-      .select("stripe_customer_id, subscription_status, terms_version, auto_renew_consent_at")
+      .select("stripe_customer_id, subscription_status, terms_version")
       .eq("user_id", auth.userId)
       .maybeSingle();
     if (error) {
       console.error("entitlements read failed:", error.message);
       return res.status(500).json({ error: "Could not load billing account" });
     }
-    // No subscription without the current Terms and the auto-renewal
-    // consent they call for (recorded at signup or by accept-terms below).
-    if (row?.terms_version !== TERMS_VERSION || !row?.auto_renew_consent_at) {
+    // No subscription without the current Terms -- accepted at signup, or in
+    // this request (the pricing-page checkbox for accounts that signed up
+    // during beta, before the Terms existed).
+    const body = (req.body ?? {}) as { termsVersion?: unknown };
+    const acceptingTerms = body.termsVersion === TERMS_VERSION;
+    if (row?.terms_version !== TERMS_VERSION && !acceptingTerms) {
       return res.status(403).json({
         error: "Please accept the Terms and Conditions to subscribe.",
         reason: "terms_required",
@@ -333,6 +336,18 @@ async function createSubscription(
     }
 
     const trialEligible = !(await hasHadSubscription(customerId));
+
+    if (acceptingTerms) {
+      const now = new Date().toISOString();
+      const { error: termsError } = await db
+        .from("entitlements")
+        .update({ terms_version: TERMS_VERSION, terms_accepted_at: now })
+        .eq("user_id", auth.userId);
+      if (termsError) {
+        console.error("entitlements terms write failed:", termsError.message);
+        return res.status(500).json({ error: "Could not save your agreement" });
+      }
+    }
 
     // A Checkout Session doesn't create a Subscription until it completes, so
     // an abandoned attempt just expires on its own — no dedup/reuse needed.
@@ -485,37 +500,7 @@ async function cancelSubscription(
   }
 }
 
-// Records that the caller accepted the current Terms and Conditions and
-// consented to auto-renewal (TermsModal on the pricing page). Server-side
-// because users can't write their own entitlements row.
-async function acceptTerms(
-  req: VercelRequest,
-  res: VercelResponse,
-  auth: { userId: string; email: string },
-) {
-  const body = (req.body ?? {}) as { version?: unknown; autoRenew?: unknown };
-  if (body.version !== TERMS_VERSION || body.autoRenew !== true) {
-    return res.status(400).json({
-      error: "The Terms have changed. Refresh the page and review them again.",
-    });
-  }
-  const now = new Date().toISOString();
-  const { error } = await serviceClient()
-    .from("entitlements")
-    .update({
-      terms_version: TERMS_VERSION,
-      terms_accepted_at: now,
-      auto_renew_consent_at: now,
-    })
-    .eq("user_id", auth.userId);
-  if (error) {
-    console.error("entitlements terms write failed:", error.message);
-    return res.status(500).json({ error: "Could not save your agreement" });
-  }
-  return res.status(200).json({ ok: true });
-}
-
-// Combines plan, billing-summary, accept-terms, create-subscription, create-setup-intent, and
+// Combines plan, billing-summary, create-subscription, create-setup-intent, and
 // cancel-subscription under one route — Vercel's Hobby plan caps deployments
 // at 12 Serverless Functions.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -531,7 +516,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "GET") return getBillingSummary(req, res, auth);
 
   const action = req.query.action;
-  if (action === "accept-terms") return acceptTerms(req, res, auth);
   if (action === "create-subscription") return createSubscription(req, res, auth);
   if (action === "create-setup-intent") return createSetupIntent(req, res, auth);
   if (action === "cancel-subscription") return cancelSubscription(req, res, auth);

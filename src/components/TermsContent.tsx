@@ -1,7 +1,6 @@
 import { TERMS_BLOCKS, TERMS_UPDATED } from "../lib/termsText";
 
-// Renders the Terms and Conditions body. Shared by TermsModal and the
-// /terms page so both always show the same text.
+// Renders the Terms and Conditions body for the /terms page.
 export default function TermsContent() {
   return (
     <>
