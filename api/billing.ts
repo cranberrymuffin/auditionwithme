@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-import { requireAuth } from "./_entitlement.js";
+import { checkRateLimit, requireAuth } from "./_entitlement.js";
 import { TRIAL_DAYS, hasPlanAccess, type Plan } from "../src/lib/plan.js";
 import { handleCors } from "./_cors.js";
 import { syncAppleSubscription } from "./_revenuecat.js";
@@ -426,6 +426,9 @@ async function cancelSubscription(
 // Called by the iOS app right after an App Store purchase or restore, so the
 // plan unlocks without waiting on RevenueCat's webhook to arrive.
 async function syncApple(res: VercelResponse, auth: { userId: string; email: string }) {
+  // Each call is a RevenueCat lookup and a row write. A purchase or restore
+  // makes one; this only stops a client from hammering it.
+  if (!(await checkRateLimit(auth.userId, res, { bucket: "sync-apple", maxPerWindow: 30 }))) return;
   try {
     const active = await syncAppleSubscription(auth.userId);
     return res.status(200).json({ active });

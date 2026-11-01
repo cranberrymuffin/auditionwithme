@@ -96,19 +96,35 @@ async function requirePlan(userId: string, res: VercelResponse): Promise<boolean
 export async function requireAuthRateLimited(
   req: VercelRequest,
   res: VercelResponse,
-  options: { bucket?: string; maxPerWindow?: number; windowSeconds?: number } = {}
+  options: RateLimitOptions = {}
 ): Promise<{ userId: string } | null> {
   const auth = await requireAuth(req, res);
   if (!auth) return null;
   // Before the rate limit, so a rejected call doesn't use up the bucket.
   if (!(await requirePlan(auth.userId, res))) return null;
+  if (!(await checkRateLimit(auth.userId, res, options))) return null;
+  return auth;
+}
 
+type RateLimitOptions = { bucket?: string; maxPerWindow?: number; windowSeconds?: number };
+
+/**
+ * The per-user, per-bucket sliding-window rate limit on its own, for an
+ * authed route that mustn't require a plan (api/billing.ts sync-apple runs
+ * right after a purchase, before the plan shows). Sends 429/500 and returns
+ * false on rejection.
+ */
+export async function checkRateLimit(
+  userId: string,
+  res: VercelResponse,
+  options: RateLimitOptions = {}
+): Promise<boolean> {
   const bucket = options.bucket ?? DEFAULT_RATE_LIMIT.bucket;
   const maxPerWindow = options.maxPerWindow ?? DEFAULT_RATE_LIMIT.maxPerWindow;
   const windowSeconds = options.windowSeconds ?? DEFAULT_RATE_LIMIT.windowSeconds;
 
   const { data: allowed, error } = await serviceClient().rpc("check_rate_limit", {
-    p_user_id: auth.userId,
+    p_user_id: userId,
     p_bucket: bucket,
     p_window_seconds: windowSeconds,
     p_max_calls: maxPerWindow,
@@ -118,14 +134,14 @@ export async function requireAuthRateLimited(
     console.error("check_rate_limit RPC failed:", error.message);
     // Fail closed (Principle 4): if we can't verify the rate limit, block.
     res.status(500).json({ error: "Could not verify rate limit" });
-    return null;
+    return false;
   }
   if (!allowed) {
     res.setHeader("Retry-After", String(windowSeconds));
     res.status(429).json({ error: "Rate limit exceeded. Please slow down.", retryAfterSeconds: windowSeconds });
-    return null;
+    return false;
   }
-  return auth;
+  return true;
 }
 
 const GRANT_TTL_SECONDS = 60 * 60; // 1 hour — see plan for reasoning
