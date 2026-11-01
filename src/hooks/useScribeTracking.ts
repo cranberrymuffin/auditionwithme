@@ -11,8 +11,10 @@ import {
   SILENCE_RMS,
   type QuietInputs,
 } from "../lib/lineMatch";
+import type { PluginListenerHandle } from "@capacitor/core";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import { AppleAI, onDeviceSpeechReady } from "../lib/native/appleAI";
 import type { LineCompletion } from "../lib/takeMetrics";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
@@ -98,13 +100,17 @@ function floatTo16BitPcmBase64(input: Float32Array): string {
 }
 
 /**
- * Live word tracking via ElevenLabs Scribe v2 Realtime.
+ * Live word tracking via ElevenLabs Scribe v2 Realtime — or, in the iOS app
+ * on iOS 26, Apple's on-device speech recognition (lib/native/appleAI.ts),
+ * which costs nothing per minute. Both take the same PCM and send back the
+ * same partial/committed transcripts; on-device is used whenever it's ready
+ * for the script's language, and Scribe otherwise.
  *
- * While `active`, streams mic audio over a token-authenticated WebSocket and
- * matches incremental transcripts against `line` with `assessLine` (the
- * matched count never regresses). Returns the matched
- * word count plus whether tracking is actually live (mic + socket up), so the
- * caller can fall back to manual advance when it isn't.
+ * While `active`, streams mic audio to the recognizer and matches
+ * incremental transcripts against `line` with `assessLine` (the matched
+ * count never regresses). Returns the matched word count plus whether
+ * tracking is actually live (mic + recognizer up), so the caller can fall
+ * back to manual advance when it isn't.
  *
  * Takes the caller's own mic stream (the self-tape recorder's) rather than
  * opening a second `getUserMedia` of its own: `active` only ever goes true
@@ -149,6 +155,11 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       scribeHeardPause: false,
     };
     let ws: WebSocket | null = null;
+    // The on-device session, once started, and its event listeners.
+    let onDeviceSession: number | null = null;
+    let onDeviceListeners: PluginListenerHandle[] = [];
+    // Where a captured chunk goes once the recognizer is up.
+    let send: ((pcm: string) => void) | null = null;
     let audioContext: AudioContext | null = null;
     let processor: ScriptProcessorNode | null = null;
     let micLevelTimer: ReturnType<typeof setInterval> | null = null;
@@ -159,22 +170,61 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       processor?.disconnect();
       audioContext?.close().catch(() => {});
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
+      onDeviceListeners.forEach((listener) => void listener.remove());
+      if (onDeviceSession !== null) void AppleAI.stopTranscription({ session: onDeviceSession });
       setListening(false);
       logAudioEvent("scribe", "deactivated");
     };
 
-    // Chunks captured while the socket is still opening. The actor starts
-    // speaking the moment the reader's cue ends, which is exactly when this
-    // effect runs, so without the buffer their first words would go to a
-    // socket that isn't there yet.
+    // Chunks (base64 PCM) captured while the recognizer is still starting.
+    // The actor starts speaking the moment the reader's cue ends, which is
+    // exactly when this effect runs, so without the buffer their first
+    // words would go to a recognizer that isn't there yet.
     const pending: string[] = [];
-    const sendChunk = (chunk: string) => {
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(chunk);
+    const sendChunk = (pcm: string) => {
+      if (send) {
+        send(pcm);
         return;
       }
-      pending.push(chunk);
+      pending.push(pcm);
       if (pending.length > MAX_BUFFERED_CHUNKS) pending.shift();
+    };
+    const recognizerReady = (deliver: (pcm: string) => void, tag: string) => {
+      send = deliver;
+      setListening(true);
+      if (pending.length) {
+        logAudioEvent(tag, `recognizer up, sending ${pending.length} buffered chunks (${Math.round((pending.length * CHUNK_SAMPLES * 1000) / SAMPLE_RATE)}ms)`);
+      }
+      for (const pcm of pending) deliver(pcm);
+      pending.length = 0;
+    };
+
+    // A transcript from either recognizer: a partial replaces the last one,
+    // a committed stretch is appended.
+    const handleTranscript = (text: string, committed: boolean) => {
+      if (committed) {
+        // A commit restating the in-progress partial isn't new speech.
+        if (text.trim() && text !== state.partial) state.lastTextChangeAt = Date.now();
+        state.committed += text + " ";
+        state.partial = "";
+        state.scribeHeardPause = true;
+      } else if (text !== state.partial) {
+        state.partial = text;
+        state.lastTextChangeAt = Date.now();
+        state.scribeHeardPause = false;
+      }
+      const progress = assessLine(scriptWords, state.committed + state.partial);
+      // Only advance — never walk the count backwards on partial rewrites
+      state.matchedCount = Math.max(state.matchedCount, progress.matched);
+      // Not sticky: a rewritten partial that drops the last word un-hears it.
+      state.endingHeard = progress.endingHeard;
+      setMatchedWordCount((prev) => Math.max(prev, progress.matched));
+      if (progress.matched >= scriptWords.length && !lineCompletionRef.current) {
+        // What credited the line, so a line that moved on before the
+        // actor spoke shows what the recognizer thought it heard.
+        logAudioEvent("scribe", `line matched on "${(state.committed + state.partial).trim().slice(0, 120)}"`);
+        lineCompletionRef.current = { kind: "auto", at: Date.now() };
+      }
     };
 
     const startCapture = () => {
@@ -204,13 +254,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       processor = audioContext.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
       processor.onaudioprocess = (e) => {
         if (state.closed) return;
-        sendChunk(
-          JSON.stringify({
-            message_type: "input_audio_chunk",
-            audio_base_64: floatTo16BitPcmBase64(e.inputBuffer.getChannelData(0)),
-            sample_rate: audioContext!.sampleRate,
-          })
-        );
+        sendChunk(floatTo16BitPcmBase64(e.inputBuffer.getChannelData(0)));
       };
       // ScriptProcessorNode only fires once it's part of a live graph
       // reaching the destination, but the actual point is capturing this
@@ -291,7 +335,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         }
         state.semanticChecked = heard;
         logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
-        void checkSemanticLineMatch(line, heard).then((match) => {
+        void checkSemanticLineMatch(line, heard, languageCode).then((match) => {
           if (state.closed || !match || lineCompletionRef.current) return;
           if (!semanticMatchMayAdvance(scriptWords, heard)) {
             logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
@@ -304,7 +348,49 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       }, MIC_LEVEL_POLL_MS);
     };
 
+    // Returns false when on-device speech couldn't start, so the line falls
+    // back to Scribe.
+    const startOnDevice = async (): Promise<boolean> => {
+      try {
+        onDeviceListeners.push(
+          await AppleAI.addListener("transcript", (event) => {
+            if (event.session === onDeviceSession && !state.closed) handleTranscript(event.text, event.isFinal);
+          }),
+          await AppleAI.addListener("transcriptionError", (event) => {
+            if (event.session !== onDeviceSession || state.closed) return;
+            logAudioEvent("speech", `recognizer error: ${event.message}`);
+            setListening(false);
+          }),
+        );
+        const { session } = await AppleAI.startTranscription({
+          language: languageCode,
+          contextualStrings: extractKeyterms(line),
+        });
+        if (state.closed) {
+          void AppleAI.stopTranscription({ session });
+          return true;
+        }
+        onDeviceSession = session;
+        logAudioEvent("speech", "on-device recognizer started");
+        recognizerReady((pcm) => AppleAI.pushAudio({ pcm }), "speech");
+        return true;
+      } catch (err) {
+        onDeviceListeners.forEach((listener) => void listener.remove());
+        onDeviceListeners = [];
+        if (state.closed) return true;
+        logAudioEvent("speech", `on-device unavailable, using Scribe: ${err instanceof Error ? err.message : err}`);
+        return false;
+      }
+    };
+
     const start = async () => {
+      // On-device speech assumes the 16 kHz PCM Scribe gets; a browser that
+      // ignored the requested sample rate goes to Scribe, which is told the
+      // real rate.
+      if (audioContext?.sampleRate === SAMPLE_RATE && (await onDeviceSpeechReady(languageCode))) {
+        if (state.closed || (await startOnDevice())) return;
+      }
+      if (state.closed) return;
       try {
         const token = await takeScribeToken();
         if (state.closed) return;
@@ -336,30 +422,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
             logScribeMessage(msg);
             return;
           }
-          const text: string = msg.text ?? "";
-          if (msg.message_type === "committed_transcript") {
-            // A commit restating the in-progress partial isn't new speech.
-            if (text.trim() && text !== state.partial) state.lastTextChangeAt = Date.now();
-            state.committed += text + " ";
-            state.partial = "";
-            state.scribeHeardPause = true;
-          } else if (msg.message_type === "partial_transcript" && text !== state.partial) {
-            state.partial = text;
-            state.lastTextChangeAt = Date.now();
-            state.scribeHeardPause = false;
-          }
-          const progress = assessLine(scriptWords, state.committed + state.partial);
-          // Only advance — never walk the count backwards on partial rewrites
-          state.matchedCount = Math.max(state.matchedCount, progress.matched);
-          // Not sticky: a rewritten partial that drops the last word un-hears it.
-          state.endingHeard = progress.endingHeard;
-          setMatchedWordCount((prev) => Math.max(prev, progress.matched));
-          if (progress.matched >= scriptWords.length && !lineCompletionRef.current) {
-            // What credited the line, so a line that moved on before the
-            // actor spoke shows what Scribe thought it heard.
-            logAudioEvent("scribe", `line matched on "${(state.committed + state.partial).trim().slice(0, 120)}"`);
-            lineCompletionRef.current = { kind: "auto", at: Date.now() };
-          }
+          handleTranscript(msg.text ?? "", msg.message_type === "committed_transcript");
         };
 
         ws.onerror = () => {
@@ -377,12 +440,15 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
 
         ws.onopen = () => {
           if (state.closed) return;
-          setListening(true);
-          if (pending.length) {
-            logAudioEvent("scribe", `socket open, sending ${pending.length} buffered chunks (${Math.round((pending.length * CHUNK_SAMPLES * 1000) / SAMPLE_RATE)}ms)`);
-          }
-          for (const chunk of pending) ws!.send(chunk);
-          pending.length = 0;
+          const socket = ws!;
+          const sampleRate = audioContext!.sampleRate;
+          recognizerReady(
+            (pcm) =>
+              socket.send(
+                JSON.stringify({ message_type: "input_audio_chunk", audio_base_64: pcm, sample_rate: sampleRate }),
+              ),
+            "scribe",
+          );
         };
       } catch (err) {
         // The actor is left on manual advance; say why in the audio log.

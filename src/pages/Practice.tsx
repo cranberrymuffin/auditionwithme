@@ -23,7 +23,8 @@ import {
 import { hashFile } from "../lib/scriptHash";
 import { createParseCache, type CachedParseFields } from "../lib/parseCache";
 import { DIRECTOR_VERSION } from "../lib/director";
-import { leadingDirections } from "../lib/delivery";
+import { ON_DEVICE_DIRECTOR_ENABLED, directLinesOnDevice, directorLines } from "../lib/onDeviceDirector";
+import { onDeviceModelReady } from "../lib/native/appleAI";
 import { useSeo } from "../components/Seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 import { coachTakeMap, loadCoachTakes } from "../lib/coachTakeStore";
@@ -593,23 +594,29 @@ function PracticeFlow({
 
   // AI director pass: annotate each line with performance markup (inline v3
   // audio tags + pacing punctuation — how the scene partner should read it)
-  // once steps load. Purely an enhancement — failures are silent and the
-  // rehearsal reads lines unadorned.
+  // once steps load. In the iOS app, once enabled, Apple's on-device model
+  // directs instead of the cloud (lib/onDeviceDirector.ts). Purely an
+  // enhancement — failures are silent and the rehearsal reads lines
+  // unadorned.
   useEffect(() => {
     if (!steps.length || deliveryTags) return;
     let cancelled = false;
+    const lines = directorLines(steps);
     void (async () => {
+      if (ON_DEVICE_DIRECTOR_ENABLED && (await onDeviceModelReady(scriptLanguage.code))) {
+        try {
+          const { tags } = await directLinesOnDevice(lines);
+          if (!cancelled) setDeliveryTags(tags);
+          return;
+        } catch (err) {
+          console.warn("On-device direction failed, using the cloud director:", err);
+        }
+      }
       try {
         const response = await apiFetch("/api/casting?action=direct-lines", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lines: steps.map((step) => ({
-              speaker: normalizeSpeaker(step.speaker),
-              text: step.verbalLine,
-              direction: leadingDirections(step.content) || undefined,
-            })),
-          }),
+          body: JSON.stringify({ lines }),
         });
         const data = (await response.json()) as {
           tags?: (string | null)[];
@@ -625,7 +632,7 @@ function PracticeFlow({
     return () => {
       cancelled = true;
     };
-  }, [steps, deliveryTags]);
+  }, [steps, deliveryTags, scriptLanguage.code]);
 
   // Write freshly generated delivery tags back to the saved row so replays
   // skip the director call. Guarded so it fires once per session. Stamped

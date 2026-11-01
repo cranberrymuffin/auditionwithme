@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { handleCors } from "./_cors.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
-import { sanitizePerformance } from "./_direction.js";
+import { sanitizePerformance } from "../src/lib/direction.js";
 import {
   fetchElevenLabs,
   holdPregenIfBusy,

@@ -784,7 +784,7 @@ async function main() {
   // Imported after the env check above (see dry-run note).
   const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
   const { BIG_DELIVERY_TAGS } = await import("../../api/tts.js");
-  const { sanitizePerformance } = await import("../../api/_direction.js");
+  const { sanitizePerformance } = await import("../../src/lib/direction.js");
   const promptText = (variant: TtsConfig["prompt"]) =>
     variant === "warm" ? WARM_DIRECTOR_PROMPT : variant === "v4" ? V4_DIRECTOR_PROMPT : DIRECTOR_PROMPT;
 

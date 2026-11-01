@@ -1,10 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { sanitizePerformance } from "./_direction.js";
+import { sanitizePerformance } from "../src/lib/direction.js";
+import { TAG_VOCABULARY } from "../src/lib/director.js";
 import { fetchVoices } from "./_elevenlabs.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 import { handleCors } from "./_cors.js";
+import { SEMANTIC_MATCH_SYSTEM_PROMPT, semanticMatchPrompt } from "../src/lib/semanticMatch.js";
 
 const client = new Anthropic();
 
@@ -102,19 +104,8 @@ const SEMANTIC_MATCH_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// Fallback for when realtime word-for-word matching (src/lib/script.ts)
-// stalls: the actor paused (VAD committed a transcript segment) but speech-
-// to-text never assembled enough of the exact/near-exact words to credit the
-// line as spoken. Rather than leave the actor stuck on manual advance, ask
-// whether the words STT DID catch still convey the line's meaning — tolerant
-// of mishears and minor ad-libs, not a rubber stamp for silence or a
-// different line entirely.
-const SEMANTIC_MATCH_SYSTEM_PROMPT = `You judge whether a speech-to-text transcript of an actor reading a script line actually conveys that line, despite likely transcription errors.
-
-Say match:true if the transcript is consistent with the actor having spoken this line — allowing for misheard/garbled words, dropped small words, or minor ad-libbing that keeps the same meaning.
-Say match:false if the transcript is empty, unrelated, a clearly different line, or too sparse/garbled to tell.
-
-Return ONLY {"match": true} or {"match": false}.`;
+// The prompt (and why there is one) lives in src/lib/semanticMatch.ts,
+// shared with the iOS app's on-device check.
 
 async function semanticLineMatch(req: VercelRequest, res: VercelResponse) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -134,7 +125,7 @@ async function semanticLineMatch(req: VercelRequest, res: VercelResponse) {
       model: "claude-haiku-4-5-20251001",
       max_tokens: 100,
       system: SEMANTIC_MATCH_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Script line: "${line}"\nTranscript: "${transcript}"` }],
+      messages: [{ role: "user", content: semanticMatchPrompt(line, transcript) }],
       output_config: {
         format: jsonSchemaOutputFormat(SEMANTIC_MATCH_SCHEMA),
       },
@@ -248,30 +239,7 @@ const MAX_LINES = 400;
 // paragraphs are clipped so they can't dominate the prompt.
 const MAX_DIRECTION_CHARS = 200;
 
-// Emotional tags Eleven v3 and v4 handle well, offered to the director as the core
-// palette (validation no longer requires them — sanitizePerformance keeps any
-// simple bracketed tag and guarantees the spoken words are unchanged).
-// Weighted toward grounded, conversational colors (per ElevenLabs' v3
-// audio-tag guidance) because the reader supports an actor's audition rather
-// than performing it. High-intensity tags (terrified, shouts, crying,
-// desperate, threatening, screams) are deliberately absent: they only reach
-// the TTS from an explicit script parenthetical (src/lib/delivery.ts), where
-// api/tts.ts's BIG_DELIVERY_TAGS lets them read big on purpose.
-// Multi-word tags use spaces, never hyphens — the tag validator
-// (normalizeTag, api/_direction.ts) only accepts letters, spaces and commas,
-// so "[matter-of-fact]" would be silently dropped.
-//
-// Bump DIRECTOR_VERSION (src/lib/director.ts) whenever this list or
-// DIRECTOR_PROMPT changes, so saved scripts get re-directed.
-const TAG_VOCABULARY = [
-  "calm", "quietly", "flatly", "matter of fact", "thoughtful", "hesitates",
-  "stammers", "gulps", "resigned tone", "sorrowful", "frustrated",
-  "angry", "annoyed", "cold", "sad", "somber", "cheerful", "warm",
-  "excited", "playful", "teasing", "flirtatious", "nervous", "hesitant",
-  "scared", "surprised", "shocked", "confused", "curious",
-  "sarcastic", "deadpan", "mocking", "pleading",
-  "tired", "resigned", "whispers", "laughs", "sighs",
-];
+// TAG_VOCABULARY (src/lib/director.ts): the director's core tag palette.
 
 export const DIRECTOR_PROMPT = `You are a voice director preparing an AI scene partner (ElevenLabs Eleven v4) to read lines opposite a human actor who is recording an audition. The scene partner is a professional audition reader: grounded, conversational, supports the actor and never upstages them, with energy one notch *below* what the scene implies. For each numbered dialogue line, decide how that reader would deliver it given the surrounding scene, and return a performance markup of that exact line.
 

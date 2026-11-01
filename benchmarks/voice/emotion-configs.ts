@@ -82,7 +82,7 @@ export const CONFIGS: Record<string, TtsConfig> = {
 export const DEFAULT_PAIR_WITH = "baseline";
 
 // Tags offered to the warm prompt. Space-separated only: the validators
-// (api/_direction.ts, api/tts.ts) accept letters and spaces, so a tag with a
+// (src/lib/direction.ts, api/tts.ts) accept letters and spaces, so a tag with a
 // comma or hyphen would be silently dropped.
 const WARM_TAG_VOCABULARY = [
   "calm", "quietly", "matter of fact", "thoughtful", "hesitates", "stammers",

@@ -128,8 +128,8 @@ function tagFromDirection(direction: string): string | undefined {
   return undefined;
 }
 
-// Mirrors api/_direction.ts — the words actually spoken once bracket tags and
-// punctuation are stripped.
+// Mirrors src/lib/direction.ts — the words actually spoken once bracket tags
+// and punctuation are stripped.
 function spokenWords(value: string): string {
   return value
     .replace(/\[[^\]]*\]/g, " ")

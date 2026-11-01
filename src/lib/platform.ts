@@ -6,8 +6,9 @@ export const IS_NATIVE = Capacitor.isNativePlatform();
 // The iOS app serves its bundle from capacitor://localhost, so relative
 // /api paths and window.location.origin point nowhere useful there. Both
 // resolve against the deployed site instead; in a browser they stay
-// same-origin as before.
-const WEB_ORIGIN = (import.meta.env.VITE_WEB_ORIGIN as string | undefined)?.replace(/\/$/, "");
+// same-origin as before. (import.meta.env is Vite's; Node scripts under
+// benchmarks/ that import this have none.)
+const WEB_ORIGIN = (import.meta.env?.VITE_WEB_ORIGIN as string | undefined)?.replace(/\/$/, "");
 
 if (IS_NATIVE && !WEB_ORIGIN) {
   console.error("VITE_WEB_ORIGIN is not set; the iOS app can't reach /api");

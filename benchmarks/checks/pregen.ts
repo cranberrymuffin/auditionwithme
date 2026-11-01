@@ -21,7 +21,7 @@ import {
   SHORT_BEAT_MS,
 } from "../../src/lib/readerLines";
 import { deliveryTagFromContent, leadingDirections, splitLeadingBeat } from "../../src/lib/delivery";
-import { normalizeTag, sanitizePerformance } from "../../api/_direction";
+import { normalizeTag, sanitizePerformance } from "../../src/lib/direction";
 import {
   canStartTake,
   lookaheadWindow,

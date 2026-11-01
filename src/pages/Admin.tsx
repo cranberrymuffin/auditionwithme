@@ -3,6 +3,8 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { apiFetch } from "../lib/api";
 import { throwIfError } from "../lib/apiError";
+import { IS_NATIVE } from "../lib/platform";
+import OnDeviceDirectorCheck from "../components/OnDeviceDirectorCheck";
 
 type AdminUser = {
   id: string;
@@ -475,6 +477,7 @@ export default function Admin() {
             )}
           </>
         )}
+        {IS_NATIVE && <OnDeviceDirectorCheck />}
       </section>
     </main>
   );

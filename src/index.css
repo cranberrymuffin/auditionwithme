@@ -7009,3 +7009,60 @@ header .flow-back:hover {
   .coaching-page .coach-text { font-size: 1rem; }
   .coach-help { padding: 0 4px 24px; }
 }
+
+/* Admin → On-device director check (iOS app only). */
+.director-check {
+  margin-top: 24px;
+}
+.director-check-run {
+  min-height: 44px;
+  margin-top: 14px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f4a583, #e98464);
+  color: #101a28;
+  font-weight: 600;
+}
+.director-check-run:disabled {
+  opacity: 0.6;
+}
+.director-check-table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.director-check-table th,
+.director-check-table td {
+  padding: 8px 6px;
+  border-top: 1px solid rgba(248, 241, 230, 0.12);
+  text-align: left;
+  font-weight: 400;
+}
+.director-check-table thead th {
+  color: rgba(248, 241, 230, 0.66);
+  border-top: 0;
+}
+.director-check-gate {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.director-check-gate li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+.director-check-gate li.is-pass {
+  background: rgba(120, 200, 150, 0.12);
+}
+.director-check-gate li.is-fail {
+  background: rgba(240, 110, 100, 0.14);
+}
+.director-check-gate span {
+  color: rgba(248, 241, 230, 0.7);
+}

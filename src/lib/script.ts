@@ -1,6 +1,8 @@
 import { apiFetch } from "./api";
 import type { ContentLine, Step } from "../types";
 import { normalizeSpeaker } from "./speaker";
+import { SEMANTIC_MATCH_SYSTEM_PROMPT, semanticMatchPrompt } from "./semanticMatch";
+import { AppleAI, onDeviceModelReady } from "./native/appleAI";
 
 export type Voice = {
   id: string;
@@ -90,12 +92,29 @@ export function dialogueTurnsLabel(count: number): string {
 /**
  * Fallback for a line that stalled short of a full countMatchedWords match
  * even after the actor paused (nothing left to transcribe for this attempt):
- * asks the server whether the transcript it did get still conveys the
- * line's meaning, tolerating mishears/garbling that exact/fuzzy word
- * matching couldn't get past. Returns false (never advance) on any request
- * failure rather than surfacing an error into the rehearsal flow.
+ * asks whether the transcript it did get still conveys the line's meaning,
+ * tolerating mishears/garbling that exact/fuzzy word matching couldn't get
+ * past. Asked of Apple's on-device model in the iOS app when it can answer
+ * in this language, else the server (Haiku). Returns false (never advance)
+ * on any request failure rather than surfacing an error into the rehearsal
+ * flow.
  */
-export async function checkSemanticLineMatch(line: string, transcript: string): Promise<boolean> {
+export async function checkSemanticLineMatch(
+  line: string,
+  transcript: string,
+  languageCode = "en",
+): Promise<boolean> {
+  if (await onDeviceModelReady(languageCode)) {
+    try {
+      const { match } = await AppleAI.semanticMatch({
+        instructions: SEMANTIC_MATCH_SYSTEM_PROMPT,
+        prompt: semanticMatchPrompt(line, transcript),
+      });
+      return match;
+    } catch (err) {
+      console.warn("On-device semantic match failed, asking the server:", err);
+    }
+  }
   try {
     const response = await apiFetch("/api/casting?action=semantic-match", {
       method: "POST",

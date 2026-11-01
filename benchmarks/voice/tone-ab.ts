@@ -120,7 +120,7 @@ async function main() {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const { DIRECTOR_PROMPT } = await import("../../api/casting.js");
   const { BIG_DELIVERY_TAGS, v3Stability } = await import("../../api/tts.js");
-  const { sanitizePerformance } = await import("../../api/_direction.js");
+  const { sanitizePerformance } = await import("../../src/lib/direction.js");
 
   // The stability contract the tone fix depends on (runs in --dry-run too).
   assert.equal(v3Stability(false), 0.3, "untagged/director lines read at 0.3");
