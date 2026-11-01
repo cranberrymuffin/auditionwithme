@@ -14,7 +14,20 @@ export function handleCors(req: VercelRequest, res: VercelResponse): boolean {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    // Every request header the client sends beyond the safelisted ones: a
+    // header missing here fails the preflight, which iOS reports only as
+    // "Load failed". x-rehearsal-grant: parse-script/parse-pages
+    // (Practice.tsx, scannedScript.ts); X-TTS-Purpose: reader-audio pregen.
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Authorization, Content-Type, X-Rehearsal-Grant, X-TTS-Purpose",
+    );
+    // Response headers the client reads; cross-origin it only sees the
+    // safelisted ones otherwise (useTtsPlayer.ts, useReaderAudioPregen.ts).
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Retry-After, X-TTS-Current-Concurrent, X-TTS-Max-Concurrent",
+    );
     res.setHeader("Access-Control-Max-Age", "86400");
   }
   if (req.method === "OPTIONS") {
