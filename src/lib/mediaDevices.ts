@@ -95,3 +95,13 @@ export function routeToPreferredSpeaker(target: HTMLMediaElement | AudioContext)
     sink.setSinkId!(id ?? "").catch(() => {}),
   );
 }
+
+/** iPadOS 13+ Safari reports a desktop Mac user agent by default, so "iPad"
+ * alone misses most real iPads — a touch-capable "Mac" is the tell. */
+export function isIpad(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return (
+    navigator.userAgent.includes("iPad") ||
+    (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)
+  );
+}

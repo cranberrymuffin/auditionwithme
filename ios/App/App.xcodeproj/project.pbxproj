@@ -18,6 +18,9 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1A1A1A12F00000100000001 /* AppleAIPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A12F00000100000002 /* AppleAIPlugin.swift */; };
 		A1A1A1A12F00000100000003 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A12F00000100000004 /* MainViewController.swift */; };
+		A1A1A1A12F00000100000005 /* MediaAudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A12F00000100000006 /* MediaAudioEngine.swift */; };
+		A1A1A1A12F00000100000007 /* CameraRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A12F00000100000008 /* CameraRecorder.swift */; };
+		A1A1A1A12F00000100000009 /* NativeMediaPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A1A1A12F0000010000000A /* NativeMediaPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +37,9 @@
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A1A1A1A12F00000100000002 /* AppleAIPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleAIPlugin.swift; sourceTree = "<group>"; };
 		A1A1A1A12F00000100000004 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
+		A1A1A1A12F00000100000006 /* MediaAudioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaAudioEngine.swift; sourceTree = "<group>"; };
+		A1A1A1A12F00000100000008 /* CameraRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraRecorder.swift; sourceTree = "<group>"; };
+		A1A1A1A12F0000010000000A /* NativeMediaPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMediaPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +77,9 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				A1A1A1A12F0000010000000A /* NativeMediaPlugin.swift */,
+				A1A1A1A12F00000100000008 /* CameraRecorder.swift */,
+				A1A1A1A12F00000100000006 /* MediaAudioEngine.swift */,
 				A1A1A1A12F00000100000004 /* MainViewController.swift */,
 				A1A1A1A12F00000100000002 /* AppleAIPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -165,6 +174,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				A1A1A1A12F00000100000009 /* NativeMediaPlugin.swift in Sources */,
+				A1A1A1A12F00000100000007 /* CameraRecorder.swift in Sources */,
+				A1A1A1A12F00000100000005 /* MediaAudioEngine.swift in Sources */,
 				A1A1A1A12F00000100000003 /* MainViewController.swift in Sources */,
 				A1A1A1A12F00000100000001 /* AppleAIPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,

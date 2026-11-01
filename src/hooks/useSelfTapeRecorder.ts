@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { logAudioEvent } from "../lib/audioDiagnostics";
+import { IS_NATIVE } from "../lib/platform";
+import type { RecordedTake } from "../lib/native/nativeMedia";
+import { useNativeSelfTapeRecorder } from "./useSelfTapeRecorder.native";
 import {
   preferredZoom,
   resolvePreferredDevice,
@@ -64,15 +67,7 @@ async function applyInitialZoom(
   }
 }
 
-/** iPadOS 13+ Safari reports a desktop Mac user agent by default, so "iPad"
- * alone misses most real iPads — a touch-capable "Mac" is the tell. */
-export function isIpad(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return (
-    navigator.userAgent.includes("iPad") ||
-    (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)
-  );
-}
+export { isIpad } from "../lib/mediaDevices";
 
 /**
  * Camera + mic capture for rehearsal self-tapes, split into two steps so the
@@ -143,7 +138,7 @@ function openCameraAndMic(cameraId: string | null, micId: string | null): Promis
   });
 }
 
-export function useSelfTapeRecorder() {
+function useWebSelfTapeRecorderCore() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   // The camera's zoom range and current level; null where it has none.
   const [zoom, setZoomState] = useState<{ range: ZoomRange; value: number } | null>(null);
@@ -383,3 +378,27 @@ export function useSelfTapeRecorder() {
 
   return { status, stream, error, cameraInterrupted, zoom, setZoom, requestCamera, switchDevice, startRecording, pause, resume, stop };
 }
+
+/** The web recorder plus the two things the app's native one also reports:
+ * the camera's size (the web reads it off the stream instead) and whether
+ * the preview is drawn natively. */
+function useWebSelfTapeRecorder() {
+  return { ...useWebSelfTapeRecorderCore(), videoSize: null, nativePreview: false };
+}
+
+/** A finished take: a Blob from MediaRecorder on the web, or the .mp4 file
+ * the iOS app wrote natively. */
+export type FinishedTake = Blob | RecordedTake;
+
+export type SelfTapeRecorder = Omit<ReturnType<typeof useWebSelfTapeRecorder>, "stop" | "videoSize" | "nativePreview"> & {
+  stop: () => Promise<FinishedTake | null>;
+  videoSize: { width: number; height: number } | null;
+  nativePreview: boolean;
+};
+
+/** Camera, mic and self-tape recording: the phone's own hardware in the iOS
+ * app (useSelfTapeRecorder.native.ts), getUserMedia and MediaRecorder
+ * everywhere else, as always. Chosen once, at load. */
+export const useSelfTapeRecorder: () => SelfTapeRecorder = IS_NATIVE
+  ? useNativeSelfTapeRecorder
+  : useWebSelfTapeRecorder;

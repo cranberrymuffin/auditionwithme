@@ -31,6 +31,7 @@
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.6.0",
     "@capacitor/ios": "^8.6.0",
+    "@capacitor/share": "^8.0.3",
     "@revenuecat/purchases-capacitor": "^14.0.0",
     "@stripe/react-stripe-js": "^6.8.1",
     "@stripe/stripe-js": "^9.13.0",

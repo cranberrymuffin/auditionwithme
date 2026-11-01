@@ -4,7 +4,9 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StorageMeter from "../components/StorageMeter";
 import { useAuth } from "../contexts/AuthContext";
-import { forgetSelfTapeUrl, getSelfTapeBlob, getSelfTapeUrl } from "../lib/selfTapeUrl";
+import { Share } from "@capacitor/share";
+import { forgetSelfTapeUrl, getSelfTapeBlob, getSelfTapeUrl, nativeTapeFile } from "../lib/selfTapeUrl";
+import { IS_NATIVE } from "../lib/platform";
 import {
   deleteTape as deleteTapeRecord,
   deleteTapesForScript,
@@ -229,6 +231,24 @@ export default function MyAccount() {
     if (downloadingRef.current) return;
     downloadingRef.current = true;
     try {
+      // The iOS app keeps each take as a real .mp4 on the phone: hand that
+      // file to the share sheet (Save Video, Save to Files). The web view
+      // can't download a blob: URL at all, and its IndexedDB Blobs often
+      // don't read back.
+      if (IS_NATIVE) {
+        const file = await nativeTapeFile(tape.id);
+        if (!file) {
+          toast("That take was recorded before an update and can't be opened.");
+          return;
+        }
+        try {
+          await Share.share({ files: [`file://${file.path}`] });
+        } catch (shareErr) {
+          // Closing the sheet without picking anything isn't a failure.
+          if (!/cancel/i.test((shareErr as Error).message ?? "")) throw shareErr;
+        }
+        return;
+      }
       // getSelfTapeBlob shares its cache with ensureTapeUrl, which already
       // kicked off (and by click time, almost always finished) this same
       // lookup when the tile/modal opened — so this resolves as an

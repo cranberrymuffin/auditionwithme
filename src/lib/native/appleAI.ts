@@ -1,9 +1,11 @@
-import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
+import { registerPlugin } from "@capacitor/core";
 import { IS_NATIVE } from "../platform";
 import { logAudioEvent } from "../audioDiagnostics";
 
-// Apple's on-device speech recognition and language model, through the
-// AppleAI plugin in the iOS app (ios/App/App/AppleAIPlugin.swift). Each
+// Apple's on-device speech models and language model, through the AppleAI
+// plugin in the iOS app (ios/App/App/AppleAIPlugin.swift). Recognition
+// itself runs in NativeMediaPlugin, fed straight from the mic; this side
+// only checks and downloads the speech model. Each
 // caller checks readiness first and falls back to the cloud API it replaces
 // when the device can't: browsers, iOS before 26, phones without Apple
 // Intelligence, or a language Apple doesn't cover.
@@ -17,26 +19,15 @@ type ModelStatus =
   | "unsupportedLanguage"
   | "unsupported";
 
-export type TranscriptEvent = { session: number; text: string; isFinal: boolean };
-
 interface AppleAIPlugin {
   speechStatus(options: { language: string }): Promise<{ status: SpeechStatus }>;
   installSpeech(options: { language: string }): Promise<void>;
-  startTranscription(options: { language: string; contextualStrings: string[] }): Promise<{ session: number }>;
-  /** 16 kHz 16-bit mono PCM, base64. Fire-and-forget: no promise. */
-  pushAudio(options: { pcm: string }): void;
-  stopTranscription(options: { session: number }): Promise<void>;
   modelStatus(options: { language: string }): Promise<{ status: ModelStatus }>;
   semanticMatch(options: { instructions: string; prompt: string }): Promise<{ match: boolean }>;
   directLines(options: {
     instructions: string;
     prompt: string;
   }): Promise<{ lines: { row: number; markup: string }[] }>;
-  addListener(event: "transcript", listener: (event: TranscriptEvent) => void): Promise<PluginListenerHandle>;
-  addListener(
-    event: "transcriptionError",
-    listener: (event: { session: number; message: string }) => void,
-  ): Promise<PluginListenerHandle>;
 }
 
 export const AppleAI = registerPlugin<AppleAIPlugin>("AppleAI");

@@ -69,6 +69,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     pause: pauseRecording,
     resume: resumeRecording,
     finish: finishRecording,
+    nativePreview,
   } = useSelfTapeSession(scriptSaved ? scriptId : null, selectedRole);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -503,6 +504,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
         willRecord={willRecord}
         cameraStatus={recorderStatus}
         cameraStream={cameraStream}
+        nativePreview={nativePreview}
         cameraError={recorderError}
         onRetryCamera={() => void requestCamera()}
         onSwitchDevice={(kind, choice) => void switchDevice(kind, choice)}
@@ -562,6 +564,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
           <SelfTapeRecorder
             status={recorderStatus}
             stream={cameraStream}
+            nativePreview={nativePreview}
             error={recorderError}
             saving={recorderSaving}
             paused={paused}

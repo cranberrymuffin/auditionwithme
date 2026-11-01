@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isIpad } from "../../hooks/useSelfTapeRecorder";
+import NativeCameraPreview from "./NativeCameraPreview";
 
 type RecorderStatus = "idle" | "requesting" | "ready" | "recording" | "paused" | "error";
 
@@ -12,6 +13,7 @@ function formatElapsed(totalSeconds: number): string {
 export default function SelfTapeRecorder({
   status,
   stream,
+  nativePreview = false,
   error,
   saving,
   paused,
@@ -21,6 +23,8 @@ export default function SelfTapeRecorder({
 }: {
   status: RecorderStatus;
   stream: MediaStream | null;
+  /** iOS app: the camera is drawn natively, and there's no stream. */
+  nativePreview?: boolean;
   error: string | null;
   saving: boolean;
   /** Rehearsal-wide pause state — mirrors the recorder's own paused status. */
@@ -45,15 +49,19 @@ export default function SelfTapeRecorder({
   }, [status]);
 
   const isRecording = status === "recording" || status === "paused";
+  // In the iOS app there's no stream: the camera is on from ready onward.
+  const cameraOn = Boolean(stream) || (nativePreview && (status === "ready" || isRecording));
   // Center Stage digitally pans/zooms the front camera to follow the face,
   // overriding our framing constraints; it can only be turned off by the
   // user (Control Center), so tell iPad users before they start a take.
-  const showCenterStageHint = Boolean(stream) && !isRecording && !practiceRun && isIpad();
+  const showCenterStageHint = cameraOn && !isRecording && !practiceRun && isIpad();
 
   return (
     <div className={`self-tape-setting ${practiceRun ? "is-practice" : ""}`}>
-      <div className="self-tape-video">
-        {stream ? (
+      <div className={`self-tape-video ${nativePreview ? "is-native-preview" : ""}`}>
+        {nativePreview && cameraOn ? (
+          <NativeCameraPreview className="self-tape-preview" />
+        ) : stream ? (
           <video className="self-tape-preview" ref={previewRef} muted autoPlay playsInline />
         ) : (
           <div className="self-tape-placeholder">
@@ -72,7 +80,7 @@ export default function SelfTapeRecorder({
             <time aria-label={`${formatElapsed(elapsed)} recorded`}>{formatElapsed(elapsed)}</time>
           </span>
         )}
-        {practiceRun && stream && (
+        {practiceRun && cameraOn && (
           <span className="self-tape-rec is-practice">Practice run · not recording</span>
         )}
       </div>

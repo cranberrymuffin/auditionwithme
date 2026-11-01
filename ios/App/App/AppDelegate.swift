@@ -1,5 +1,4 @@
 import UIKit
-import AVFoundation
 import Capacitor
 
 @UIApplicationMain
@@ -8,14 +7,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Rehearsal plays the reader through the speaker while the mic stays open
-        // for line tracking and self-tapes. Without this, WebKit routes playback
-        // to the earpiece once getUserMedia starts.
-        try? AVAudioSession.sharedInstance().setCategory(
-            .playAndRecord,
-            mode: .default,
-            options: [.defaultToSpeaker, .allowBluetoothA2DP]
-        )
+        // No audio session setup here: MediaAudioEngine configures it when a
+        // rehearsal starts, and WebKit manages it for web audio elsewhere.
         return true
     }
 

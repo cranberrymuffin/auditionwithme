@@ -28,6 +28,8 @@
 	<string>Audition With Me uses the camera to record your self-tapes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Audition With Me listens while you rehearse so the reader knows when you have finished your line, and records your self-tapes.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Audition With Me saves your self-tapes to your photo library when you choose Save Video.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Audition With Me recognizes your lines on this device to follow along with the scene.</string>
 	<key>UIApplicationSceneManifest</key>

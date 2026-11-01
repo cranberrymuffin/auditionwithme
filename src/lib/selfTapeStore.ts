@@ -7,6 +7,8 @@
 // in Supabase (see submitFeedback below) so the team can read it — only the
 // "still owe feedback" flag stays local, for gating FeedbackGate.tsx.
 import { SELF_TAPES_STORE, withStore, withStoreReadModifyWrite } from "./localDb";
+import { NativeMedia } from "./native/nativeMedia";
+import { toBase64 } from "./pcm";
 import { supabase } from "./supabase";
 import { TAKE_METRICS_COLUMNS, type TakeMetricsRow } from "./takeMetrics";
 import type { SelfTape } from "../types";
@@ -19,7 +21,14 @@ type TapeRecord = {
    * existed. */
   role?: string;
   mimeType: string;
-  blob: Blob;
+  /** The video, for takes recorded in a browser. */
+  blob?: Blob;
+  /** The video's file on the phone, for takes recorded in the iOS app
+   * (NativeMediaPlugin keeps them in Application Support). A take's video
+   * is either here or in `blob`, never both. */
+  filePath?: string;
+  /** The file's size in bytes, alongside `filePath`. */
+  size?: number;
   createdAt: string;
   feedbackRequired: boolean;
   feedbackSubmittedAt: string | null;
@@ -72,6 +81,25 @@ export async function saveTape(
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(record));
 }
 
+/** Saves a take recorded natively in the iOS app: its row points at the
+ * file instead of holding the video, which never enters the web view. */
+export async function saveTapeFile(
+  meta: NewSelfTape,
+  file: { path: string; size: number },
+  metrics?: TakeMetricsRow,
+): Promise<void> {
+  const record: TapeRecord = {
+    ...meta,
+    filePath: file.path,
+    size: file.size,
+    metrics,
+    createdAt: new Date().toISOString(),
+    feedbackRequired: true,
+    feedbackSubmittedAt: null,
+  };
+  await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.put(record));
+}
+
 export async function listTapes(userId: string): Promise<SelfTape[]> {
   const all = await withStore<TapeRecord[]>(SELF_TAPES_STORE, "readonly", (store) =>
     store.getAll(),
@@ -88,7 +116,9 @@ export async function listTapeSizes(userId: string): Promise<number[]> {
   const all = await withStore<TapeRecord[]>(SELF_TAPES_STORE, "readonly", (store) =>
     store.getAll(),
   );
-  return all.filter((record) => record.userId === userId).map((record) => record.blob.size);
+  return all
+    .filter((record) => record.userId === userId)
+    .map((record) => record.blob?.size ?? record.size ?? 0);
 }
 
 export async function getTapeBlob(id: string): Promise<Blob | null> {
@@ -100,8 +130,51 @@ export async function getTapeBlob(id: string): Promise<Blob | null> {
   return record?.blob ?? null;
 }
 
+/** A natively recorded take's file, or null for a browser take (or none). */
+export async function getTapeFile(id: string): Promise<{ path: string; size: number; mimeType: string } | null> {
+  const record = await withStore<TapeRecord | undefined>(
+    SELF_TAPES_STORE,
+    "readonly",
+    (store) => store.get(id),
+  );
+  return record?.filePath ? { path: record.filePath, size: record.size ?? 0, mimeType: record.mimeType } : null;
+}
+
+/**
+ * iOS app only: moves a take recorded in the web view before native
+ * recording (a Blob in IndexedDB, which WKWebView often can't read back)
+ * into a file, and points the row at it. Resolves the file, or null if the
+ * Blob couldn't be read — that take can't be recovered.
+ */
+export async function moveTapeBlobToFile(id: string): Promise<{ path: string; size: number; mimeType: string } | null> {
+  const record = await withStore<TapeRecord | undefined>(
+    SELF_TAPES_STORE,
+    "readonly",
+    (store) => store.get(id),
+  );
+  if (!record?.blob) return null;
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await record.blob.arrayBuffer());
+  } catch (err) {
+    console.warn(`Self-tape ${id} couldn't be read back:`, err);
+    return null;
+  }
+  const file = await NativeMedia.storeTakeFile({
+    tapeId: id,
+    base64: toBase64(bytes),
+    extension: extensionForMimeType(record.mimeType),
+  });
+  await withStore(SELF_TAPES_STORE, "readwrite", (store) =>
+    store.put({ ...record, blob: undefined, filePath: file.path, size: file.size }),
+  );
+  return { path: file.path, size: file.size, mimeType: record.mimeType };
+}
+
 export async function deleteTape(id: string): Promise<void> {
+  const file = await getTapeFile(id);
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.delete(id));
+  if (file) await NativeMedia.deleteTakeFile({ path: file.path });
 }
 
 export async function deleteTapesForScript(scriptId: string): Promise<string[]> {

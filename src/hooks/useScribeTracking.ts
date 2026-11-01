@@ -14,7 +14,9 @@ import {
 import type { PluginListenerHandle } from "@capacitor/core";
 import { apiFetch } from "../lib/api";
 import { logAudioEvent } from "../lib/audioDiagnostics";
-import { AppleAI, onDeviceSpeechReady } from "../lib/native/appleAI";
+import { onDeviceSpeechReady } from "../lib/native/appleAI";
+import { NativeMedia } from "../lib/native/nativeMedia";
+import { IS_NATIVE } from "../lib/platform";
 import type { LineCompletion } from "../lib/takeMetrics";
 
 const SCRIBE_WS_BASE = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
@@ -138,7 +140,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
   useEffect(() => {
     setMatchedWordCount(0);
     lineCompletionRef.current = null;
-    if (!active || !line.trim() || !micStream) return;
+    // In the iOS app the mic belongs to the native engine (opened with the
+    // camera by the recorder), so no stream is needed.
+    if (!active || !line.trim() || (!micStream && !IS_NATIVE)) return;
     logAudioEvent("scribe", `activating for "${line.slice(0, 24)}"`);
 
     const scriptWords = line.split(/\s+/).filter(Boolean);
@@ -171,7 +175,9 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       audioContext?.close().catch(() => {});
       if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
       onDeviceListeners.forEach((listener) => void listener.remove());
-      if (onDeviceSession !== null) void AppleAI.stopTranscription({ session: onDeviceSession });
+      if (onDeviceSession !== null) void NativeMedia.stopTranscription({ session: onDeviceSession });
+      nativeMicListeners.forEach((listener) => void listener.then((handle) => handle.remove()));
+      if (pcmStreamingOn) void NativeMedia.setPcmStreaming({ enabled: false });
       setListening(false);
       logAudioEvent("scribe", "deactivated");
     };
@@ -227,6 +233,89 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
       }
     };
 
+    // The quiet rules (and, after the patient hold, the semantic fallback),
+    // run on every mic-level poll whichever mic is measuring.
+    const checkQuiet = () => {
+      const now = Date.now();
+      if (lineCompletionRef.current) return;
+      const inputs: QuietInputs = {
+        scriptWords,
+        progress: { matched: state.matchedCount, endingHeard: state.endingHeard },
+        msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
+        // Our mic level reads the raw signal, so in a noisy room (HVAC,
+        // traffic) it may never drop under SILENCE_RMS. Scribe's VAD runs
+        // on background-filtered audio; once it has committed the
+        // segment, take its word that the actor stopped.
+        msSinceMicActive: state.scribeHeardPause
+          ? now - (state.lastTextChangeAt ?? now)
+          : state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
+      };
+      const rule = quietAdvance(inputs);
+      if (rule) {
+        logAudioEvent(
+          "scribe",
+          rule === "ending"
+            ? "line's ending heard and actor went quiet, advancing"
+            : "actor held a long pause with nearly all of the line heard, advancing",
+        );
+        // An ending-heard advance is word detection, just with a word
+        // or two in the middle misheard, so it's counted with full matches.
+        lineCompletionRef.current = { kind: rule === "ending" ? "auto" : "silence", at: now };
+        setMatchedWordCount(scriptWords.length);
+        return;
+      }
+
+      // Still not credited after the whole patient hold — maybe the
+      // actor paraphrased. Ask the semantic fallback whether what Scribe
+      // did transcribe still conveys the line, rather than leave them
+      // stuck on manual advance. Once per distinct transcript, and only
+      // once word matching has already credited most of the line —
+      // otherwise a pause partway through a monologue reads as "done"
+      // and the scene partner cuts the actor off (see lib/lineMatch.ts).
+      const quiet = quietFor(inputs);
+      const heard = (state.committed + state.partial).trim();
+      if (
+        quiet === null ||
+        quiet < PATIENT_HOLD_MS ||
+        heard === state.semanticChecked ||
+        !shouldTrySemanticFallback(scriptWords, state.matchedCount, heard)
+      ) {
+        return;
+      }
+      state.semanticChecked = heard;
+      logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
+      void checkSemanticLineMatch(line, heard, languageCode).then((match) => {
+        if (state.closed || !match || lineCompletionRef.current) return;
+        if (!semanticMatchMayAdvance(scriptWords, heard)) {
+          logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
+          return;
+        }
+        logAudioEvent("scribe", "semantic fallback matched line");
+        lineCompletionRef.current = { kind: "semantic", at: Date.now() };
+        setMatchedWordCount(scriptWords.length);
+      });
+    };
+
+    // iOS app: the native engine measures the mic and, only while Scribe is
+    // in use, streams it the same 16 kHz PCM the web graph below produces.
+    const nativeMicListeners: Promise<PluginListenerHandle>[] = [];
+    let pcmStreamingOn = false;
+    const startNativeCapture = () => {
+      logAudioEvent("scribe", "mic: native engine");
+      state.lastMicActiveAt = Date.now();
+      nativeMicListeners.push(
+        NativeMedia.addListener("micLevel", ({ rms }) => {
+          if (rms >= SILENCE_RMS) state.lastMicActiveAt = Date.now();
+        }),
+        NativeMedia.addListener("pcm", ({ pcm }) => {
+          if (!state.closed) sendChunk(pcm);
+        }),
+      );
+      micLevelTimer = setInterval(() => {
+        if (!state.closed) checkQuiet();
+      }, MIC_LEVEL_POLL_MS);
+    };
+
     const startCapture = () => {
       audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
       logAudioEvent("scribe", `mic ctx created, initial state=${audioContext.state}`);
@@ -236,7 +325,8 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         () => logAudioEvent("scribe", `mic ctx resume() resolved, state=${audioContext?.state}`),
         (err) => logAudioEvent("scribe", `mic ctx resume() rejected: ${err}`),
       );
-      const source = audioContext.createMediaStreamSource(micStream);
+      // Only reached in a browser, where the early return guarantees a stream.
+      const source = audioContext.createMediaStreamSource(micStream!);
       // Browser autoGainControl still leaves quiet mic input under Scribe's
       // VAD threshold, so boost the signal ourselves before sending it.
       const gain = audioContext.createGain();
@@ -286,65 +376,8 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         analyser.getFloatTimeDomainData(samples);
         let sum = 0;
         for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-        const now = Date.now();
-        if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = now;
-        if (lineCompletionRef.current) return;
-        const inputs: QuietInputs = {
-          scriptWords,
-          progress: { matched: state.matchedCount, endingHeard: state.endingHeard },
-          msSinceTextChange: state.lastTextChangeAt === null ? null : now - state.lastTextChangeAt,
-          // Our mic level reads the raw signal, so in a noisy room (HVAC,
-          // traffic) it may never drop under SILENCE_RMS. Scribe's VAD runs
-          // on background-filtered audio; once it has committed the
-          // segment, take its word that the actor stopped.
-          msSinceMicActive: state.scribeHeardPause
-            ? now - (state.lastTextChangeAt ?? now)
-            : state.lastMicActiveAt === null ? null : now - state.lastMicActiveAt,
-        };
-        const rule = quietAdvance(inputs);
-        if (rule) {
-          logAudioEvent(
-            "scribe",
-            rule === "ending"
-              ? "line's ending heard and actor went quiet, advancing"
-              : "actor held a long pause with nearly all of the line heard, advancing",
-          );
-          // An ending-heard advance is word detection, just with a word
-          // or two in the middle misheard, so it's counted with full matches.
-          lineCompletionRef.current = { kind: rule === "ending" ? "auto" : "silence", at: now };
-          setMatchedWordCount(scriptWords.length);
-          return;
-        }
-
-        // Still not credited after the whole patient hold — maybe the
-        // actor paraphrased. Ask the semantic fallback whether what Scribe
-        // did transcribe still conveys the line, rather than leave them
-        // stuck on manual advance. Once per distinct transcript, and only
-        // once word matching has already credited most of the line —
-        // otherwise a pause partway through a monologue reads as "done"
-        // and the scene partner cuts the actor off (see lib/lineMatch.ts).
-        const quiet = quietFor(inputs);
-        const heard = (state.committed + state.partial).trim();
-        if (
-          quiet === null ||
-          quiet < PATIENT_HOLD_MS ||
-          heard === state.semanticChecked ||
-          !shouldTrySemanticFallback(scriptWords, state.matchedCount, heard)
-        ) {
-          return;
-        }
-        state.semanticChecked = heard;
-        logAudioEvent("scribe", "word match stalled through a long pause, trying semantic fallback");
-        void checkSemanticLineMatch(line, heard, languageCode).then((match) => {
-          if (state.closed || !match || lineCompletionRef.current) return;
-          if (!semanticMatchMayAdvance(scriptWords, heard)) {
-            logAudioEvent("scribe", "semantic match ignored: long line's ending not heard yet");
-            return;
-          }
-          logAudioEvent("scribe", "semantic fallback matched line");
-          lineCompletionRef.current = { kind: "semantic", at: Date.now() };
-          setMatchedWordCount(scriptWords.length);
-        });
+        if (Math.sqrt(sum / samples.length) >= SILENCE_RMS) state.lastMicActiveAt = Date.now();
+        checkQuiet();
       }, MIC_LEVEL_POLL_MS);
     };
 
@@ -353,26 +386,27 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     const startOnDevice = async (): Promise<boolean> => {
       try {
         onDeviceListeners.push(
-          await AppleAI.addListener("transcript", (event) => {
+          await NativeMedia.addListener("transcript", (event) => {
             if (event.session === onDeviceSession && !state.closed) handleTranscript(event.text, event.isFinal);
           }),
-          await AppleAI.addListener("transcriptionError", (event) => {
+          await NativeMedia.addListener("transcriptionError", (event) => {
             if (event.session !== onDeviceSession || state.closed) return;
             logAudioEvent("speech", `recognizer error: ${event.message}`);
             setListening(false);
           }),
         );
-        const { session } = await AppleAI.startTranscription({
+        const { session } = await NativeMedia.startTranscription({
           language: languageCode,
           contextualStrings: extractKeyterms(line),
         });
         if (state.closed) {
-          void AppleAI.stopTranscription({ session });
+          void NativeMedia.stopTranscription({ session });
           return true;
         }
         onDeviceSession = session;
         logAudioEvent("speech", "on-device recognizer started");
-        recognizerReady((pcm) => AppleAI.pushAudio({ pcm }), "speech");
+        // The recognizer hears the mic natively; nothing to forward.
+        recognizerReady(() => {}, "speech");
         return true;
       } catch (err) {
         onDeviceListeners.forEach((listener) => void listener.remove());
@@ -384,16 +418,19 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     };
 
     const start = async () => {
-      // On-device speech assumes the 16 kHz PCM Scribe gets; a browser that
-      // ignored the requested sample rate goes to Scribe, which is told the
-      // real rate.
-      if (audioContext?.sampleRate === SAMPLE_RATE && (await onDeviceSpeechReady(languageCode))) {
+      // In the iOS app, Apple's on-device recognizer when it's ready for
+      // this language; Scribe otherwise, and always in a browser.
+      if (IS_NATIVE && (await onDeviceSpeechReady(languageCode))) {
         if (state.closed || (await startOnDevice())) return;
       }
       if (state.closed) return;
       try {
         const token = await takeScribeToken();
         if (state.closed) return;
+        if (IS_NATIVE) {
+          pcmStreamingOn = true;
+          void NativeMedia.setPcmStreaming({ enabled: true });
+        }
         // For the actor's next line, while this one plays out.
         prefetchScribeToken();
 
@@ -441,7 +478,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
         ws.onopen = () => {
           if (state.closed) return;
           const socket = ws!;
-          const sampleRate = audioContext!.sampleRate;
+          const sampleRate = audioContext?.sampleRate ?? SAMPLE_RATE;
           recognizerReady(
             (pcm) =>
               socket.send(
@@ -459,7 +496,7 @@ export function useScribeTracking(active: boolean, line: string, languageCode = 
     };
 
     try {
-      startCapture();
+      (IS_NATIVE ? startNativeCapture : startCapture)();
     } catch (err) {
       logAudioEvent("scribe", `mic capture unavailable: ${err instanceof Error ? err.message : err}`);
       console.error("Scribe mic capture unavailable:", err);
