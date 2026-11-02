@@ -27,6 +27,9 @@ const CONFIRM_POLL_MS = 1500;
 const CONFIRM_TIMEOUT_MS = 15000;
 
 function dayFromNow(days: number): string {
+  // The build-time prerender would bake in the build day's date, which goes
+  // stale in search snippets; crawlers get a relative label instead.
+  if (typeof document === "undefined") return `Day ${days}`;
   const date = new Date();
   date.setDate(date.getDate() + days);
   return date.toLocaleDateString(undefined, { month: "long", day: "numeric" });

@@ -21,7 +21,7 @@
     "dev": "vite",
     "dev:host": "vite --host",
     "dev:vercel": "vercel dev",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/prerender.mjs",
     "build:staging": "tsc -b && vite build --mode staging",
     "build:prod": "tsc -b && vite build --mode prod",
     "ios:local": "tsc -b && VITE_WEB_ORIGIN=http://$(ipconfig getifaddr en0):3000 vite build --mode development && cap sync ios",

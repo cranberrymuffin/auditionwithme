@@ -15,6 +15,28 @@ type SeoProps = {
   noindex?: boolean;
 };
 
+export type ResolvedSeo = {
+  title: string;
+  description: string;
+  url: string;
+  image: string;
+  noindex: boolean;
+};
+
+function resolveSeo({ title, description, path, image, noindex = false }: SeoProps): ResolvedSeo {
+  return {
+    title: path === "/" ? title : `${title} | ${SITE_NAME}`,
+    description,
+    url: `${SITE_URL}${path}`,
+    image: `${SITE_URL}${image ?? DEFAULT_OG_IMAGE}`,
+    noindex,
+  };
+}
+
+/** Filled during the build-time prerender (src/entry-server.tsx), where
+ * effects never run, so it can write each page's head tags into its HTML. */
+export const ssrSeo: { current: ResolvedSeo | null } = { current: null };
+
 function setMetaByName(name: string, content: string) {
   let tag = document.querySelector(`meta[name="${name}"]`);
   if (!tag) {
@@ -59,10 +81,18 @@ export function useSeo({
   image,
   noindex = false,
 }: SeoProps) {
+  if (typeof document === "undefined") {
+    ssrSeo.current = resolveSeo({ title, description, path, image, noindex });
+  }
+
   useEffect(() => {
-    const url = `${SITE_URL}${path}`;
-    const ogImage = `${SITE_URL}${image ?? DEFAULT_OG_IMAGE}`;
-    const fullTitle = path === "/" ? title : `${title} | ${SITE_NAME}`;
+    const { title: fullTitle, url, image: ogImage } = resolveSeo({
+      title,
+      description,
+      path,
+      image,
+      noindex,
+    });
 
     document.title = fullTitle;
 

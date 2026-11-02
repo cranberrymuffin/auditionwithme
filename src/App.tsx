@@ -25,9 +25,11 @@ import NavigationFocus, { SkipLink } from "./components/NavigationFocus";
 import NativeLinkHandler from "./components/NativeLinkHandler";
 import { IS_BETA_TESTING } from "./lib/beta";
 
-function App() {
+/** Everything inside the router, shared by the browser app and the
+ * build-time prerender (src/entry-server.tsx), which uses a StaticRouter. */
+export function AppRoutes() {
   return (
-    <BrowserRouter>
+    <>
       <SkipLink />
       <NavigationFocus />
       <NativeLinkHandler />
@@ -110,6 +112,14 @@ function App() {
           {IS_BETA_TESTING && <FeedbackGate />}
         </AuthProvider>
       </ToastProvider>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
       <Analytics />
     </BrowserRouter>
   );

@@ -98,6 +98,23 @@ function localVercelApi(): Plugin {
   };
 }
 
+// Emits a copy of the built index.html as app.html: the blank SPA shell that
+// every non-prerendered route is served (vercel.json rewrite, service worker
+// navigation fallback). scripts/prerender.mjs later overwrites index.html
+// with the prerendered home page, so the shell needs its own file.
+function appShell(): Plugin {
+  return {
+    name: "app-shell",
+    apply: "build",
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      const index = bundle["index.html"];
+      if (index?.type !== "asset") return;
+      this.emitFile({ type: "asset", fileName: "app.html", source: index.source });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   Object.assign(process.env, loadEnv(mode, process.cwd(), ""));
 
@@ -106,6 +123,7 @@ export default defineConfig(({ mode }) => {
       localVercelApi(),
       react(),
       tailwindcss(),
+      appShell(),
       VitePWA({
         registerType: "autoUpdate",
         injectRegister: false,
@@ -149,6 +167,10 @@ export default defineConfig(({ mode }) => {
           skipWaiting: true,
           clientsClaim: true,
           globPatterns: ["**/*.{js,css,html,woff,woff2,svg,ico}"],
+          // index.html is replaced by the prerendered home page after this
+          // manifest is written; the shell navigations need is app.html.
+          globIgnores: ["index.html"],
+          navigateFallback: "app.html",
           // Let real files (sitemap.xml, robots.txt, .well-known/*) reach
           // the network instead of being answered with the SPA shell.
           navigateFallbackDenylist: [
