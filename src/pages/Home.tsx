@@ -79,7 +79,7 @@ export default function Home() {
       }}
     >
       <Seo
-        title="AuditionWithMe — A rehearsal partner for actors"
+        title="AuditionWithMe | A rehearsal partner for actors"
         description={
           IS_BETA_TESTING
             ? "Free during beta."
