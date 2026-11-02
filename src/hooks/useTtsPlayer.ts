@@ -7,6 +7,8 @@ import { loadCoachTakeBlob } from "../lib/coachTakeStore";
 import { toBase64, toPcm16kMono } from "../lib/pcm";
 import { clampCharacterVolume } from "../lib/characterVolume";
 import { routeToPreferredSpeaker } from "../lib/mediaDevices";
+import { IS_NATIVE } from "../lib/platform";
+import { makeUseNativeTtsPlayer } from "./useTtsPlayer.native";
 
 export { cacheKey } from "../lib/ttsCacheKey";
 export type { TtsIntensity, TtsLine } from "../lib/ttsCacheKey";
@@ -404,7 +406,7 @@ function speakWithBrowserVoice(
  * prefetches the next AI line while the current step plays to keep auto-flow
  * seamless.
  */
-export function useTtsPlayer(options?: {
+function useWebTtsPlayer(options?: {
   /** Saved script whose live-fetched lines get stored on-device. */
   scriptId?: string | null;
   /** Called whenever a line has to come from (or wait on) the network
@@ -693,3 +695,9 @@ export function useTtsPlayer(options?: {
     getAudioContext,
   };
 }
+
+/** The scene-partner player: native in the iOS app (useTtsPlayer.native.ts),
+ * the web player above everywhere else. Chosen once, at load. */
+export const useTtsPlayer: typeof useWebTtsPlayer = IS_NATIVE
+  ? makeUseNativeTtsPlayer({ getBlob, speakWithBrowserVoice, describeError })
+  : useWebTtsPlayer;
