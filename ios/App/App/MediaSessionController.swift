@@ -228,9 +228,27 @@ final class MediaSessionController {
     @objc private func playbackEngineConfigurationChanged() {
         DispatchQueue.main.async { [self] in
             guard playing, !isCapturing, let engine = playbackEngine, !engine.isRunning else { return }
+            endInterruptedLine(reason: "line cut off by a route change")
             try? engine.start()
             report(reason: "playback engine restarted after a route change")
+            scheduleIdleStop()
         }
+    }
+
+    /// An engine that stops underneath a playing line (a route change, a
+    /// call, Siri) leaves its player stopped, and the line's completion never
+    /// comes — the rehearsal would wait on it forever. So the line is ended
+    /// here instead: stopped for good, and reported as finished, so the
+    /// scene moves on to the actor's turn.
+    private func endInterruptedLine(reason: String) {
+        guard playing else { return }
+        let token = lineToken
+        lineToken += 1 // a late completion from the stopped player is stale
+        captureChain?.player.stop()
+        playbackChain?.player.stop()
+        playing = false
+        report(reason: reason)
+        onLineEnded?(token)
     }
 
     private func scheduleIdleStop() {
@@ -381,13 +399,24 @@ final class MediaSessionController {
         DispatchQueue.main.async { [self] in
             guard !leases.isEmpty, let engine = captureEngine,
                   (note.object as? AVAudioEngine) === engine, !engine.isRunning else { return }
+            endInterruptedLine(reason: "line cut off by a configuration change")
             restartCapture(engine, reason: "capture engine restarted after a configuration change")
         }
     }
 
     @objc private func interrupted(_ note: Notification) {
         guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-              AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        if type == .began {
+            // iOS has already stopped the engine for the call or Siri.
+            DispatchQueue.main.async { [self] in
+                endInterruptedLine(reason: "line cut off by an interruption")
+                if !isCapturing, playbackEngine != nil {
+                    update(reason: "playback interrupted") { $0.mode = .idle }
+                }
+            }
+            return
+        }
         DispatchQueue.main.async { [self] in
             // Only a live capture comes back; an idle app stays idle.
             guard !leases.isEmpty, let engine = captureEngine, !engine.isRunning else { return }
