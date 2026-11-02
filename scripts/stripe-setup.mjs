@@ -5,7 +5,7 @@
 // by lookup key, so a second run just prints the existing one.
 //
 // Usage:
-//   node --env-file=.env.local scripts/stripe-setup.mjs            # sandbox
+//   node --env-file=.env.development.local scripts/stripe-setup.mjs            # sandbox
 //   STRIPE_SECRET_KEY=sk_live_... node scripts/stripe-setup.mjs    # production
 //
 // Optionally creates the webhook endpoint too (production only — locally,

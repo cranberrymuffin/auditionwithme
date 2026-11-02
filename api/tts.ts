@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { handleCors } from "./_cors.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 import { sanitizePerformance } from "./_direction.js";
 import {
@@ -120,6 +121,7 @@ export function v3Stability(bigDelivery: boolean, emotion = 0): number {
 const lastSeenConcurrency: ConcurrencyReading = { current: 0, max: 3, updatedAt: 0 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

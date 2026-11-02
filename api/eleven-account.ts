@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { fetchElevenLabs, fetchVoices } from "./_elevenlabs.js";
 import { requireAuth, requireAuthRateLimited } from "./_entitlement.js";
+import { handleCors } from "./_cors.js";
 
 async function listVoices(res: VercelResponse, apiKey: string) {
   try {
@@ -55,6 +56,7 @@ async function mintScribeToken(res: VercelResponse, apiKey: string) {
 // split by HTTP method, so no action param is needed. Keeps the function
 // count under Vercel Hobby's 12-per-deployment cap.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

@@ -1,13 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import { IS_NATIVE } from './lib/platform'
 import './index.css'
 import App from './App.tsx'
 
 // The product uses one deliberate, fixed dark palette throughout.
 document.documentElement.classList.add('dark')
 
-if ('serviceWorker' in navigator) {
+// The iOS app ships its bundle inside the binary; a service worker there would
+// only cache a stale copy of what's already local.
+if (!IS_NATIVE && 'serviceWorker' in navigator) {
   // autoUpdate silently installs+activates a new SW as soon as one is found;
   // reload once it takes control so the open tab actually gets the new build.
   let reloading = false

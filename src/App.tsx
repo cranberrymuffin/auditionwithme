@@ -22,6 +22,7 @@ import ToastProvider from "./components/ToastProvider";
 import FeedbackGate from "./components/FeedbackGate";
 import { AuthProvider } from "./contexts/AuthContext";
 import NavigationFocus, { SkipLink } from "./components/NavigationFocus";
+import NativeLinkHandler from "./components/NativeLinkHandler";
 import { IS_BETA_TESTING } from "./lib/beta";
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
     <BrowserRouter>
       <SkipLink />
       <NavigationFocus />
+      <NativeLinkHandler />
       <ToastProvider>
         <AuthProvider>
           <Routes>

@@ -58,7 +58,7 @@ const ONLY = argValue("--only")?.split(",") as Strategy[] | undefined;
 const FILE_FILTER = argValue("--file");
 const strategies = STRATEGIES.filter((s) => !ONLY || ONLY.includes(s));
 if (strategies.some((s) => s !== "rules") && !process.env.ANTHROPIC_API_KEY) {
-  console.error("ANTHROPIC_API_KEY is not set (npm script loads .env.local).");
+  console.error("ANTHROPIC_API_KEY is not set (npm script loads .env.development.local).");
   process.exit(1);
 }
 

@@ -6,6 +6,7 @@ import Modal from "../components/Modal";
 import PasswordField from "../components/PasswordField";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { authRedirectOrigin } from "../lib/platform";
 import { apiFetch } from "../lib/api";
 import { friendlyAuthError } from "../lib/authErrors";
 import { useToast } from "../lib/toast";
@@ -107,7 +108,7 @@ function ChangeEmail({ email, pendingEmail }: { email: string; pendingEmail: str
     }
     const { error: updateError } = await supabase.auth.updateUser(
       { email: target },
-      { emailRedirectTo: `${window.location.origin}/account/settings` },
+      { emailRedirectTo: `${authRedirectOrigin()}/account/settings` },
     );
     setSubmitting(false);
     if (updateError) {
@@ -202,7 +203,7 @@ function ChangePassword({ email }: { email: string }) {
     setError(null);
     setResetState("sending");
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${authRedirectOrigin()}/reset-password`,
     });
     if (resetError) {
       setResetState("idle");

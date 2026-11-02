@@ -523,6 +523,7 @@ function PracticeFlow({
           navigate("/", { replace: true });
           return;
         }
+        console.error("Script parsing failed:", err);
         setError(err instanceof Error ? err.message : "An error occurred");
       } finally {
         setLoading(false);

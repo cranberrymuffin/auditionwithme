@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireAuth, issueRehearsalGrant } from "./_entitlement.js";
+import { handleCors } from "./_cors.js";
 
 // Called once per upload, before any parse-script/parse-pages calls. Issues
 // a signed grant that every downstream call for this same upload (parallel
 // scanned-PDF chunks, retries, the bilingual re-parse) reuses read-only —
 // see api/_entitlement.ts and the plan's Decision 2.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

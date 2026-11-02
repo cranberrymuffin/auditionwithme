@@ -4,6 +4,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sanitizePerformance } from "./_direction.js";
 import { fetchVoices } from "./_elevenlabs.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
+import { handleCors } from "./_cors.js";
 
 const client = new Anthropic();
 
@@ -432,6 +433,7 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
 // Combines four Claude-driven casting/directing/rehearsal steps behind one
 // route — keeps the function count under Vercel Hobby's 12-per-deployment cap.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
