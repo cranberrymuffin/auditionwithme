@@ -81,6 +81,10 @@ interface NativeMediaPlugin {
   keepTake(options: { path: string; tapeId: string; fileName: string }): Promise<RecordedTake>;
   deleteTakeFile(options: { path: string }): Promise<void>;
   fileSize(options: { path: string }): Promise<{ size: number }>;
+  /** Every file in the tapes folder; `modifiedAt` is ms since 1970. */
+  listTakeFiles(): Promise<{ files: { name: string; size: number; modifiedAt: number }[] }>;
+  /** The phone's free and total space — what limits how many more takes fit. */
+  storageInfo(): Promise<{ freeBytes: number; totalBytes: number }>;
 
   addListener(
     event: "mediaState",

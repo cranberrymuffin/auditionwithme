@@ -1,7 +1,9 @@
 // How much of this browser's on-device storage the app is using, and how
 // much is left. Scripts, self-tapes, reader audio, and coached takes all live in IndexedDB
 // (see localDb.ts), so the browser's per-origin quota is the real ceiling on
-// how much more an actor can save — not anything on our side.
+// how much more an actor can save — not anything on our side. In the iOS
+// app, takes are files instead (selfTapeStore.ts), so the ceiling is the
+// phone's own free space.
 import {
   COACH_TAKES_STORE,
   READER_AUDIO_STORE,
@@ -10,6 +12,8 @@ import {
   SELF_TAPES_STORE,
   withStore,
 } from "./localDb";
+import { IS_NATIVE } from "./platform";
+import { NativeMedia } from "./native/nativeMedia";
 
 export type StorageUsage = {
   /** Bytes of this user's own scripts, script PDFs, reader audio, coached
@@ -19,12 +23,14 @@ export type StorageUsage = {
    * counts the app's own offline copy (the PWA precache and image cache),
    * which shares the same quota, so free space comes from that total. */
   freeBytes: number;
+  /** The origin's quota in a browser; the phone's capacity in the iOS app. */
   quotaBytes: number;
 };
 
 /** Usage for `userId`, or null where the browser doesn't report a quota
  * (StorageManager missing, or an estimate with no quota). */
 export async function getStorageUsage(userId: string): Promise<StorageUsage | null> {
+  if (IS_NATIVE) return getNativeStorageUsage(userId);
   if (typeof navigator === "undefined" || !navigator.storage?.estimate) return null;
   try {
     const [{ usage, quota }, auditionBytes] = await Promise.all([
@@ -35,6 +41,20 @@ export async function getStorageUsage(userId: string): Promise<StorageUsage | nu
     return { auditionBytes, freeBytes: Math.max(0, quota - (usage ?? 0)), quotaBytes: quota };
   } catch (err) {
     console.warn("Couldn't estimate storage usage:", err);
+    return null;
+  }
+}
+
+async function getNativeStorageUsage(userId: string): Promise<StorageUsage | null> {
+  try {
+    const [{ freeBytes, totalBytes }, auditionBytes] = await Promise.all([
+      NativeMedia.storageInfo(),
+      getAuditionBytes(userId),
+    ]);
+    if (!totalBytes) return null;
+    return { auditionBytes, freeBytes, quotaBytes: totalBytes };
+  } catch (err) {
+    console.warn("Couldn't read the phone's storage:", err);
     return null;
   }
 }
@@ -50,7 +70,9 @@ async function getAuditionBytes(userId: string): Promise<number> {
     getAll<{ scriptId: string; file: File }>(SCRIPT_PDFS_STORE),
     getAll<{ scriptId: string; size: number }>(READER_AUDIO_STORE),
     getAll<{ scriptId: string; size: number }>(COACH_TAKES_STORE),
-    getAll<{ userId: string; blob: Blob }>(SELF_TAPES_STORE),
+    // A browser take's video is its blob; an iOS app take's is a file whose
+    // size is on the record.
+    getAll<{ userId: string; blob?: Blob; size?: number }>(SELF_TAPES_STORE),
   ]);
   const mine = scripts.filter((script) => script.userId === userId);
   const scriptIds = new Set(mine.map((script) => script.id));
@@ -65,7 +87,7 @@ async function getAuditionBytes(userId: string): Promise<number> {
     .reduce((sum, record) => sum + record.size, 0);
   const tapeBytes = tapes
     .filter((record) => record.userId === userId)
-    .reduce((sum, record) => sum + record.blob.size, 0);
+    .reduce((sum, record) => sum + (record.blob?.size ?? record.size ?? 0), 0);
   return scriptBytes + pdfBytes + audioBytes + tapeBytes;
 }
 

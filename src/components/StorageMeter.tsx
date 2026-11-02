@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { listTapeSizes } from "../lib/selfTapeStore";
+import { listTapeSizes, pruneOrphanTakeFiles } from "../lib/selfTapeStore";
+import { IS_NATIVE } from "../lib/platform";
 import { formatBytes, getStorageUsage, type StorageUsage } from "../lib/storageUsage";
 
 // Below this many average-sized takes' worth of room (or this fraction of
@@ -24,9 +25,16 @@ export default function StorageMeter({
 
   useEffect(() => {
     let active = true;
-    void getStorageUsage(userId).then((next) => {
-      if (active) setUsage(next);
-    });
+    // In the iOS app, clear out take files nothing points at before
+    // measuring, so they don't eat free space the meter can't explain.
+    const pruned = IS_NATIVE
+      ? pruneOrphanTakeFiles().catch((err) => console.warn("Couldn't tidy take files:", err))
+      : Promise.resolve();
+    void pruned
+      .then(() => getStorageUsage(userId))
+      .then((next) => {
+        if (active) setUsage(next);
+      });
     listTapeSizes(userId)
       .then((sizes) => {
         if (!active) return;

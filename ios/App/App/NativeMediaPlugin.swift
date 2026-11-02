@@ -45,6 +45,8 @@ public class NativeMediaPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "keepTake", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteTakeFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "fileSize", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "listTakeFiles", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "storageInfo", returnType: CAPPluginReturnPromise),
     ]
 
     private let media = MediaSessionController()
@@ -374,6 +376,10 @@ public class NativeMediaPlugin: CAPPlugin, CAPBridgedPlugin {
             let destination = try Self.tapesDir().appendingPathComponent(fileName)
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.moveItem(at: URL(fileURLWithPath: path), to: destination)
+            // A move keeps the recording's own timestamp, which can be hours
+            // old (a take finished by backgrounding). Stamp it now, so the
+            // web view's orphan cleanup times its grace period from the keep.
+            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
             call.resolve(Self.describe(destination))
         } catch {
             call.reject(error.localizedDescription)
@@ -389,5 +395,47 @@ public class NativeMediaPlugin: CAPPlugin, CAPBridgedPlugin {
         let path = call.getString("path") ?? ""
         let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
         call.resolve(["size": size])
+    }
+
+    /// `{ files: [{ name, size, modifiedAt }] }`: every file in the tapes
+    /// folder, so the web view can find ones no take points at any more.
+    /// `modifiedAt` is milliseconds since 1970.
+    @objc func listTakeFiles(_ call: CAPPluginCall) {
+        do {
+            let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: Self.tapesDir(), includingPropertiesForKeys: keys
+            )
+            let files: [[String: Any]] = urls.compactMap { url in
+                guard let values = try? url.resourceValues(forKeys: Set(keys)),
+                      values.isRegularFile == true else { return nil }
+                return [
+                    "name": url.lastPathComponent,
+                    "size": values.fileSize ?? 0,
+                    "modifiedAt": (values.contentModificationDate?.timeIntervalSince1970 ?? 0) * 1000,
+                ]
+            }
+            call.resolve(["files": files])
+        } catch {
+            call.reject(error.localizedDescription)
+        }
+    }
+
+    /// `{ freeBytes, totalBytes }` for the device. Takes are files, so the
+    /// phone's free space, not the web view's storage quota, is what limits
+    /// how many more fit. Free space is what iOS would make available for
+    /// something the user asked to save (it can clear caches to get there).
+    @objc func storageInfo(_ call: CAPPluginCall) {
+        do {
+            let values = try URL(fileURLWithPath: NSHomeDirectory()).resourceValues(forKeys: [
+                .volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey,
+            ])
+            call.resolve([
+                "freeBytes": values.volumeAvailableCapacityForImportantUsage ?? 0,
+                "totalBytes": values.volumeTotalCapacity ?? 0,
+            ])
+        } catch {
+            call.reject(error.localizedDescription)
+        }
     }
 }

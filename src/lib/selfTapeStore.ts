@@ -162,6 +162,37 @@ export async function deleteTape(id: string): Promise<void> {
   if (file) await NativeMedia.deleteTakeFile({ path: file.path }).catch(() => {});
 }
 
+// A file this new may belong to a take whose row is still being saved
+// (keepTake moves the file, then saveTapeFile writes the row).
+const ORPHAN_MIN_AGE_MS = 10 * 60 * 1000;
+
+/** iOS app only: deletes files in the tapes folder that no take points at —
+ * left behind when a take's row failed to save after its file was kept.
+ * Checks every user's rows, since they share the device's tapes folder.
+ * Returns the bytes freed. */
+export async function pruneOrphanTakeFiles(): Promise<number> {
+  const [records, { files }, dir] = await Promise.all([
+    withStore<TapeRecord[]>(SELF_TAPES_STORE, "readonly", (store) => store.getAll()),
+    NativeMedia.listTakeFiles(),
+    NativeMedia.getTapesDir(),
+  ]);
+  const referenced = new Set(
+    records.map((record) => record.fileName ?? record.filePath?.split("/").pop()).filter(Boolean),
+  );
+  // The rows are the only thing vouching for a file, and they live in the web
+  // view's storage, which iOS can wipe when the phone is low on space. If no
+  // row points at any file here, that's far likelier to be lost rows than a
+  // folder of leftovers — and deleting would take every video with them.
+  if (!files.some((file) => referenced.has(file.name))) return 0;
+  const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
+  const orphans = files.filter((file) => !referenced.has(file.name) && file.modifiedAt < cutoff);
+  await Promise.all(
+    orphans.map((file) => NativeMedia.deleteTakeFile({ path: `${dir.path}/${file.name}` }).catch(() => {})),
+  );
+  if (orphans.length) console.info(`Deleted ${orphans.length} take files no take pointed at`);
+  return orphans.reduce((sum, file) => sum + file.size, 0);
+}
+
 export async function deleteTapesForScript(scriptId: string): Promise<string[]> {
   const all = await withStore<TapeRecord[]>(SELF_TAPES_STORE, "readonly", (store) =>
     store.getAll(),
