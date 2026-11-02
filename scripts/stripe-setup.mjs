@@ -11,7 +11,7 @@
 // Optionally creates the webhook endpoint too (production only — locally,
 // `stripe listen` forwards events instead):
 //   STRIPE_SECRET_KEY=sk_live_... node scripts/stripe-setup.mjs \
-//     --webhook https://auditionwithme.com/api/stripe-webhook
+//     --webhook https://www.auditionwithme.com/api/stripe-webhook
 
 import Stripe from "stripe";
 
