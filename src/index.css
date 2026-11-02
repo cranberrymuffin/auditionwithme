@@ -6978,3 +6978,19 @@ header .flow-back:hover {
 .pricing-consent .consent-check:last-child {
   margin-bottom: 0;
 }
+
+/* iOS app: the camera is a native layer drawn over the preview box, so the
+   labels that float over the web <video> (REC, tips) sit just below it, and
+   the box carries the corner radius the native layer copies. */
+.self-tape-video.is-native-preview {
+  overflow: visible;
+  background: transparent;
+}
+.self-tape-video.is-native-preview .self-tape-preview {
+  border-radius: 8px;
+}
+.self-tape-video.is-native-preview .self-tape-rec,
+.self-tape-video.is-native-preview .self-tape-hint {
+  position: static;
+  margin-top: 8px;
+}

@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSelfTapeRecorder } from "./useSelfTapeRecorder";
-import { saveTape } from "../lib/selfTapeStore";
+import { extensionForMimeType, saveTape, saveTapeFile } from "../lib/selfTapeStore";
+import { NativeMedia } from "../lib/native/nativeMedia";
 import { deviceClass, type TakeMetrics } from "../lib/takeMetrics";
 import { notifyAuditionClosed } from "../lib/feedbackGate";
 import { useToast } from "../lib/toast";
@@ -14,12 +15,16 @@ import { useToast } from "../lib/toast";
  */
 export function useSelfTapeSession(scriptId: string | null, role: string) {
   const { user } = useAuth();
-  const { status, stream, error, cameraInterrupted, zoom, setZoom, requestCamera, switchDevice, startRecording, pause, resume, stop } =
-    useSelfTapeRecorder();
+  const {
+    status, stream, error, cameraInterrupted, zoom, setZoom, requestCamera, switchDevice, startRecording, pause, resume, stop,
+    videoSize, nativePreview, endedInBackground,
+  } = useSelfTapeRecorder();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const statusRef = useRef(status);
   statusRef.current = status;
+  const endedInBackgroundRef = useRef(endedInBackground);
+  endedInBackgroundRef.current = endedInBackground;
 
   /** Stops capture and saves the take straight to the local store, resolving
    * with its id once that write lands — no upload, no network round trip.
@@ -29,14 +34,18 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
    * rehearsal telemetry) is saved with the take and sent along with its
    * feedback later. */
   const finish = useCallback(async (metrics?: TakeMetrics): Promise<string | null> => {
-    const hadTake = statusRef.current === "recording" || statusRef.current === "paused";
+    // iOS app: going to the background finishes the take natively, leaving
+    // the recorder idle with the take waiting for stop().
+    const hadTake =
+      statusRef.current === "recording" || statusRef.current === "paused" || endedInBackgroundRef.current;
     setSaving(true);
     try {
-      // Read before stop(), which ends the camera track.
-      const video = stream?.getVideoTracks()[0]?.getSettings();
-      const blob = await stop();
+      // Read before stop(), which ends the camera track (web); the native
+      // recorder reports its camera's size itself.
+      const video = videoSize ?? stream?.getVideoTracks()[0]?.getSettings();
+      const take = await stop();
       if (!hadTake) return null;
-      if (!blob || blob.size === 0) {
+      if (!take || take.size === 0) {
         toast("That take didn't record. Please try again.");
         return null;
       }
@@ -49,7 +58,18 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
           videoWidth: video?.width ?? null,
           videoHeight: video?.height ?? null,
         });
-        await saveTape({ id, userId: user.id, scriptId, role, mimeType: blob.type }, blob, metricsRow);
+        if (take instanceof Blob) {
+          await saveTape({ id, userId: user.id, scriptId, role, mimeType: take.type }, take, metricsRow);
+        } else {
+          // Moved from the temp folder to where takes are kept, under the
+          // name the share sheet will save it as.
+          const kept = await NativeMedia.keepTake({
+            path: take.path,
+            tapeId: id,
+            fileName: `self-tape-${new Date().toISOString().slice(0, 10)}-${id.slice(0, 8)}.${extensionForMimeType(take.mimeType)}`,
+          });
+          await saveTapeFile({ id, userId: user.id, scriptId, role, mimeType: take.mimeType }, kept, metricsRow);
+        }
       } catch (saveError) {
         console.error("Failed to save self-tape locally:", saveError);
         toast("Your self-tape couldn't be saved. Please try again.");
@@ -67,7 +87,10 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
     } finally {
       setSaving(false);
     }
-  }, [stop, stream, user, scriptId, role, toast]);
+  }, [stop, stream, videoSize, user, scriptId, role, toast]);
 
-  return { user, status, stream, error, cameraInterrupted, zoom, setZoom, saving, requestCamera, switchDevice, startRecording, pause, resume, finish };
+  return {
+    user, status, stream, error, cameraInterrupted, zoom, setZoom, saving, requestCamera, switchDevice, startRecording, pause, resume, finish,
+    nativePreview, endedInBackground,
+  };
 }

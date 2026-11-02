@@ -69,6 +69,8 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     pause: pauseRecording,
     resume: resumeRecording,
     finish: finishRecording,
+    nativePreview,
+    endedInBackground,
   } = useSelfTapeSession(scriptSaved ? scriptId : null, selectedRole);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -122,7 +124,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   // than a short opening line, so if it only spun up at "active" the actor
   // could start speaking before the mic was actually being transcribed.
   const scribeWarm = startPhase === "countdown" || startPhase === "active";
-  const { matchedWordCount, listening, lineCompletionRef } = useScribeTracking(isMyLine && !paused && scribeWarm, currentStep?.verbalLine ?? "", languageCode, cameraStream);
+  // The mic line tracking listens to: the recorder's stream on the web; in
+  // the iOS app, the native mic, live while the recorder holds the camera.
+  const nativeMicOn = recorderStatus === "ready" || recorderStatus === "recording" || recorderStatus === "paused";
+  const trackingMic = nativePreview ? (nativeMicOn ? "native" : null) : cameraStream;
+  const { matchedWordCount, listening, lineCompletionRef } = useScribeTracking(isMyLine && !paused && scribeWarm, currentStep?.verbalLine ?? "", languageCode, trackingMic);
 
   // Nothing to record if the user isn't reading a role — just listening to
   // the scene doesn't need a camera or a self-tape. Reading a role opens the
@@ -410,6 +416,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     void endRehearsal();
   }, [stop, endRehearsal, recording]);
 
+  // iOS app: going to the background finished the take natively and turned
+  // the camera and mic off. End the take so it's saved like any other.
+  useEffect(() => {
+    if (endedInBackground && startPhase === "active" && !finishedRef.current) stopRecordingManually();
+  }, [endedInBackground, startPhase, stopRecordingManually]);
+
   // Ending a take early asks first — the scene pauses meanwhile, and picks
   // back up if the actor keeps going.
   const [confirmingStop, setConfirmingStop] = useState(false);
@@ -512,6 +524,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
         onStart={() => beginRehearsal(willRecord)}
         onPracticeRun={willRecord ? () => beginRehearsal(false) : undefined}
         onBack={onBack}
+        nativePreview={nativePreview}
       />
     );
   }
@@ -568,6 +581,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
             practiceRun={!recording}
             onTogglePause={togglePause}
             onStop={requestStop}
+            nativePreview={nativePreview}
           />
         )}
 

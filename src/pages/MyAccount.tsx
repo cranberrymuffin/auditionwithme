@@ -4,11 +4,14 @@ import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import StorageMeter from "../components/StorageMeter";
 import { useAuth } from "../contexts/AuthContext";
+import { Share } from "@capacitor/share";
 import { forgetSelfTapeUrl, getSelfTapeBlob, getSelfTapeUrl } from "../lib/selfTapeUrl";
+import { IS_NATIVE } from "../lib/platform";
 import {
   deleteTape as deleteTapeRecord,
   deleteTapesForScript,
   extensionForMimeType,
+  getTapeFile,
   listTapes,
 } from "../lib/selfTapeStore";
 import {
@@ -229,6 +232,21 @@ export default function MyAccount() {
     if (downloadingRef.current) return;
     downloadingRef.current = true;
     try {
+      // The iOS app keeps a natively recorded take as a real .mp4 on the
+      // phone: hand that file to the share sheet (Save Video, Save to
+      // Files, AirDrop). The web view can't download at all, and reading
+      // the video back into a Blob first outlasts the tap the share sheet
+      // needs.
+      const file = IS_NATIVE ? await getTapeFile(tape.id) : null;
+      if (file) {
+        try {
+          await Share.share({ files: [`file://${file.path}`] });
+        } catch (shareErr) {
+          // Closing the sheet without picking anything isn't a failure.
+          if (!/cancel/i.test((shareErr as Error).message ?? "")) throw shareErr;
+        }
+        return;
+      }
       // getSelfTapeBlob shares its cache with ensureTapeUrl, which already
       // kicked off (and by click time, almost always finished) this same
       // lookup when the tile/modal opened — so this resolves as an

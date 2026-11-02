@@ -53,19 +53,6 @@ export function makeUseNativeTtsPlayer({ getBlob, speakWithBrowserVoice, describ
     // that was stopped or replaced) never matches.
     const currentRef = useRef<{ token: number; onEnded?: () => void } | null>(null);
 
-    // Phase 1 interim: the self-tape recorder is still the web one, and it
-    // taps the player's audio through a Web Audio context. Native lines
-    // don't pass through it, so this tap is silent until native recording
-    // (phase 3) mixes the reader in natively.
-    const tapRef = useRef<{ context: AudioContext; destination: MediaStreamAudioDestinationNode } | null>(null);
-    const ensureTap = useCallback(() => {
-      if (!tapRef.current) {
-        const context = new AudioContext();
-        tapRef.current = { context, destination: context.createMediaStreamDestination() };
-      }
-      return tapRef.current;
-    }, []);
-
     useEffect(() => {
       const listener = NativeMedia.addListener("lineEnded", ({ token }) => {
         const current = currentRef.current;
@@ -117,6 +104,13 @@ export function makeUseNativeTtsPlayer({ getBlob, speakWithBrowserVoice, describ
           opts?.onPlaying?.();
         } catch (err) {
           if (opts?.signal?.aborted) return;
+          // iOS won't start audio in the background (the take is being
+          // ended and saved then); a browser-voice fallback would only try
+          // the same thing.
+          if (document.hidden) {
+            logAudioEvent("play", "native playLine refused in the background; skipped");
+            return;
+          }
           logAudioEvent("play", `native playLine failed: ${describeError(err, "unknown")} — falling back`);
           opts?.onFallback?.(describeError(err, "Audio playback failed"));
           return speakWithBrowserVoice(line.text, opts);
@@ -142,17 +136,13 @@ export function makeUseNativeTtsPlayer({ getBlob, speakWithBrowserVoice, describ
     /** Native audio has no autoplay gate; nothing to unlock. */
     const unlock = useCallback(() => {}, []);
 
-    const getTapStream = useCallback(() => ensureTap().destination.stream, [ensureTap]);
-    const getAudioContext = useCallback(() => ensureTap().context, [ensureTap]);
+    // The native recorder mixes the scene partner into the take itself, so
+    // there's no Web Audio tap or context to hand it (and no stray context
+    // to unsettle the audio session the native engine owns).
+    const getTapStream = useCallback((): MediaStream | null => null, []);
+    const getAudioContext = useCallback((): AudioContext | null => null, []);
 
-    useEffect(
-      () => () => {
-        stop();
-        void tapRef.current?.context.close();
-        tapRef.current = null;
-      },
-      [stop],
-    );
+    useEffect(() => stop, [stop]);
 
     return { play, prefetch, load, stop, setPlaybackRate, setVolume, getTapStream, unlock, getAudioContext };
   };

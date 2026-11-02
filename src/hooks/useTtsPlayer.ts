@@ -698,6 +698,13 @@ function useWebTtsPlayer(options?: {
 
 /** The scene-partner player: native in the iOS app (useTtsPlayer.native.ts),
  * the web player above everywhere else. Chosen once, at load. */
-export const useTtsPlayer: typeof useWebTtsPlayer = IS_NATIVE
+export type TtsPlayer = Omit<ReturnType<typeof useWebTtsPlayer>, "getTapStream" | "getAudioContext"> & {
+  /** The web player's audio as a stream, for the web self-tape recorder;
+   * null in the iOS app, which mixes the take natively. */
+  getTapStream: () => MediaStream | null;
+  getAudioContext: () => AudioContext | null;
+};
+
+export const useTtsPlayer: (options?: Parameters<typeof useWebTtsPlayer>[0]) => TtsPlayer = IS_NATIVE
   ? makeUseNativeTtsPlayer({ getBlob, speakWithBrowserVoice, describeError })
   : useWebTtsPlayer;

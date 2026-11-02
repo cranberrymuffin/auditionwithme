@@ -10,6 +10,9 @@ import {
   type DeviceChoice,
 } from "../../lib/mediaDevices";
 import SetupStep from "./SetupStep";
+import NativeCameraPreview from "./NativeCameraPreview";
+import { NativeMedia } from "../../lib/native/nativeMedia";
+import { IS_NATIVE } from "../../lib/platform";
 
 type RecorderStatus =
   | "idle"
@@ -107,6 +110,39 @@ function useDevices(refreshKey: unknown) {
   }, [refreshKey]);
   return devices;
 }
+
+/** useDevices in the iOS app: the phone's cameras and audio inputs, read
+ * once the camera is on. The speaker follows the system's route there. */
+function useNativeDevices(cameraOn: unknown) {
+  const [devices, setDevices] = useState<{
+    cameras: DeviceOption[];
+    mics: DeviceOption[];
+    speakers: DeviceOption[];
+    speakerFound: boolean;
+  }>({ cameras: [], mics: [], speakers: [], speakerFound: true });
+  useEffect(() => {
+    if (!cameraOn) return;
+    let active = true;
+    void NativeMedia.listDevices()
+      .then(({ cameras, mics }) => {
+        if (!active) return;
+        const systemDefaultOption = { id: "", label: "System default" };
+        setDevices({
+          cameras: [systemDefaultOption, ...cameras],
+          mics: [systemDefaultOption, ...mics],
+          speakers: [],
+          speakerFound: true,
+        });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [cameraOn]);
+  return devices;
+}
+
+const useDeviceList = IS_NATIVE ? useNativeDevices : useDevices;
 
 /** The picker's value: the remembered device if it's listed, else the
  * system default. */
@@ -208,6 +244,32 @@ function MicLevel({
   );
 }
 
+/** MicLevel in the iOS app, from the native engine's level readings. */
+function NativeMicLevel() {
+  const barsRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const listener = NativeMedia.addListener("micLevel", ({ rms }) => {
+      // The engine reports the line tracker's 3x-boosted level; this meter
+      // reads the raw one, as MicLevel does.
+      const level = Math.min(1, rms / 3 / MIC_FULL_SCALE);
+      const lit = Math.round(level * MIC_METER_BARS);
+      barsRef.current?.querySelectorAll("i").forEach((bar, i) => {
+        bar.classList.toggle("is-lit", i < lit);
+      });
+    });
+    return () => {
+      void listener.then((handle) => handle.remove());
+    };
+  }, []);
+  return (
+    <span className="mic-level" ref={barsRef} aria-hidden="true">
+      {Array.from({ length: MIC_METER_BARS }, (_, i) => (
+        <i key={i} />
+      ))}
+    </span>
+  );
+}
+
 /**
  * Step 4: the last stop before the take. The scene partner's lines are
  * pre-generated while the camera and microphone are set up beside them;
@@ -232,6 +294,7 @@ export default function RehearsalSetup({
   onStart,
   onPracticeRun,
   onBack,
+  nativePreview = false,
 }: {
   scriptName: string;
   /** Back to an earlier step (1-based), from the header's step bars. */
@@ -255,6 +318,8 @@ export default function RehearsalSetup({
   onPracticeRun?: () => void;
   /** Back to the scene partners step. */
   onBack: () => void;
+  /** iOS app: the camera is drawn natively, and there's no stream. */
+  nativePreview?: boolean;
 }) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
@@ -279,7 +344,9 @@ export default function RehearsalSetup({
   const linesStartable = linesReady || startAnywayOffered || pregen.failed > 0;
   const allLinesReady =
     pregen.done || (pregen.total > 0 && pregen.ready >= pregen.total);
-  const cameraReady = !willRecord || Boolean(cameraStream);
+  // In the iOS app there's no stream: the camera is on once it's ready.
+  const cameraOn = Boolean(cameraStream) || (nativePreview && cameraStatus === "ready");
+  const cameraReady = !willRecord || cameraOn;
   const canStart =
     linesStartable && cameraReady && (!willRecord || scriptSaved);
   const directing =
@@ -288,8 +355,12 @@ export default function RehearsalSetup({
   // Step 4's own audio graph for the speaker and mic checks, apart from the
   // player's (which is mixed into the self-tape). Browsers may start it
   // suspended until a gesture, so any click on the step resumes it.
+  // In the iOS app the context is made only when Test is tapped: WebKit can
+  // reconfigure the shared audio session when one starts, which the native
+  // camera and mic (on from this step) shouldn't have to ride out.
   const [checkAudio, setCheckAudio] = useState<AudioContext | null>(null);
   useEffect(() => {
+    if (IS_NATIVE) return;
     const context = new AudioContext();
     const resume = () => void context.resume().catch(() => {});
     resume();
@@ -301,7 +372,7 @@ export default function RehearsalSetup({
       void context.close().catch(() => {});
     };
   }, []);
-  const available = useDevices(cameraStream);
+  const available = useDeviceList(nativePreview ? cameraOn : cameraStream);
   const [speakerId, setSpeakerId] = useState(
     () => preferredDevice("audiooutput")?.id ?? "",
   );
@@ -316,28 +387,46 @@ export default function RehearsalSetup({
     available.speakers[0]?.label ??
     "System default";
   const testSpeakers = () => {
-    if (!checkAudio) return;
-    void checkAudio.resume().catch(() => {});
-    playTestChime(checkAudio);
+    let context = checkAudio;
+    if (!context && IS_NATIVE) {
+      context = new AudioContext();
+      setCheckAudio(context);
+    }
+    if (!context) return;
+    void context.resume().catch(() => {});
+    playTestChime(context);
   };
+  // The on-demand context (iOS app) still closes with the step.
+  const checkAudioRef = useRef(checkAudio);
+  checkAudioRef.current = checkAudio;
+  useEffect(() => {
+    if (!IS_NATIVE) return;
+    return () => void checkAudioRef.current?.close().catch(() => {});
+  }, []);
 
   const [permissionSlow, setPermissionSlow] = useState(false);
   useEffect(() => {
     setPermissionSlow(false);
-    if (!willRecord || cameraStream || cameraStatus === "error") return;
+    if (!willRecord || cameraOn || cameraStatus === "error") return;
     const timer = setTimeout(
       () => setPermissionSlow(true),
       PERMISSION_NUDGE_AFTER_MS,
     );
     return () => clearTimeout(timer);
-  }, [willRecord, cameraStream, cameraStatus]);
+  }, [willRecord, cameraOn, cameraStatus]);
 
   const videoTrack = cameraStream?.getVideoTracks()[0];
   const audioTrack = cameraStream?.getAudioTracks()[0];
-  const deviceStatus = (track: MediaStreamTrack | undefined) =>
+  // The app has no tracks: the device is on with the camera, named by the
+  // actor's choice if they made one.
+  const nativeLabel = (kind: "videoinput" | "audioinput") =>
+    preferredDevice(kind)?.label ?? "Connected";
+  const deviceStatus = (track: MediaStreamTrack | undefined, kind: "videoinput" | "audioinput") =>
     track
       ? { done: true, text: deviceName(track.label) || "Connected" }
-      : cameraStatus === "error"
+      : nativePreview && cameraOn
+        ? { done: true, text: nativeLabel(kind) }
+        : cameraStatus === "error"
         ? { done: false, failed: true, text: "Not available" }
         : { done: false, text: "Waiting for access…" };
   const devices: {
@@ -352,9 +441,9 @@ export default function RehearsalSetup({
       ? [
           {
             name: "Camera",
-            ...deviceStatus(videoTrack),
+            ...deviceStatus(videoTrack, "videoinput"),
             // Past the system default, at least two to choose between.
-            picker: videoTrack && !isPhone && available.cameras.length > 2 && (
+            picker: (videoTrack || (nativePreview && cameraOn)) && !isPhone && available.cameras.length > 2 && (
               <DevicePicker
                 label="Camera"
                 value={chosenId("videoinput", available.cameras)}
@@ -365,8 +454,8 @@ export default function RehearsalSetup({
           },
           {
             name: "Microphone",
-            ...deviceStatus(audioTrack),
-            picker: audioTrack && available.mics.length > 2 && (
+            ...deviceStatus(audioTrack, "audioinput"),
+            picker: (audioTrack || (nativePreview && cameraOn)) && available.mics.length > 2 && (
               <DevicePicker
                 label="Microphone"
                 value={chosenId("audioinput", available.mics)}
@@ -374,9 +463,11 @@ export default function RehearsalSetup({
                 onChange={(choice) => onSwitchDevice("audioinput", choice)}
               />
             ),
-            aside: cameraStream && audioTrack && checkAudio && (
-              <MicLevel stream={cameraStream} context={checkAudio} />
-            ),
+            aside: nativePreview
+              ? cameraOn && <NativeMicLevel />
+              : cameraStream && audioTrack && checkAudio && (
+                  <MicLevel stream={cameraStream} context={checkAudio} />
+                ),
           },
         ]
       : []),
@@ -425,8 +516,10 @@ export default function RehearsalSetup({
 
       {willRecord && (
         <div className="rehearsal-setup-camera">
-          <div className="self-tape-video">
-            {cameraStream ? (
+          <div className={`self-tape-video ${nativePreview ? "is-native-preview" : ""}`}>
+            {nativePreview && cameraOn ? (
+              <NativeCameraPreview className="self-tape-preview" />
+            ) : cameraStream ? (
               <video
                 className="self-tape-preview"
                 ref={previewRef}
@@ -441,14 +534,14 @@ export default function RehearsalSetup({
                   : "Waiting for camera access…"}
               </div>
             )}
-            {cameraStream && isIpad() && (
+            {cameraOn && isIpad() && (
               <p className="self-tape-hint">
                 Tip: turn off Center Stage in Control Center for steady framing.
               </p>
             )}
           </div>
           {/* Only where the camera itself zooms: no digital crop. */}
-          {cameraStream && cameraZoom && (
+          {cameraOn && cameraZoom && (
             <label className="camera-zoom">
               <span>Zoom</span>
               <input
