@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "bench:sides": "tsx benchmarks/parse/sides-parse.ts",
-    "bench:strategies": "tsx --env-file=.env.local benchmarks/parse/strategy-compare.ts",
+    "bench:strategies": "tsx --env-file=.env.development.local benchmarks/parse/strategy-compare.ts",
     "benchmark:pdf": "node benchmarks/parse/pdf-latency.mjs",
     "test:cutoff": "tsx benchmarks/checks/cutoff-guard.ts",
     "test:match": "tsx benchmarks/checks/line-match.ts",
@@ -19,14 +19,23 @@
     "set-admin": "node scripts/set-admin.mjs",
     "purge-script-pdfs": "node scripts/purge-script-pdfs.mjs",
     "dev": "vite",
+    "dev:host": "vite --host",
     "dev:vercel": "vercel dev",
     "build": "tsc -b && vite build",
+    "build:staging": "tsc -b && vite build --mode staging",
+    "build:prod": "tsc -b && vite build --mode prod",
+    "ios:local": "tsc -b && VITE_WEB_ORIGIN=http://$(ipconfig getifaddr en0):3000 vite build --mode development && cap sync ios",
+    "ios:staging": "npm run build:staging && cap sync ios",
+    "ios:prod": "npm run build:prod && cap sync ios",
     "lint": "eslint .",
     "prepare": "husky install",
     "preview": "vite preview"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@stripe/react-stripe-js": "^6.8.1",
     "@stripe/stripe-js": "^9.13.0",
     "@supabase/supabase-js": "^2.45.0",
@@ -43,6 +52,7 @@
     "@tailwindcss/oxide-darwin-x64": "^4.3.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@eslint/js": "^9.21.0",
     "@types/node": "^22.20.1",
     "@types/react": "^19.0.10",

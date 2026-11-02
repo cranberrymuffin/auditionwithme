@@ -10,6 +10,7 @@ import { IS_BETA_TESTING } from "../lib/beta";
 import { TRIAL_DAYS } from "../lib/plan";
 import { TERMS_VERSION } from "../lib/termsText";
 import { supabase } from "../lib/supabase";
+import { authRedirectOrigin } from "../lib/platform";
 
 export default function Signup() {
   // Carries the visitor's original destination/intent (e.g. the home upload
@@ -38,7 +39,7 @@ export default function Signup() {
     const { error: resendError } = await supabase.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: `${window.location.origin}/login` },
+      options: { emailRedirectTo: `${authRedirectOrigin()}/login` },
     });
     if (resendError) {
       setError(friendlyAuthError(resendError, "sign up"));
@@ -61,7 +62,7 @@ export default function Signup() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/login`,
+        emailRedirectTo: `${authRedirectOrigin()}/login`,
         // Read by the handle_new_user trigger (see
         // supabase/migrations/20261101120000_terms_acceptance.sql) and
         // written straight to entitlements -- there's no session yet at this

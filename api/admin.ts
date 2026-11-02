@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireAuth } from "./_entitlement.js";
+import { handleCors } from "./_cors.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -101,6 +102,7 @@ async function adminOverview(res: VercelResponse) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { apiUrl } from "./platform";
 
 /**
  * fetch() with the current Supabase access token attached. Every call to an
@@ -9,5 +10,5 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const token = data.session?.access_token;
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  return fetch(path, { ...init, headers });
+  return fetch(apiUrl(path), { ...init, headers });
 }

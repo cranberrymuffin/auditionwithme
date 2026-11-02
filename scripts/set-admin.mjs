@@ -9,14 +9,14 @@
 //   node scripts/set-admin.mjs --list             list current admins
 //
 // Requires SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL in the environment
-// or .env.local.
+// or .env.development.local.
 
 import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 
 async function loadEnvLocal() {
   try {
-    const text = await readFile(new URL("../.env.local", import.meta.url), "utf8");
+    const text = await readFile(new URL("../.env.development.local", import.meta.url), "utf8");
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -33,7 +33,7 @@ async function loadEnvLocal() {
       if (process.env[key] === undefined) process.env[key] = value;
     }
   } catch {
-    // no .env.local, fall back to whatever is already in process.env
+    // no .env.development.local, fall back to whatever is already in process.env
   }
 }
 
