@@ -353,15 +353,17 @@ final class MediaSessionController {
         engine.stop()
         captureEngine = nil
         captureChain = nil
-        tapLock.lock()
-        pcmStreaming = false
-        tapLock.unlock()
     }
 
     private func teardownCapture(reason: String) {
         lineToken += 1
         playing = false
         destroyCaptureEngine()
+        // Here rather than in destroyCaptureEngine, so a rebuild mid-take
+        // keeps sending Scribe its audio.
+        tapLock.lock()
+        pcmStreaming = false
+        tapLock.unlock()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         update(reason: reason) {
             $0.mode = .idle
