@@ -149,7 +149,13 @@ export default defineConfig(({ mode }) => {
           skipWaiting: true,
           clientsClaim: true,
           globPatterns: ["**/*.{js,css,html,woff,woff2,svg,ico}"],
-          navigateFallbackDenylist: [/^\/api\//],
+          // Let real files (sitemap.xml, robots.txt, .well-known/*) reach
+          // the network instead of being answered with the SPA shell.
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/\.well-known\//,
+            /\/[^/?]+\.[^/?]+$/,
+          ],
           runtimeCaching: [
             {
               urlPattern: ({ request }) => request.destination === "image",
