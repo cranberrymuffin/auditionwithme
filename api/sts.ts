@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { handleCors } from "./_cors.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 import {
   fetchElevenLabs,
@@ -30,6 +31,7 @@ const VOICE_ID_PATTERN = /^[A-Za-z0-9]{1,64}$/;
 const lastSeenConcurrency: ConcurrencyReading = { current: 0, max: 3, updatedAt: 0 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

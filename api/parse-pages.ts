@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireRehearsalGrant } from "./_entitlement.js";
 import { splitSpeech } from "./_screenplay.js";
 import { extractJson, isValidCharacters } from "./_response.js";
+import { handleCors } from "./_cors.js";
 
 // Parses a chunk of scanned script pages (rendered to JPEGs client-side) with
 // vision. Scanned PDFs have no text layer, so the fast text path in
@@ -56,6 +57,7 @@ Output format: return ONLY valid JSON, no prose, no markdown fences:
 }`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (handleCors(req, res)) return;
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

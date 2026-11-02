@@ -340,12 +340,14 @@ header .flow-back:hover {
   position: relative;
   z-index: 10;
   display: flex;
-  height: clamp(68px, 10vh, 92px);
+  /* The top inset is 0 in browsers; in the iOS app it clears the status
+     bar and Dynamic Island, which the web view draws under. */
+  height: calc(clamp(68px, 10vh, 92px) + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
   /* Every header shares the landing hero's side margins, so the logo sits
      on the same left edge on every page. */
-  padding: 0 clamp(22px, 7vw, 108px);
+  padding: env(safe-area-inset-top, 0px) clamp(22px, 7vw, 108px) 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -512,7 +514,7 @@ header .flow-back:hover {
 }
 
 .hero-editorial {
-  min-height: calc(100dvh - clamp(68px, 10vh, 92px));
+  min-height: calc(100dvh - clamp(68px, 10vh, 92px) - env(safe-area-inset-top, 0px));
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -1003,8 +1005,8 @@ header .flow-back:hover {
     );
   }
   .site-nav {
-    height: 66px;
-    padding: 0 22px;
+    height: calc(66px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 22px 0;
   }
   .site-nav-links {
     display: none;
@@ -1025,8 +1027,8 @@ header .flow-back:hover {
      Safari lays it out exactly like the installed app: full image up top,
      copy in the lower half. The bars just overlap the bottom until scroll. */
   .hero-editorial {
-    min-height: calc(100dvh - 66px);
-    min-height: calc(100lvh - 66px);
+    min-height: calc(100dvh - 66px - env(safe-area-inset-top, 0px));
+    min-height: calc(100lvh - 66px - env(safe-area-inset-top, 0px));
     justify-content: flex-end;
     padding: 0 22px max(24px, env(safe-area-inset-bottom));
   }

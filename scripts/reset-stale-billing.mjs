@@ -12,7 +12,7 @@
 //   STRIPE_SECRET_KEY=rk_live_... node scripts/reset-stale-billing.mjs --confirm  apply
 //
 // Requires SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL for the production
-// project, in the environment or .env.local. STRIPE_SECRET_KEY must be a live
+// project, in the environment or .env.development.local. STRIPE_SECRET_KEY must be a live
 // key: checking against the sandbox would reset every real subscriber.
 
 import { readFile } from "node:fs/promises";
@@ -21,7 +21,7 @@ import Stripe from "stripe";
 
 async function loadEnvLocal() {
   try {
-    const text = await readFile(new URL("../.env.local", import.meta.url), "utf8");
+    const text = await readFile(new URL("../.env.development.local", import.meta.url), "utf8");
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -38,7 +38,7 @@ async function loadEnvLocal() {
       if (process.env[key] === undefined) process.env[key] = value;
     }
   } catch {
-    // no .env.local, fall back to whatever is already in process.env
+    // no .env.development.local, fall back to whatever is already in process.env
   }
 }
 
@@ -55,7 +55,7 @@ async function customerExists(stripe, customerId) {
 async function main() {
   const confirm = process.argv.includes("--confirm");
 
-  // Read before .env.local, whose STRIPE_SECRET_KEY is the sandbox one.
+  // Read before .env.development.local, whose STRIPE_SECRET_KEY is the sandbox one.
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey?.startsWith("sk_live_") && !stripeKey?.startsWith("rk_live_")) {
     console.error(

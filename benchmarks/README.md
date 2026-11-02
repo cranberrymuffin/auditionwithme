@@ -37,7 +37,7 @@ Haiku text, Sonnet text, Sonnet reading the PDF) on the same sides and scores
 each against the ground truth in `parse/sides-fixtures.ts`: assertions passed,
 spoken lines copied verbatim, run-to-run stability (`--runs N`), and spoken
 lines that differ from the rules parse. Narrow with `--only rules,sonnet-pdf`
-or `--file CANNED`. Loads `ANTHROPIC_API_KEY` from `.env.local`.
+or `--file CANNED`. Loads `ANTHROPIC_API_KEY` from `.env.development.local`.
 
 **PDF upload latency** (`parse/pdf-latency.mjs`, `npm run benchmark:pdf`):
 compares the original binary-PDF model request with the text-first request.
