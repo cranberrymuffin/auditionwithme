@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-export const SITE_URL = "https://auditionwithme.com";
+export const SITE_URL = "https://www.auditionwithme.com";
 export const SITE_NAME = "AuditionWithMe";
 const DEFAULT_OG_IMAGE = "/images/hollywood-hills-hero-wide.png";
 

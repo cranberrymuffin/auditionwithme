@@ -4,4 +4,4 @@ Disallow: /practice
 Disallow: /account
 Disallow: /billing
 
-Sitemap: https://auditionwithme.com/sitemap.xml
+Sitemap: https://www.auditionwithme.com/sitemap.xml
