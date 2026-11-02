@@ -5,6 +5,10 @@ import { IS_NATIVE } from './lib/platform'
 import './index.css'
 import App from './App.tsx'
 
+// In the iOS app, log native media state changes (mic/camera on and off).
+// Loaded only there, so the browser bundle never runs it.
+if (IS_NATIVE) void import('./lib/native/mediaLog')
+
 // The product uses one deliberate, fixed dark palette throughout.
 document.documentElement.classList.add('dark')
 
