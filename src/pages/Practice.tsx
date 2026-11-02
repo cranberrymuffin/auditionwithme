@@ -73,6 +73,13 @@ type ParseData = {
 };
 
 // In production the raw "run `vercel dev`" hint is developer noise; keep it dev-only.
+// A parse with no spoken lines means the PDF isn't a script (a resume, a
+// headshot, a contract…) — caught right after upload, before it's saved.
+const hasSpokenLines = (data: ParseData) =>
+  (data.steps ?? []).some((step) => step.verbalLine?.trim());
+const NOT_A_SCRIPT_MESSAGE =
+  "We didn't find any spoken lines in this PDF. Upload a script or sides with character names and dialogue.";
+
 const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
   ? "The local script service isn't running. Start it with `vercel dev --listen 3000`."
   : "We couldn't reach the script service. Check your connection and try again.";
@@ -217,6 +224,8 @@ function PracticeFlow({
     "extracting" | "analyzing"
   >("extracting");
   const [error, setError] = useState("");
+  // The upload parsed fine but holds no dialogue: retrying won't help.
+  const [notScript, setNotScript] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [characters, setCharacters] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
@@ -429,6 +438,7 @@ function PracticeFlow({
     const run = async () => {
       setLoading(true);
       setError("");
+      setNotScript(false);
       setPendingParse(null);
       setProcessingPhase("extracting");
 
@@ -501,7 +511,14 @@ function PracticeFlow({
           );
         }
 
-        if (data.unreadableOriginalLanguage && (data.steps?.length ?? 0) > 0) {
+        if (!hasSpokenLines(data)) {
+          // Not a script: stop here, before it's saved to the account or
+          // the actor can continue into casting.
+          setNotScript(true);
+          setError(NOT_A_SCRIPT_MESSAGE);
+          return;
+        }
+        if (data.unreadableOriginalLanguage) {
           // Bilingual edition — let the user pick a language before rehearsing.
           cacheParse(data, true);
           setLanguageChoice(data);
@@ -784,6 +801,11 @@ function PracticeFlow({
       const result = await parseScannedPdf(file, grant, undefined, undefined, {
         preferOriginalLanguage: true,
       });
+      if (!hasSpokenLines(result)) {
+        throw new Error(
+          "We couldn't read the original language from the printed pages.",
+        );
+      }
       cacheParse(result, false);
       // Same continue-gate as the initial parse — this path takes minutes, so
       // the user may have stepped away; don't jump into casting unprompted.
@@ -1121,20 +1143,30 @@ function PracticeFlow({
     return (
       <StageShell>
         <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="eyebrow mb-4">Something went wrong</p>
-          <h1 className="stage-error-title">We couldn’t read that script.</h1>
+          <p className="eyebrow mb-4">
+            {notScript ? "No dialogue found" : "Something went wrong"}
+          </p>
+          <h1 className="stage-error-title">
+            {notScript
+              ? "This doesn’t look like a script."
+              : "We couldn’t read that script."}
+          </h1>
           <p className="stage-error-detail">{error}</p>
           <div className="stage-error-actions">
+            {!notScript && (
+              <button
+                type="button"
+                className="stage-error-retry"
+                onClick={() => setParseAttempt((attempt) => attempt + 1)}
+              >
+                Try again
+              </button>
+            )}
             <button
               type="button"
-              className="stage-error-retry"
-              onClick={() => setParseAttempt((attempt) => attempt + 1)}
-            >
-              Try again
-            </button>
-            <button
-              type="button"
-              className="stage-error-secondary"
+              className={
+                notScript ? "stage-error-retry" : "stage-error-secondary"
+              }
               onClick={() => navigate("/")}
             >
               Upload a different script
@@ -1190,9 +1222,20 @@ function PracticeFlow({
     return (
       <StageShell>
         <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="text-ink-soft">
-            No spoken lines detected in this script.
-          </p>
+          <p className="eyebrow mb-4">No dialogue found</p>
+          <h1 className="stage-error-title">
+            This doesn’t look like a script.
+          </h1>
+          <p className="stage-error-detail">{NOT_A_SCRIPT_MESSAGE}</p>
+          <div className="stage-error-actions">
+            <button
+              type="button"
+              className="stage-error-retry"
+              onClick={() => navigate("/")}
+            >
+              Upload a different script
+            </button>
+          </div>
         </div>
       </StageShell>
     );
