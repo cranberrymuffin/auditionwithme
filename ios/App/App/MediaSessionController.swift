@@ -65,6 +65,79 @@ private final class ReaderChain {
     }
 }
 
+/// The actor's voice for the take mix, held briefly between the mic and the
+/// mixer. With voice processing on, the input delivers audio on its own
+/// cadence, and a mixer pulling the input node directly got zeros whenever it
+/// asked before the next chunk arrived — about a third of the actor's voice,
+/// as 16 ms holes every 45–70 ms. Here the mic tap (which sees every sample)
+/// writes, the mixer's source node reads, and reading starts only once ~43 ms
+/// is banked, so a late chunk never leaves the mixer short.
+private final class MicRing {
+    private var samples: [Float]
+    private var readIndex = 0
+    private var count = 0
+    private var primed = false
+    private let lock = NSLock()
+    /// Banked before reading starts (and again after running dry).
+    private let prime: Int
+    /// Past this the mic is drifting ahead; drop back to `prime` to keep it
+    /// in sync with the reader and the camera.
+    private let maxFill: Int
+
+    init(capacity: Int, prime: Int, maxFill: Int) {
+        samples = [Float](repeating: 0, count: capacity)
+        self.prime = prime
+        self.maxFill = maxFill
+    }
+
+    /// Tap thread.
+    func write(_ input: UnsafePointer<Float>, count n: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        let capacity = samples.count
+        for i in 0..<n {
+            samples[(readIndex + count) % capacity] = input[i]
+            if count < capacity { count += 1 } else { readIndex = (readIndex + 1) % capacity }
+        }
+        if count > maxFill {
+            let drop = count - prime
+            readIndex = (readIndex + drop) % capacity
+            count -= drop
+        }
+    }
+
+    /// Render thread: fills `output` with the next `n` samples, or silence
+    /// while banking.
+    func read(into output: UnsafeMutablePointer<Float>, count n: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        if !primed {
+            guard count >= prime else {
+                output.update(repeating: 0, count: n)
+                return
+            }
+            primed = true
+        }
+        let capacity = samples.count
+        let available = min(n, count)
+        for i in 0..<available { output[i] = samples[(readIndex + i) % capacity] }
+        readIndex = (readIndex + available) % capacity
+        count -= available
+        if available < n {
+            (output + available).update(repeating: 0, count: n - available)
+            primed = false
+        }
+    }
+
+    func reset() {
+        lock.lock()
+        readIndex = 0
+        count = 0
+        primed = false
+        lock.unlock()
+    }
+}
+
 /// The single owner of the app's audio hardware: the audio session, the
 /// audio engines and the mic. Everything that turns the mic on or off goes
 /// through here, and every change is reported with a reason so on-device
@@ -79,8 +152,8 @@ private final class ReaderChain {
 ///
 ///         reader chain ─┬─▶ speakers
 ///                       └─▶ takeMixer ─▶ take tap (recording) ─▶ takeMute (silent) ─▶ speakers
-///         mic ─▶ input (voice processing) ─┬─▶ takeMixer
-///                                          └─▶ mic tap (level, Scribe PCM)
+///         mic ─▶ input (voice processing) ─▶ mic tap (level, Scribe PCM)
+///                                                    └─▶ MicRing ─▶ micSource ─▶ takeMixer
 ///
 ///   Voice processing is Apple's echo cancellation, which keeps the reader
 ///   playing out of the speaker out of the mic; it only works for audio
@@ -161,6 +234,10 @@ final class MediaSessionController {
     /// 128 ms of 16 kHz 16-bit audio — the chunk size the web tracker sent Scribe.
     private let pcmChunkBytes = 2048 * 2
     private var lastLevelAt: TimeInterval = 0
+    /// The mic on its way into the take mix (see MicRing), and the converter
+    /// that brings it to `takeFormat` (tap thread).
+    private let micRing = MicRing(capacity: 48_000, prime: 2048, maxFill: 9600)
+    private var micConverter: AVAudioConverter?
     private var levelPeak: Float = 0
 
     init() {
@@ -337,7 +414,19 @@ final class MediaSessionController {
             format: lineFormat
         )
         let micFormat = input.outputFormat(forBus: 0)
-        engine.connect(input, to: takeMixer, fromBus: 0, toBus: 1, format: micFormat)
+        // The mic reaches the take mix through MicRing, not a direct
+        // connection from the input node (which left holes in the voice).
+        micRing.reset()
+        let ring = micRing
+        let micSource = AVAudioSourceNode(format: takeFormat) { _, _, frameCount, bufferList -> OSStatus in
+            let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+            if let data = buffers.first?.mData?.assumingMemoryBound(to: Float.self) {
+                ring.read(into: data, count: Int(frameCount))
+            }
+            return noErr
+        }
+        engine.attach(micSource)
+        engine.connect(micSource, to: takeMixer, fromBus: 0, toBus: 1, format: takeFormat)
         engine.connect(takeMixer, to: takeMute, format: takeFormat)
         engine.connect(takeMute, to: main, format: takeFormat)
 
@@ -488,7 +577,37 @@ final class MediaSessionController {
             pcmPending.removeAll()
             pcmConverter = nil
         }
+        feedTakeMix(buffer)
         if streaming { streamPcm(buffer) }
+    }
+
+    /// The mic, as `takeFormat`, into MicRing for the take mix.
+    private func feedTakeMix(_ buffer: AVAudioPCMBuffer) {
+        if micConverter == nil || micConverter?.inputFormat != buffer.format {
+            micConverter = buffer.format == takeFormat ? nil : AVAudioConverter(from: buffer.format, to: takeFormat)
+            if buffer.format != takeFormat && micConverter == nil { return }
+        }
+        guard let converter = micConverter else {
+            if let samples = buffer.floatChannelData?[0] { micRing.write(samples, count: Int(buffer.frameLength)) }
+            return
+        }
+        let ratio = takeFormat.sampleRate / buffer.format.sampleRate
+        guard let converted = AVAudioPCMBuffer(
+            pcmFormat: takeFormat, frameCapacity: AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 32
+        ) else { return }
+        var supplied = false
+        converter.convert(to: converted, error: nil) { _, status in
+            if supplied {
+                status.pointee = .noDataNow
+                return nil
+            }
+            supplied = true
+            status.pointee = .haveData
+            return buffer
+        }
+        if let samples = converted.floatChannelData?[0], converted.frameLength > 0 {
+            micRing.write(samples, count: Int(converted.frameLength))
+        }
     }
 
     /// 16 kHz 16-bit mono for Scribe, boosted 3x through a soft limiter as
