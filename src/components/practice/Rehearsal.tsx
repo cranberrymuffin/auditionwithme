@@ -582,6 +582,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
             onTogglePause={togglePause}
             onStop={requestStop}
             nativePreview={nativePreview}
+            onRetry={nativePreview ? () => void requestCamera() : undefined}
           />
         )}
 

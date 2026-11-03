@@ -20,6 +20,7 @@ export default function SelfTapeRecorder({
   onTogglePause,
   onStop,
   nativePreview = false,
+  onRetry,
 }: {
   status: RecorderStatus;
   stream: MediaStream | null;
@@ -33,6 +34,9 @@ export default function SelfTapeRecorder({
   onStop: () => void;
   /** iOS app: the camera is drawn natively, and there's no stream. */
   nativePreview?: boolean;
+  /** Offered with an error: turns the camera and mic back on (the iOS app,
+   * after backgrounding turned them off). */
+  onRetry?: () => void;
 }) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   // Seconds of tape so far; holds still while paused.
@@ -64,8 +68,13 @@ export default function SelfTapeRecorder({
         ) : stream ? (
           <video className="self-tape-preview" ref={previewRef} muted autoPlay playsInline />
         ) : (
-          <div className="self-tape-placeholder">
+          <div className={`self-tape-placeholder ${status === "error" && onRetry ? "has-retry" : ""}`}>
             {status === "requesting" ? "Waiting for camera access…" : error ?? "Camera preview"}
+            {status === "error" && onRetry && (
+              <button type="button" className="speaker-test" onClick={onRetry}>
+                Try again
+              </button>
+            )}
           </div>
         )}
         {showCenterStageHint && (

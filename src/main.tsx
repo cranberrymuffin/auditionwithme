@@ -12,6 +12,10 @@ if (IS_NATIVE) void import('./lib/native/mediaLog')
 // The product uses one deliberate, fixed dark palette throughout.
 document.documentElement.classList.add('dark')
 
+// App-only styling hooks (html.is-native in index.css): a pinned header and
+// no rubber-band scrolling. Browsers never get the class.
+if (IS_NATIVE) document.documentElement.classList.add('is-native')
+
 // The iOS app ships its bundle inside the binary; a service worker there would
 // only cache a stale copy of what's already local.
 if (!IS_NATIVE && 'serviceWorker' in navigator) {

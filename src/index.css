@@ -351,6 +351,22 @@ header .flow-back:hover {
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+/* iOS app only (html.is-native, set in main.tsx): the header stays pinned
+   at the top like a native navigation bar, and the page doesn't rubber-band,
+   which dragged every header down past the top and back. */
+html.is-native,
+html.is-native body {
+  overscroll-behavior: none;
+}
+html.is-native .site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(12, 23, 36, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
 .cinematic-page .site-nav .text-hero-ink,
 .cinematic-page .site-nav .eyebrow,
 .cinematic-page .site-nav button {
@@ -5105,10 +5121,12 @@ header .flow-back:hover {
   top: 0;
   z-index: 20;
   display: grid;
-  height: 72px;
+  /* The top inset is 0 in browsers; in the iOS app it clears the status
+     bar, which the web view draws under (as .site-nav does). */
+  height: calc(72px + env(safe-area-inset-top, 0px));
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 0 clamp(22px, 7vw, 108px);
+  padding: env(safe-area-inset-top, 0px) clamp(22px, 7vw, 108px) 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.11);
   background: rgba(12, 23, 36, 0.88);
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.14);
@@ -5436,10 +5454,10 @@ header .flow-back:hover {
 
 @media (max-width: 760px) {
   .setup-header {
-    height: 66px;
+    height: calc(66px + env(safe-area-inset-top, 0px));
     grid-template-columns: 1fr auto auto;
     gap: 14px;
-    padding: 0 22px;
+    padding: env(safe-area-inset-top, 0px) 22px 0;
   }
   .step-bar {
     width: 16px;
@@ -5524,11 +5542,12 @@ header .flow-back:hover {
   top: 0;
   z-index: 30;
   display: grid;
-  height: 68px;
+  /* Clears the status bar in the iOS app; the inset is 0 in browsers. */
+  height: calc(68px + env(safe-area-inset-top, 0px));
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 20px;
-  padding: 0 24px;
+  padding: env(safe-area-inset-top, 0px) 24px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.13);
   background: #0c1725;
 }
@@ -5610,7 +5629,7 @@ header .flow-back:hover {
 }
 .rehearsal-progress {
   position: sticky;
-  top: 68px;
+  top: calc(68px + env(safe-area-inset-top, 0px));
   z-index: 30;
   height: 3px;
   background: rgba(255, 255, 255, 0.08);
@@ -6057,7 +6076,7 @@ header .flow-back:hover {
 }
 .self-tape-setting {
   position: sticky;
-  top: 71px;
+  top: calc(71px + env(safe-area-inset-top, 0px));
   z-index: 25;
   grid-row: 1;
   display: flex;
@@ -6095,6 +6114,10 @@ header .flow-back:hover {
   text-align: center;
   color: rgba(248, 241, 230, 0.6);
   font-size: 0.8125rem;
+}
+.self-tape-placeholder.has-retry {
+  flex-direction: column;
+  gap: 10px;
 }
 .self-tape-hint {
   position: absolute;
@@ -6429,9 +6452,9 @@ header .flow-back:hover {
     padding: calc(78px + env(safe-area-inset-top)) 16px 16px;
   }
   .rehearsal-header {
-    height: 62px;
+    height: calc(62px + env(safe-area-inset-top, 0px));
     grid-template-columns: 1fr auto;
-    padding: 0 16px;
+    padding: env(safe-area-inset-top, 0px) 16px 0;
   }
   /* A compact strip: the picture at 45% width, controls beside it, so
      the script keeps most of the screen. */
@@ -6462,7 +6485,7 @@ header .flow-back:hover {
     font-size: 0.625rem;
   }
   .rehearsal-progress {
-    top: 62px;
+    top: calc(62px + env(safe-area-inset-top, 0px));
   }
   .rehearsal-header > div:first-child > span,
   .rehearsal-header > p {
