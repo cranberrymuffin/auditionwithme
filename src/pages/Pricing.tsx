@@ -412,7 +412,7 @@ export default function Pricing() {
 
       <footer className="pricing-footer">
         <span>Audition With Me</span>
-        <span>Questions about the plan? Contact support before subscribing.</span>
+        <span>Questions about the plan? Contact <a href="mailto:team@auditionwithme.com">team@auditionwithme.com</a></span>
       </footer>
     </main>
   );

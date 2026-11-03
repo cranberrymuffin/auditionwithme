@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { useAuth } from "../contexts/AuthContext";
@@ -21,10 +21,6 @@ const faqs = [
   [
     "Does AuditionWithMe hold onto my files?",
     "No, neither your script nor your self-tapes are stored on our servers. Everything is kept on your device unless you choose to upload it.",
-  ],
-  [
-    "Do I need to sign an NDA to use AuditionWithMe?",
-    "Yes. You accept a confidentiality agreement when you create your account.",
   ],
   [
     "What file formats can I upload for my sides?",
@@ -54,6 +50,20 @@ const faqSchema = {
     },
   })),
 };
+
+const PRICING_MENTION = "see Pricing";
+
+/** Renders an answer, turning its "see Pricing" mention into a link to /pricing. */
+function renderAnswer(answer: string) {
+  const at = answer.indexOf(PRICING_MENTION);
+  if (at === -1) return answer;
+  return (
+    <>
+      {answer.slice(0, at)}see <Link to="/pricing">Pricing</Link>
+      {answer.slice(at + PRICING_MENTION.length)}
+    </>
+  );
+}
 
 export default function Faq() {
   const navigate = useNavigate();
@@ -94,7 +104,7 @@ export default function Faq() {
                   <i />
                 </span>
               </summary>
-              <p>{answer}</p>
+              <p>{renderAnswer(answer)}</p>
             </details>
           ))}
         </div>
