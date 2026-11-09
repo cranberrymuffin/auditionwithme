@@ -71,9 +71,13 @@ await build({
   },
 });
 
-const { render } = await import(pathToFileURL(join(ssrOut, "entry-server.js")).href);
+const { render, IS_BETA_TESTING } = await import(pathToFileURL(join(ssrOut, "entry-server.js")).href);
 
-for (const route of ROUTES) {
+// While beta testing, /pricing is a <Navigate> to "/" with no page or <Seo>
+// of its own, so it is left to the app.html rewrite like any other app route.
+const routes = IS_BETA_TESTING ? ROUTES.filter((route) => route !== "/pricing") : ROUTES;
+
+for (const route of routes) {
   const { html: body, seo } = render(route);
   if (!seo) throw new Error(`prerender: ${route} rendered no <Seo> tags`);
   if (seo.noindex) throw new Error(`prerender: ${route} is noindex; drop it from ROUTES`);

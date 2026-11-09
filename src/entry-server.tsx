@@ -8,6 +8,9 @@ import { StaticRouter } from "react-router-dom";
 import { AppRoutes } from "./App";
 import { ssrSeo, type ResolvedSeo } from "./components/Seo";
 
+// Lets the prerender skip /pricing while beta testing turns it into a redirect.
+export { IS_BETA_TESTING } from "./lib/beta";
+
 export function render(url: string): { html: string; seo: ResolvedSeo | null } {
   ssrSeo.current = null;
   const html = renderToString(
