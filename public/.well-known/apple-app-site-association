@@ -2,7 +2,7 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["Z9WN384MPT.AuditionWithMe"],
+        "appIDs": ["Z3K7BHKLN2.com.auditionwithme"],
         "components": [
           { "/": "/login*" },
           { "/": "/reset-password*" },

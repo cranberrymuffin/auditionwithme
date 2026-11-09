@@ -347,7 +347,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Z9WN384MPT;
+				DEVELOPMENT_TEAM = Z3K7BHKLN2;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -360,7 +360,7 @@
 					"-weak_framework",
 					FoundationModels,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = AuditionWithMe;
+				PRODUCT_BUNDLE_IDENTIFIER = com.auditionwithme;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
 				SWIFT_VERSION = 5.0;

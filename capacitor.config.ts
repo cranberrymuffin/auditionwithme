@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'AuditionWithMe',
+  appId: 'com.auditionwithme',
   appName: 'Audition With Me',
   webDir: 'dist'
 };
