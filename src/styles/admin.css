@@ -1,0 +1,576 @@
+/* Admin: every user and what they've said about their takes. A data
+   screen: figures in the script face's tabular digits, ruled tables, no
+   panels. Nothing here is coral: marks (bars, stars, meters) are ink, so
+   the only colour on the page means something (a tag, an error). */
+
+.admin-main {
+  flex: 1;
+  padding-block: clamp(var(--space-7), 6vw, var(--space-8)) var(--space-9);
+}
+
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-5);
+}
+.admin-header .slug {
+  margin-bottom: var(--space-3);
+}
+.admin-subtitle {
+  margin: var(--space-3) 0 0;
+}
+
+.admin-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-6);
+  color: var(--ink);
+}
+.admin-error p {
+  margin: 0;
+}
+
+/* ── Headline figures ── four ruled cells, like the fields of a slate. */
+.admin-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: var(--space-7) 0 0;
+  border-top: 1px solid var(--line);
+}
+.admin-kpi {
+  display: flex;
+  min-height: 136px;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-4) var(--space-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+.admin-kpi:nth-child(even) {
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--line);
+}
+@media (min-width: 900px) {
+  .admin-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .admin-kpi {
+    padding-right: var(--space-5);
+  }
+  .admin-kpi + .admin-kpi {
+    padding-left: var(--space-5);
+    border-left: 1px solid var(--line);
+  }
+}
+.admin-kpi dt {
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  line-height: var(--leading-snug);
+  text-transform: uppercase;
+}
+.admin-kpi dd {
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-size: var(--text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.admin-kpi-unit {
+  margin-left: var(--space-1);
+  color: var(--ink-muted);
+  font-size: var(--text-base);
+  font-weight: 400;
+}
+.admin-kpi p {
+  margin: auto 0 0;
+  padding-top: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.admin-kpi p strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.admin-kpi .admin-stars {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  font-size: var(--text-lg);
+}
+.admin-meter {
+  height: 4px;
+  margin-top: auto;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+.admin-meter + p {
+  margin-top: 0;
+  padding-top: var(--space-2);
+}
+.admin-meter i {
+  display: block;
+  height: 100%;
+  background: var(--ink-soft);
+}
+
+/* Stars: lit in ink, unlit in the control-border grey; a half star lights
+   its left half (a hard stop clipped to the glyph, not a blend). */
+.admin-stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--line-strong);
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+.admin-stars .is-on {
+  color: var(--ink);
+}
+.admin-stars .is-half {
+  background: linear-gradient(90deg, var(--ink) 50%, var(--line-strong) 50%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── Ratings and the latest comments ── */
+.admin-insights {
+  margin-top: var(--space-7);
+}
+.admin-section-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.admin-insights .meta {
+  margin: 2px 0 0;
+}
+.admin-distribution {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-distribution li {
+  position: relative;
+  display: grid;
+  min-height: 28px;
+  grid-template-columns: 2rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+.admin-distribution li:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.admin-distribution-label,
+.admin-distribution-count {
+  color: var(--ink-soft);
+  font-family: var(--font-script);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.admin-distribution-count {
+  color: var(--ink);
+  font-weight: 700;
+  text-align: right;
+}
+.admin-distribution-track {
+  height: 12px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--ink-wash);
+}
+.admin-distribution-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--ink-soft);
+  transition: background-color var(--dur) var(--ease);
+}
+.admin-distribution li:hover .admin-distribution-track i,
+.admin-distribution li:focus-visible .admin-distribution-track i {
+  background: var(--ink);
+}
+/* Per-bar tooltip on hover or keyboard focus. */
+.admin-distribution li::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 2.75rem;
+  z-index: var(--z-sticky);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease);
+}
+.admin-distribution li:hover::after,
+.admin-distribution li:focus-visible::after {
+  opacity: 1;
+}
+
+.admin-latest {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+.admin-latest li {
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.admin-latest blockquote {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.admin-latest p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+.admin-empty {
+  margin: var(--space-4) 0 0;
+  color: var(--ink-muted);
+}
+
+/* ── Tabs and search ── */
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-8);
+}
+.admin-tabs {
+  flex: 1 1 auto;
+}
+.admin-tab-count {
+  margin-left: var(--space-1);
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.admin-search {
+  max-width: 320px;
+  min-height: var(--control-h);
+  flex: 1 1 220px;
+}
+
+/* ── Tables ──
+   Wide screens: the table is as wide as the page and its header sticks to
+   the top of the window. Narrower than its columns need (under 1200px):
+   it scrolls both ways inside its own frame, header still stuck. */
+.admin-table-wrap {
+  /* Never so short (a phone on its side) that it shows a row or two. */
+  max-height: max(76dvh, 420px);
+  margin-top: var(--space-4);
+  overflow: auto;
+  container-type: inline-size;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.admin-table-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (min-width: 1200px) {
+  .admin-table-wrap {
+    max-height: none;
+    overflow: visible;
+  }
+}
+.admin-table {
+  width: 100%;
+  /* Separate, not collapsed: a collapsed border doesn't travel with a
+     sticky header cell. */
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.admin-users {
+  min-width: 760px;
+}
+.admin-feedback-table {
+  min-width: 1100px;
+}
+.admin-table :is(th, td) {
+  padding: var(--space-3) var(--space-4) var(--space-3) 0;
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: top;
+}
+.admin-table :is(th, td):last-child {
+  padding-right: 0;
+}
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  padding-block: var(--space-3);
+  border-bottom-color: var(--line-strong);
+  background: var(--ground);
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+/* The iOS app pins its header, so the table's sits under it. */
+html.is-native .admin-table thead th {
+  top: calc(var(--nav-h) + env(safe-area-inset-top, 0px));
+}
+.admin-table thead abbr {
+  text-decoration: underline dotted var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.admin-table .is-num {
+  font-family: var(--font-script);
+  text-align: right;
+  white-space: nowrap;
+}
+.admin-table td.is-num {
+  color: var(--ink);
+}
+.admin-table td.admin-empty {
+  padding-block: var(--space-5);
+}
+.admin-muted {
+  color: var(--ink-muted);
+}
+
+/* Users: a row opens to that user's feedback. */
+.admin-user {
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+.admin-user:hover,
+.admin-user.is-expanded {
+  background: var(--ink-wash);
+}
+.admin-user > :is(th, td) {
+  /* Centre the single-line cells on the 44px toggle beside them. */
+  padding-block: var(--space-2);
+  vertical-align: middle;
+}
+.admin-user > th {
+  width: 38%;
+}
+.admin-user.is-expanded > :is(th, td) {
+  border-bottom-color: transparent;
+}
+.admin-user-toggle {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: var(--control-h);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+/* Open / closed, in the script face: + and −. */
+.admin-user-toggle::before {
+  content: "+";
+  width: 1ch;
+  flex: none;
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-weight: 400;
+}
+.admin-user-toggle[aria-expanded="true"]::before {
+  content: "\2212";
+}
+.admin-user-email {
+  overflow-wrap: anywhere;
+}
+.admin-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+.admin-badges:empty {
+  display: none;
+}
+.admin-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.admin-rating-value {
+  color: var(--ink);
+  font-family: var(--font-script);
+}
+.admin-user-detail > td {
+  padding: 0 0 var(--space-5) calc(1ch + var(--space-2));
+  background: var(--ink-wash);
+}
+/* Where the table is wider than its frame, the detail stays the frame's
+   width and in view instead of running off to the right with the columns. */
+.admin-user-detail-body {
+  position: sticky;
+  left: calc(1ch + var(--space-2));
+  max-width: calc(100cqw - 1ch - var(--space-2));
+}
+.admin-user-facts {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/* A user's feedback, listed under their row. */
+.admin-list {
+  max-width: 760px;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.admin-feedback {
+  padding-block: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.admin-feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+.admin-feedback-time {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+.admin-feedback-comment {
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.admin-feedback-comment--empty {
+  color: var(--ink-muted);
+}
+.admin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  list-style: none;
+}
+.admin-chips span {
+  margin-right: var(--space-2);
+  color: var(--ink-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* All feedback: the comment takes the room; everything else stays narrow. */
+.admin-feedback-table td:first-child {
+  white-space: nowrap;
+}
+.admin-cell-email {
+  min-width: 13.5rem;
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+.admin-cell-comment {
+  min-width: 16rem;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.admin-load-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  margin-top: var(--space-5);
+}
+.admin-load-more p {
+  max-width: 60ch;
+  margin: 0;
+}
+
+/* ── Loading ── */
+.admin-skeleton .admin-kpi {
+  border-left: 0;
+}
+.admin-skeleton-block {
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  animation: admin-pulse 1.4s var(--ease) infinite alternate;
+}
+.admin-skeleton .admin-kpis {
+  gap: var(--space-3);
+  border-top: 0;
+}
+.admin-skeleton .admin-kpi {
+  border-bottom: 0;
+}
+.admin-skeleton-row {
+  height: 52px;
+  margin-top: var(--space-3);
+}
+@keyframes admin-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-skeleton-block {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-search {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}

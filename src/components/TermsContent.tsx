@@ -4,7 +4,7 @@ import { TERMS_BLOCKS, TERMS_UPDATED } from "../lib/termsText";
 export default function TermsContent() {
   return (
     <>
-      <p className="terms-updated">Last updated: {TERMS_UPDATED}</p>
+      <p className="meta terms-updated">Last updated: {TERMS_UPDATED}</p>
       {TERMS_BLOCKS.map((block, index) => {
         switch (block.kind) {
           case "heading":

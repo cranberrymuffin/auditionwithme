@@ -15,25 +15,24 @@ export default function SetupActions({
   nextHint?: string;
 }) {
   return (
-    <div className="script-accordion-actions role-actions">
-      <button
-        type="button"
-        className="btn-secondary"
-        onClick={onBack}
-      >
+    <div className="setup-actions">
+      <button type="button" className="btn-ghost" onClick={onBack}>
         Back
       </button>
       <button
         type="button"
-        className="setup-next"
+        className="btn-primary btn-lg"
         disabled={nextDisabled}
         aria-describedby={nextDisabled && nextHint ? "setup-next-hint" : undefined}
         onClick={onNext}
       >
-        {nextLabel} <span aria-hidden="true">→</span>
+        {nextLabel}{" "}
+        <span className="btn-arrow" aria-hidden="true">
+          →
+        </span>
       </button>
       {nextDisabled && nextHint && (
-        <p id="setup-next-hint" className="setup-next-hint">
+        <p id="setup-next-hint" className="field-hint setup-next-hint">
           {nextHint}
         </p>
       )}

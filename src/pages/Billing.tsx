@@ -217,8 +217,19 @@ export default function Billing() {
     }
   }
 
+  const statusLabel =
+    subscription?.cancelAtPeriodEnd && !hasEnded ? "Canceling" : status?.label;
+  const statusTag =
+    subscription?.cancelAtPeriodEnd || hasEnded
+      ? "tag"
+      : status?.tone === "active"
+        ? "tag tag-success"
+        : status?.tone === "trial"
+          ? "tag tag-accent"
+          : "tag tag-warn";
+
   return (
-    <main className="account-page billing-page">
+    <main className="page account-page billing-page">
       <Seo
         title="Billing"
         description="Manage your Audition Plus subscription and billing history."
@@ -227,38 +238,40 @@ export default function Billing() {
       />
       <SiteNav />
 
-      <section className="account-main">
-        <header className="account-header">
-          <h1>Billing</h1>
-          <p className="account-email">
-            Your plan, payment method, and receipts.
-          </p>
+      <div className="wrap grid doc-layout account-layout">
+        <header className="page-head doc-head account-head span-4">
+          <p className="slug">Audition Plus</p>
+          <h1 className="title">Billing</h1>
+          <p className="lead">Your plan, payment method, and receipts.</p>
         </header>
 
+        <div className="billing-body span-7 at-6">
         {loading ? (
-          <div className="billing-card is-loading" aria-busy="true">
+          <div className="billing-plan is-loading" aria-busy="true">
             <span className="billing-skeleton is-wide" />
             <span className="billing-skeleton" />
             <span className="billing-skeleton is-short" />
           </div>
         ) : !subscription ? (
-          <div className="billing-empty">
-            <p className="billing-empty-eyebrow">No plan yet</p>
+          <div className="billing-plan billing-empty">
+            <p className="slug">No plan yet</p>
             <h2>
               {summary?.trialEligible === false
                 ? "Pick up where you left off."
                 : `Rehearse free for ${TRIAL_DAYS} days.`}
             </h2>
-            <p>
+            <p className="billing-headline">
               Audition Plus gives you unlimited rehearsals with AI scene
               partners. Cancel anytime from this page.
             </p>
-            <button type="button" onClick={() => navigate("/pricing")}>
-              {summary?.trialEligible === false
-                ? "See the plan"
-                : "Start your free trial"}{" "}
-              <span aria-hidden="true">→</span>
-            </button>
+            <div className="billing-actions">
+              <button type="button" className="btn-primary btn-lg" onClick={() => navigate("/pricing")}>
+                {summary?.trialEligible === false
+                  ? "See the plan"
+                  : "Start your free trial"}{" "}
+                <span className="btn-arrow" aria-hidden="true">→</span>
+              </button>
+            </div>
             {error && (
               <p className="plan-error" role="alert">
                 {error}
@@ -267,31 +280,27 @@ export default function Billing() {
           </div>
         ) : (
           <>
-            <article className={`billing-card tone-${status?.tone}`}>
-              <header className="billing-card-header">
+            <article className="billing-plan">
+              <header className="billing-plan-head">
                 <div>
-                  <span className="billing-card-label">Your plan</span>
+                  <p className="slug">Your plan</p>
                   <h2>Audition Plus</h2>
-                  {price && <p className="billing-card-price">{price}</p>}
+                  {price && <p className="billing-plan-price">{price}</p>}
                 </div>
-                <span className={`billing-status-pill tone-${status?.tone}`}>
-                  {subscription.cancelAtPeriodEnd && !hasEnded
-                    ? "Canceling"
-                    : status?.label}
-                </span>
+                <span className={statusTag}>{statusLabel}</span>
               </header>
 
-              {headline && (
-                <p
-                  className={`billing-headline ${status?.tone === "warning" ? "is-warning" : ""}`}
-                  role={status?.tone === "warning" ? "alert" : undefined}
-                >
-                  {headline}
-                </p>
-              )}
+              {headline &&
+                (status?.tone === "warning" ? (
+                  <p className="notice notice-danger billing-warning" role="alert">
+                    {headline}
+                  </p>
+                ) : (
+                  <p className="billing-headline">{headline}</p>
+                ))}
 
               {!hasEnded && (
-                <dl className="billing-facts">
+                <dl className="spec-list billing-facts">
                   <div>
                     <dt>
                       {subscription.cancelAtPeriodEnd
@@ -304,40 +313,30 @@ export default function Billing() {
                   </div>
                   <div>
                     <dt>Payment method</dt>
-                    <dd className="billing-card-number">
-                      {subscription.card ? (
-                        <>
-                          <span className="billing-brand" aria-hidden="true">
-                            {(BRAND_LABEL[subscription.card.brand] ??
-                              subscription.card.brand)
-                              .slice(0, 4)
-                              .toUpperCase()}
-                          </span>
-                          <span>•••• {subscription.card.last4}</span>
-                        </>
-                      ) : (
-                        "No card on file"
-                      )}
+                    <dd>
+                      {subscription.card
+                        ? `${BRAND_LABEL[subscription.card.brand] ?? subscription.card.brand} •••• ${subscription.card.last4}`
+                        : "No card on file"}
                     </dd>
                   </div>
                 </dl>
               )}
 
-              <div className="billing-card-actions">
+              <div className="billing-actions">
                 {hasEnded ? (
                   <button
                     type="button"
-                    className="is-primary"
+                    className="btn-primary"
                     onClick={() => navigate("/pricing")}
                   >
-                    Resubscribe <span aria-hidden="true">→</span>
+                    Resubscribe <span className="btn-arrow" aria-hidden="true">→</span>
                   </button>
                 ) : (
                   <>
                     {subscription.cancelAtPeriodEnd ? (
                       <button
                         type="button"
-                        className="is-primary"
+                        className="btn-primary"
                         onClick={() => toggleCancel(true)}
                         disabled={busy}
                       >
@@ -346,7 +345,7 @@ export default function Billing() {
                     ) : null}
                     <button
                       type="button"
-                      className={status?.tone === "warning" ? "is-primary" : ""}
+                      className={status?.tone === "warning" ? "btn-primary" : "btn-secondary"}
                       onClick={startCardUpdate}
                       disabled={busy}
                     >
@@ -355,7 +354,7 @@ export default function Billing() {
                     {!subscription.cancelAtPeriodEnd && (
                       <button
                         type="button"
-                        className="is-quiet"
+                        className="btn-ghost billing-cancel"
                         onClick={() => setConfirmingCancel(true)}
                         disabled={busy}
                       >
@@ -428,23 +427,32 @@ export default function Billing() {
 
             {summary && summary.invoices.length > 0 && (
               <section className="billing-history" aria-labelledby="billing-history-title">
-                <h2 id="billing-history-title">Billing history</h2>
+                <h2 id="billing-history-title" className="slug">
+                  Billing history
+                </h2>
                 <ul>
                   {summary.invoices.map((invoice) => (
                     <li key={invoice.id}>
-                      <span>{formatDate(invoice.created)}</span>
+                      <span className="billing-history-date">{formatDate(invoice.created)}</span>
                       <span className="billing-history-amount">
                         {invoice.amountPaid === 0 && invoice.status === "paid"
                           ? "Free trial"
                           : formatMoney(invoice.amountPaid, invoice.currency)}
                       </span>
                       <span
-                        className={`billing-history-status is-${invoice.status ?? "unknown"}`}
+                        className={`tag billing-history-status ${
+                          invoice.status === "paid"
+                            ? "tag-success"
+                            : invoice.status === "open" || invoice.status === "uncollectible"
+                              ? "tag-warn"
+                              : ""
+                        }`}
                       >
                         {invoice.status ?? "—"}
                       </span>
                       {invoice.hostedInvoiceUrl ? (
                         <a
+                          className="link"
                           href={invoice.hostedInvoiceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -461,7 +469,8 @@ export default function Billing() {
             )}
           </>
         )}
-      </section>
+        </div>
+      </div>
     </main>
   );
 }

@@ -1,0 +1,558 @@
+/* Public pages: Home, How it works, FAQ, Terms, NDA, 404. */
+
+/* ── Home hero ──
+   The one photograph in the product, used once. The copy sits on the left
+   of the grid where a scrim takes the sky down to the ground colour; the
+   hillside sign stays clear on the right. */
+.home-page .site-nav {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-bottom-color: color-mix(in srgb, var(--ink) 14%, transparent);
+  background: transparent;
+}
+/* The pinned header in the iOS app (nav.css) must stay opaque and in flow. */
+html.is-native .home-page .site-nav {
+  position: sticky;
+  border-bottom-color: var(--line);
+  background: var(--ground);
+}
+
+.hero {
+  position: relative;
+  display: flex;
+  min-height: min(100svh, 860px);
+  align-items: center;
+  padding-block: calc(var(--nav-h) + env(safe-area-inset-top, 0px) + var(--space-7)) var(--space-8);
+  overflow: hidden;
+  isolation: isolate;
+}
+html.is-native .hero {
+  padding-top: var(--space-7);
+}
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-color: var(--ground);
+  background-image: url("/images/hero-wide.jpg");
+  background-position: right center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(
+      90deg,
+      var(--ground) 0%,
+      color-mix(in srgb, var(--ground) 86%, transparent) 30%,
+      color-mix(in srgb, var(--ground) 30%, transparent) 54%,
+      transparent 70%
+    ),
+    linear-gradient(0deg, var(--ground) 0%, transparent 26%);
+  pointer-events: none;
+}
+.hero-inner {
+  width: min(100% - 2 * var(--gutter), var(--page-max));
+}
+.hero-copy {
+  max-width: 580px;
+}
+.hero-copy .slug {
+  color: var(--ink-soft);
+}
+.hero-copy .display {
+  margin-top: var(--space-4);
+}
+.hero-copy .lead {
+  max-width: 44ch;
+  margin-top: var(--space-5);
+  color: var(--ink);
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.hero-actions .btn-secondary {
+  border-color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.hero-note {
+  margin: var(--space-4) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+/* A file is being dragged over the page. */
+.hero-upload.is-dragging {
+  outline: 2px dashed var(--ink);
+  outline-offset: 4px;
+}
+/* Back from signing up to upload: two rings point at the button. */
+.hero-upload.is-pulsing {
+  animation: hero-upload-ring 1.4s var(--ease) 2;
+}
+@keyframes hero-upload-ring {
+  from {
+    box-shadow: 0 0 0 0 var(--accent-line);
+  }
+  to {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-upload.is-pulsing {
+    animation: none;
+    outline: 2px solid var(--ink);
+    outline-offset: 4px;
+  }
+}
+
+/* Squarer windows get the 4:3 crop, which keeps the whole sign in frame. */
+@media (max-aspect-ratio: 7 / 5) {
+  .hero-photo {
+    background-image: url("/images/hero-tablet.jpg");
+    background-position: center top;
+  }
+}
+/* Upright phones and tablets: the sign sits in the top third of the tall
+   crop, so the copy moves to the foot of the hero, over the dark hillside. */
+@media (max-aspect-ratio: 4 / 5) {
+  .hero {
+    min-height: min(100svh, 820px);
+    align-items: flex-end;
+    padding-bottom: var(--space-7);
+  }
+  .hero-photo {
+    background-image: url("/images/hero-portrait.jpg");
+    background-position: center top;
+  }
+  .hero::after {
+    background: linear-gradient(
+      0deg,
+      var(--ground) 0%,
+      color-mix(in srgb, var(--ground) 88%, transparent) 42%,
+      transparent 70%
+    );
+  }
+}
+@media (max-width: 560px) {
+  .hero-actions > * {
+    flex: 1 1 100%;
+  }
+}
+/* Phones on their side: everything through the button has to fit in ~390px. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .hero {
+    min-height: 100svh;
+    padding-block: calc(52px + var(--space-4)) var(--space-4);
+  }
+  .hero-inner {
+    width: calc(100% - max(var(--gutter), env(safe-area-inset-left)) - max(var(--gutter), env(safe-area-inset-right)));
+  }
+  .hero-copy .display {
+    margin-top: var(--space-2);
+    font-size: 2.25rem;
+  }
+  .hero-copy .lead {
+    max-width: 52ch;
+    margin-top: var(--space-2);
+    font-size: var(--text-base);
+  }
+  .hero-actions {
+    margin-top: var(--space-4);
+  }
+  .hero-actions .btn-lg {
+    min-height: var(--control-h);
+  }
+  .hero-note {
+    margin-top: var(--space-2);
+  }
+}
+
+/* ── Section furniture ── */
+.section-head .slug,
+.page-head .slug {
+  margin-bottom: var(--space-4);
+}
+.section-head .lead,
+.page-head .lead {
+  margin-top: var(--space-5);
+}
+.section-head--wide {
+  max-width: 760px;
+  margin-bottom: var(--space-7);
+}
+
+/* The top of an inner page: label, title, a paragraph. */
+.page-head {
+  padding-block: clamp(var(--space-7), 8vw, var(--space-9)) clamp(var(--space-6), 5vw, var(--space-8));
+}
+.page-head .title {
+  max-width: 20ch;
+}
+
+/* Title on the left, the document on the right (FAQ, Terms, NDA). */
+.doc-layout {
+  align-items: start;
+  padding-block: clamp(var(--space-7), 8vw, var(--space-9));
+}
+.doc-head {
+  padding-block: 0;
+}
+@media (min-width: 900px) {
+  .doc-head {
+    position: sticky;
+    top: var(--space-7);
+  }
+}
+.terms-updated {
+  margin-bottom: var(--space-5);
+}
+
+/* ── The rehearsal screen, illustrated (RehearsalMock) ── */
+.mock {
+  margin: 0;
+}
+.mock-screen .sides {
+  border-radius: 0;
+}
+.mock-rec {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+}
+.mock-rec i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.mock-controls {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  background: var(--surface-1);
+  list-style: none;
+}
+.mock-controls li {
+  padding: var(--space-3) var(--space-1);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+.mock-controls li + li {
+  border-left: 1px solid var(--line);
+}
+.mock-controls li:last-child {
+  color: var(--ink);
+}
+.mock figcaption {
+  margin-top: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/* ── The four steps (HowSteps) ── */
+.how-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.how-step-num {
+  display: block;
+  margin-bottom: var(--space-3);
+  color: var(--accent);
+  font-family: var(--font-script);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.how-step-copy h3 {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.how-step-copy p {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--ink-soft);
+}
+.how-step-copy p + p {
+  margin-top: var(--space-3);
+}
+
+/* Home: four across, ruled between, the illustration under the words. */
+.how-steps--columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+}
+/* Each step shares the list's two rows, so the illustrations start on one
+   line however long the words above them run. */
+.how-steps--columns > li {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-2) 0;
+}
+.how-steps--columns > li + li {
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--line);
+}
+.how-steps--columns > li:last-child {
+  padding-right: 0;
+}
+.how-steps--columns .how-step-copy h3 {
+  font-size: var(--text-lg);
+}
+.how-steps--columns .how-step-copy p {
+  font-size: 0.9375rem;
+}
+@media (max-width: 1199px) {
+  .how-steps--columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .how-steps--columns > li {
+    padding-bottom: var(--space-6);
+  }
+  .how-steps--columns > li:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .how-steps--columns > li:nth-child(even) {
+    padding-right: 0;
+  }
+  .how-steps--columns > li:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+}
+@media (max-width: 560px) {
+  .how-steps--columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .how-steps--columns > li,
+  .how-steps--columns > li + li {
+    padding-inline: 0;
+    border-left: 0;
+  }
+  .how-steps--columns > li + li {
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* How it works: one step a row, words left, illustration right. */
+.how-steps--rows > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  padding-block: var(--space-7);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 900px) {
+  .how-steps--rows > li {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--space-6);
+    align-items: center;
+  }
+  .how-steps--rows .how-step-copy {
+    grid-column: 1 / span 5;
+  }
+  .how-steps--rows .how-step-art {
+    grid-column: 7 / -1;
+  }
+}
+.how-steps--rows .how-step-copy p {
+  font-size: var(--text-lg);
+  line-height: 1.55;
+}
+.how-steps--rows .how-step-copy p + p {
+  color: var(--ink-muted);
+  font-size: var(--text-base);
+}
+
+/* What each step shows. Small pieces of the script page (script.css). */
+.step-art {
+  font-size: var(--text-sm);
+}
+.step-art.sides .sides-head,
+.step-art.sides .sides-body {
+  padding-inline: var(--space-4);
+}
+.step-art .sides-slug,
+.step-art .sides-action {
+  margin-bottom: var(--space-2);
+}
+.step-art .sides-action:last-child {
+  margin-bottom: 0;
+}
+.step-cast {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.step-cast li {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-script);
+}
+.step-cast .is-picked .sides-cue {
+  color: var(--accent);
+}
+.step-voice dl {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 0;
+}
+.step-voice dl > div {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  align-items: center;
+}
+.step-voice dt {
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* A slider, drawn: track, filled part, thumb at --at. */
+.step-voice dd {
+  position: relative;
+  height: 2px;
+  margin: 0;
+  background: linear-gradient(90deg, var(--ink-soft) var(--at), var(--line-strong) var(--at));
+}
+.step-voice dd::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: calc(var(--at) - 6px);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.step-slate {
+  padding-block: var(--space-4);
+  border-block: 1px solid var(--line);
+}
+
+/* ── Where the material goes (DataLedger) ── */
+.ledger > section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3) var(--space-5);
+  padding-block: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 560px) {
+  .ledger > section {
+    grid-template-columns: 11rem minmax(0, 1fr);
+  }
+}
+.ledger .slug {
+  padding-top: 0.3em;
+  color: var(--ink-soft);
+}
+.ledger ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ledger li {
+  color: var(--ink);
+  line-height: 1.55;
+}
+.ledger li + li {
+  margin-top: var(--space-2);
+}
+.ledger section p {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.ledger-more {
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* ── A short ruled list of term and detail ── */
+.spec-list {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.spec-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1) var(--space-5);
+  padding-block: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 560px) {
+  .spec-list > div {
+    grid-template-columns: 14rem minmax(0, 1fr);
+  }
+}
+.spec-list dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+.spec-list dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* ── The last word on a page: one line and the way in ── */
+.closing > .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-8);
+}
+.closing .title {
+  max-width: 18ch;
+}
+.start-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.start-cta .meta {
+  margin: 0;
+}
+
+/* ── 404 ── */
+.not-found {
+  padding-bottom: var(--space-9);
+}
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}

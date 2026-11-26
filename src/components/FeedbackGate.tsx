@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Modal from "./Modal";
 import { useAuth } from "../contexts/AuthContext";
-import { getPendingFeedbackTape, submitFeedback } from "../lib/selfTapeStore";
+import { getPendingFeedbackTape, skipFeedback, submitFeedback } from "../lib/selfTapeStore";
 import { getSelfTapeUrl } from "../lib/selfTapeUrl";
 import { useToast } from "../lib/toast";
-import { onAuditionClosed } from "../lib/feedbackGate";
+import { notifyFeedbackOwedChanged, onFeedbackGateRequested, onFeedbackOwedChanged } from "../lib/feedbackGate";
 import { displayCharacterName } from "../lib/script";
 import type { SelfTape } from "../types";
 
-// Beta requirement: a piece of feedback is owed for every audition (self-tape)
-// before the user can keep using the app. Mounted once near the root
-// (App.tsx) so it blocks on every route, not just My Account — checked
-// against the local self-tape store (selfTapeStore.ts), not a server row,
-// so clearing site data also clears the gate. That's an acceptable trade for
-// a beta feedback nudge, not a security boundary. See src/lib/beta.ts for
-// the switch that turns this off.
+// Beta: every saved take asks for a rating before the next one is recorded.
+// Mounted once near the root (App.tsx) so it shows wherever the actor lands
+// after a take. It can be put off ("Not now") or skipped for a test take;
+// what it blocks is recording another take (Rehearsal.tsx, via
+// useFeedbackOwed), not the rest of the app. Checked against the local
+// self-tape store (selfTapeStore.ts), not a server row, so clearing site data
+// also clears it: a feedback nudge, not a security boundary. See
+// src/lib/beta.ts for the switch that turns this off.
+const COMMENT_MAX_LENGTH = 5000; // enforced by the database too
 export default function FeedbackGate() {
   const { user } = useAuth();
   const toast = useToast();
@@ -23,8 +25,12 @@ export default function FeedbackGate() {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  // Shown in the form, by the field it's about — and gone once that's fixed.
-  const [problem, setProblem] = useState<"rating" | "comment" | null>(null);
+  const [problem, setProblem] = useState(false);
+  // "Not now" for this take, until the actor tries to record another (or
+  // reloads): a tape id, so a newer pending take shows the gate again.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
+  // Reopened by a blocked Start, so the copy can say why.
+  const [requested, setRequested] = useState(false);
 
   const loadPending = useCallback(async () => {
     if (!user) {
@@ -42,9 +48,14 @@ export default function FeedbackGate() {
     void loadPending();
   }, [loadPending]);
 
-  // Rehearsal.tsx fires this the instant a take is saved, so the overlay is
-  // already up by the time the user lands on My Account — no refresh needed.
-  useEffect(() => onAuditionClosed(() => void loadPending()), [loadPending]);
+  // Fired the instant a take is saved, so the overlay is already up by the
+  // time the user lands on My Account — no refresh needed.
+  useEffect(() => onFeedbackOwedChanged(() => void loadPending()), [loadPending]);
+
+  useEffect(() => onFeedbackGateRequested(() => {
+    setDismissedId(null);
+    setRequested(true);
+  }), []);
 
   // Playback URL for the specific audition this feedback is about — same
   // local-blob-URL pattern as My Account's tape tiles.
@@ -62,7 +73,7 @@ export default function FeedbackGate() {
     };
   }, [pending]);
 
-  if (!pending) return null;
+  if (!pending || pending.id === dismissedId) return null;
 
   const recordedAt = new Date(pending.created_at).toLocaleString(undefined, {
     month: "short",
@@ -71,17 +82,20 @@ export default function FeedbackGate() {
     minute: "2-digit",
   });
 
+  const reset = () => {
+    setRating(0);
+    setComment("");
+    setProblem(false);
+    setRequested(false);
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (rating === 0) {
-      setProblem("rating");
+      setProblem(true);
       return;
     }
-    if (rating < 5 && !comment.trim()) {
-      setProblem("comment");
-      return;
-    }
-    setProblem(null);
+    setProblem(false);
     setSubmitting(true);
     try {
       await submitFeedback(pending.id, rating, comment.trim() || null);
@@ -92,34 +106,61 @@ export default function FeedbackGate() {
       return;
     }
     setSubmitting(false);
-    setRating(0);
-    setComment("");
+    reset();
     toast("Thanks for the feedback!", "success");
-    void loadPending();
+    notifyFeedbackOwedChanged();
   };
 
+  const handleSkip = async () => {
+    setSubmitting(true);
+    try {
+      await skipFeedback(pending.id);
+    } catch (err) {
+      console.error("Failed to skip audition feedback:", err);
+      toast("Couldn't skip that just now. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+    setSubmitting(false);
+    reset();
+    notifyFeedbackOwedChanged();
+  };
+
+  const handleNotNow = () => {
+    setRequested(false);
+    setDismissedId(pending.id);
+  };
+
+  const lowRating = rating > 0 && rating < 5;
+
   return (
-    <Modal onClose={() => {}} labelledBy="feedback-gate-title">
+    <Modal onClose={handleNotNow} labelledBy="feedback-gate-title" className="feedback-gate">
       <h2 id="feedback-gate-title" className="modal-title">
-        How did this audition go?
+        How did this take go?
       </h2>
-      <p className="mb-3 text-sm text-ink-soft">
+      <p className="feedback-gate-slate">
         Recorded {recordedAt}
-        {pending.role && <> as {displayCharacterName(pending.role)}</>}. We're in
-        beta — a quick note after every audition helps us fix what's broken
-        before you record another one.
+        {pending.role && <> as {displayCharacterName(pending.role)}</>}
+      </p>
+      <p className="modal-copy feedback-gate-intro">
+        {requested
+          ? "Rate this take, or skip it, and you can record the next one."
+          : "We’re in beta, so a quick rating after each take helps us fix what’s broken. You’ll need to rate or skip this one before recording another."}
       </p>
       {videoUrl ? (
+        // No autoplay: the actor may be somewhere their take shouldn't blare
+        // out. The fragment makes Safari paint a first frame as the poster.
         <video
           className="feedback-gate-video"
-          src={videoUrl}
+          src={`${videoUrl}#t=0.001`}
           controls
-          autoPlay
           playsInline
+          preload="metadata"
+          aria-label="Your take"
         />
       ) : (
         <div className="feedback-gate-video feedback-gate-video-loading">
-          Loading audition…
+          Loading your take…
         </div>
       )}
       <form className="feedback-gate-form" onSubmit={handleSubmit}>
@@ -128,7 +169,7 @@ export default function FeedbackGate() {
             className="feedback-gate-stars"
             role="radiogroup"
             aria-label="Rating"
-            aria-describedby={problem === "rating" ? "feedback-gate-problem" : undefined}
+            aria-describedby={problem ? "feedback-gate-problem" : undefined}
           >
             {[1, 2, 3, 4, 5].map((value) => (
               <button
@@ -143,7 +184,7 @@ export default function FeedbackGate() {
                 data-autofocus={value === 1 ? true : undefined}
                 onClick={() => {
                   setRating(value);
-                  if (problem === "rating" || value === 5) setProblem(null);
+                  setProblem(false);
                 }}
               >
                 ★
@@ -154,40 +195,43 @@ export default function FeedbackGate() {
             {["Tap to rate", "Didn’t work", "Rough", "Okay", "Good", "Great"][rating]}
           </span>
         </div>
-        <label className="sr-only" htmlFor="feedback-gate-comment">
-          {rating > 0 && rating < 5 ? "What happened? (required)" : "Comments (optional)"}
+        {problem && (
+          <p id="feedback-gate-problem" className="field-error feedback-gate-problem" role="alert">
+            Pick a star rating to send feedback, or skip this take below.
+          </p>
+        )}
+        <label className="field-label feedback-gate-label" htmlFor="feedback-gate-comment">
+          {lowRating ? "What could have gone better?" : "Anything to add?"}{" "}
+          <span>(optional)</span>
         </label>
         <textarea
           id="feedback-gate-comment"
-          className={`feedback-gate-textarea ${problem === "comment" ? "is-invalid" : ""}`}
+          className="textarea feedback-gate-textarea"
           value={comment}
-          onChange={(event) => {
-            setComment(event.target.value);
-            if (problem === "comment" && event.target.value.trim()) setProblem(null);
-          }}
+          onChange={(event) => setComment(event.target.value)}
           placeholder={
-            rating > 0 && rating < 5
-              ? "What could have gone better? (required)"
-              : "Anything that worked well, felt off, or broke outright? (optional)"
+            lowRating
+              ? "Even a few words help: what felt off, was slow, or broke?"
+              : "Anything that worked well, felt off, or broke outright?"
           }
-          aria-invalid={problem === "comment"}
-          aria-describedby={problem === "comment" ? "feedback-gate-problem" : undefined}
-          rows={4}
+          maxLength={COMMENT_MAX_LENGTH}
+          rows={3}
         />
-        {problem && (
-          <p id="feedback-gate-problem" className="feedback-gate-problem" role="alert">
-            {problem === "rating"
-              ? "Pick a star rating to continue."
-              : "Tell us a little about what could have gone better — even a few words helps."}
-          </p>
-        )}
         <button
           type="submit"
-          className="feedback-gate-submit"
+          className="btn-primary btn-lg btn-block feedback-gate-submit"
           disabled={submitting}
         >
-          {submitting ? "Saving…" : "Submit feedback"}
+          {submitting ? "Saving…" : "Send feedback"}
         </button>
+        <div className="feedback-gate-secondary">
+          <button type="button" className="btn-ghost" onClick={() => void handleSkip()} disabled={submitting}>
+            This was just a test — skip
+          </button>
+          <button type="button" className="btn-ghost" onClick={handleNotNow} disabled={submitting}>
+            Not now
+          </button>
+        </div>
       </form>
     </Modal>
   );

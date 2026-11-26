@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Step } from "../../types";
-import { normalizeSpeaker } from "../../lib/script";
+import { displayCharacterName, normalizeSpeaker } from "../../lib/script";
 import { buildReaderCue, type ReaderCue } from "../../lib/readerLines";
 import { clampCharacterPace } from "../../lib/characterDelivery";
 import { useTtsPlayer, type TtsIntensity, type TtsLine } from "../../hooks/useTtsPlayer";
@@ -10,7 +10,11 @@ import { useSelfTapeSession } from "../../hooks/useSelfTapeSession";
 import { useWakeLock } from "../../hooks/useWakeLock";
 import { TakeMetrics } from "../../lib/takeMetrics";
 import type { ReaderAudioPregen } from "../../hooks/useReaderAudioPregen";
+import { useFeedbackOwed } from "../../hooks/useFeedbackOwed";
+import { requestFeedbackGate } from "../../lib/feedbackGate";
 import RehearsalLineList from "./RehearsalLineList";
+import RehearsalStatusStrip, { type RehearsalStatus } from "./RehearsalStatusStrip";
+import RehearsalControlBar from "./RehearsalControlBar";
 import SelfTapeRecorder from "./SelfTapeRecorder";
 import Modal from "../Modal";
 import RehearsalSetup from "./RehearsalSetup";
@@ -26,6 +30,26 @@ const COUNTDOWN_START = 3;
 // (AudioContext.state reports "running" throughout). Delaying the very
 // first cue avoids racing a transition that only happens once, at start.
 const RECORDING_SETTLE_MS = 500;
+// How long a step with nothing to say (a stage direction) stays up before
+// the scene moves on by itself.
+const SILENT_STEP_HOLD_MS = 1200;
+// The actor's line with no new word recognised for this long: say how to
+// carry on, in case the mic or the match has lost them.
+const STALLED_LINE_HINT_MS = 8000;
+// Line tracking reconnects at the top of each of the actor's lines; only
+// call the mic missing once it's had time to.
+const MIC_MISSING_AFTER_MS = 2500;
+
+/** True once `active` has held for `ms` under the same `key`. */
+function useElapsed(key: string, ms: number, active: boolean): boolean {
+  const [firedKey, setFiredKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const timer = setTimeout(() => setFiredKey(key), ms);
+    return () => clearTimeout(timer);
+  }, [key, ms, active]);
+  return active && firedKey === key;
+}
 
 export default function Rehearsal({ steps, selectedRole, characterVoices, characterVolumes, characterEmotions, characterPaces, coachTakes, deliveryTags, onBack, onGoToStep, languageCode, fileName, scriptId, scriptSaved, pregen, onRecordingActiveChange }: {
   steps: Step[];
@@ -56,6 +80,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
 }) {
   const navigate = useNavigate();
   const {
+    user,
     status: recorderStatus,
     stream: cameraStream,
     error: recorderError,
@@ -102,7 +127,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   const readerCue = useCallback(
     (index: number): ReaderCue | null =>
       buildReaderCue(steps, index, characterVoices, deliveryTagsRef.current, characterEmotions, coachTakes, languageCode),
-    [steps, characterVoices, characterEmotions, coachTakes],
+    [steps, characterVoices, characterEmotions, coachTakes, languageCode],
   );
   // Fixed for the take: set on the voice setup screen, never mid-scene.
   const volumeFor = useCallback(
@@ -114,6 +139,12 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     [steps, characterPaces],
   );
   const ttsLine = useCallback((index: number): TtsLine | null => readerCue(index)?.line ?? null, [readerCue]);
+  // Read through a ref by the playback effect below, which must only restart
+  // for a new step, a pause or the start: a cast map changing identity
+  // mid-line (a voice, level or coached take saved elsewhere) would otherwise
+  // cut the playing line off and start it again.
+  const castRef = useRef({ readerCue, volumeFor, paceFor });
+  castRef.current = { readerCue, volumeFor, paceFor };
 
   const currentStep = steps[currentStepIndex];
   const currentSpeaker = normalizeSpeaker(currentStep?.speaker ?? "");
@@ -137,6 +168,9 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   const willRecord = Boolean(selectedRole);
   const [recordTake, setRecordTake] = useState(true);
   const recording = willRecord && recordTake;
+  // Beta: a take still waiting for its rating holds back the next recorded
+  // one (FeedbackGate.tsx); running lines without a tape is never held.
+  const feedbackOwed = useFeedbackOwed(user?.id);
   // A run without a tape reached its last line: offer what's next.
   const [runComplete, setRunComplete] = useState(false);
 
@@ -163,6 +197,10 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   }, [willRecord]);
 
   const beginRehearsal = useCallback((record: boolean) => {
+    if (record && feedbackOwed) {
+      requestFeedbackGate();
+      return;
+    }
     setRecordTake(record);
     takeMetricsRef.current = new TakeMetrics();
     takeMetricsRef.current.liveFetchesDuringTake = 0;
@@ -172,7 +210,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     unlock();
     setCountdown(COUNTDOWN_START);
     setStartPhase("countdown");
-  }, [unlock]);
+  }, [unlock, feedbackOwed]);
 
   useEffect(() => {
     if (startPhase !== "countdown") return;
@@ -204,12 +242,25 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     };
   }, [startPhase]);
 
+  // Anything that restarts the scene from a pause (a jump, a replay) must
+  // restart the tape with it, or the take silently stays paused. Through a
+  // ref: the recorder's resume is a new function every render, and goTo
+  // must stay stable for the memoized line rows.
+  const resumeRecordingRef = useRef(resumeRecording);
+  resumeRecordingRef.current = resumeRecording;
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const unpause = useCallback(() => {
+    if (pausedRef.current) resumeRecordingRef.current();
+    pausedRef.current = false;
+    setPaused(false);
+  }, []);
   const goTo = useCallback((index: number) => {
     stop();
-    setPaused(false);
+    unpause();
     setPlaybackState("waiting");
     setCurrentStepIndex(Math.max(0, Math.min(index, steps.length - 1)));
-  }, [stop, steps.length]);
+  }, [stop, unpause, steps.length]);
   // Counts how each of the actor's lines moved on — detected (with the
   // moment it was, opening a reader-latency sample) or by hand — once per
   // visit to the line.
@@ -235,7 +286,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   const goNextRef = useRef(goNext);
   goNextRef.current = goNext;
 
+  // Replaying the scene partner's current line re-runs the playback effect
+  // below, so the line still hands over to the next one when it ends.
+  const [replayCount, setReplayCount] = useState(0);
+  const skipBeatRef = useRef(false);
   useEffect(() => {
+    const { readerCue, volumeFor, paceFor } = castRef.current;
+    const skipBeat = skipBeatRef.current;
+    skipBeatRef.current = false;
     // Taken (and cleared) on every run, so a latency sample only pairs the
     // actor's line with the step right after it, and never spans a pause.
     const lineCompletedAt = takeMetricsRef.current.takePendingAdvance();
@@ -248,7 +306,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     // own line and playback advances to it.
     const nextIndex = steps.findIndex((item, index) => index > currentStepIndex && item.verbalLine.trim() && (!selectedRole || normalizeSpeaker(item.speaker) !== selectedRole));
     if (nextIndex !== -1) {
-      const nextLine = ttsLine(nextIndex);
+      const nextLine = readerCue(nextIndex)?.line;
       if (nextLine) prefetch(nextLine, intensity);
     }
     if (selectedRole && speaker === selectedRole) {
@@ -261,12 +319,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     if (!step.verbalLine.trim()) {
       setPlaybackState("ready");
       if (isLast) return;
-      const timer = setTimeout(() => goNextRef.current(), 1200);
+      const timer = setTimeout(() => goNextRef.current(), SILENT_STEP_HOLD_MS);
       return () => clearTimeout(timer);
     }
     const cue = readerCue(currentStepIndex);
     if (!cue) return;
-    const { line, beatMs } = cue;
+    const { line } = cue;
+    const beatMs = skipBeat ? 0 : cue.beatMs;
     const controller = new AbortController();
     let latencyRecorded = false;
     const onPlaying = lineCompletedAt === null ? undefined : () => {
@@ -309,7 +368,7 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       holdTimer = setTimeout(startPlayback, holdMs);
     } else startPlayback();
     return () => { if (holdTimer) clearTimeout(holdTimer); controller.abort(); stop(); };
-  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, ttsLine, readerCue, volumeFor, paceFor, play, prefetch, stop, recording]);
+  }, [currentStepIndex, steps, selectedRole, paused, startPhase, intensity, play, prefetch, stop, recording, replayCount]);
 
   const lineDetected = isMyLine && lineWordCount > 0 && matchedWordCount >= lineWordCount;
   useEffect(() => {
@@ -325,16 +384,14 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
   // audition the same way: save the take, then land on its tile in My
   // Scripts so the user can immediately review, download, or delete it.
   const endRehearsal = useCallback(async () => {
-    // finishRecording() guards its own errors and shouldn't throw, but this
-    // still can't be allowed to skip the navigate below — an unhandled
-    // rejection here used to leave the rehearsal stuck on-screen with no
-    // feedback prompt and no way back to My Auditions.
     // Pre-generation's duration (to its finish, or to now if it's still
     // going) and how many lines it gave up on.
     const { startedAt, finishedAt, failed } = pregenRef.current;
     const metrics = takeMetricsRef.current;
     metrics.pregenMs = startedAt === null ? null : (finishedAt ?? Date.now()) - startedAt;
     metrics.pregenFailedLines = startedAt === null ? null : failed;
+    // finishRecording() guards its own errors, but nothing may skip the
+    // navigate below: without it the rehearsal is stuck on-screen.
     const tapeId = await finishRecording(metrics).catch((err) => {
       console.error("endRehearsal: finishRecording failed unexpectedly", err);
       return null;
@@ -365,19 +422,29 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     void endRehearsal();
   }, [recording, lastLineFinished, paused, startPhase, endRehearsal, recordMyLineAdvance]);
 
-  const cueIndex = isMyLine
-    ? [...steps.slice(0, currentStepIndex).keys()].reverse().find((index) => steps[index].verbalLine.trim())
-    : currentStepIndex;
+  const cueIndex = useMemo(() => {
+    if (!isMyLine) return currentStepIndex;
+    for (let index = currentStepIndex - 1; index >= 0; index -= 1) {
+      if (steps[index].verbalLine.trim()) return index;
+    }
+    return undefined;
+  }, [isMyLine, steps, currentStepIndex]);
   const cueStep = cueIndex === undefined ? null : steps[cueIndex];
 
   // Plays at once, with no beat: the actor asked for the cue, so a beat
   // would only read as lag.
   const replayCue = useCallback(() => {
     if (cueIndex === undefined) return;
+    if (!isMyLine) {
+      skipBeatRef.current = true;
+      unpause();
+      setReplayCount((count) => count + 1);
+      return;
+    }
     const line = ttsLine(cueIndex);
     if (!line) return;
     stop();
-    setPaused(false);
+    unpause();
     setFailureReason(null);
     setPlaybackState("playing");
     play(line, {
@@ -385,16 +452,19 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
       volume: volumeFor(cueIndex),
       speed: paceFor(cueIndex),
       onFallback: (reason) => { setFailureReason(reason); setPlaybackState("error"); },
-      onEnded: () => setPlaybackState(isMyLine ? "ready" : "waiting"),
-    }).catch((error) => { setFailureReason(error?.message ?? null); setPlaybackState("error"); });
-  }, [cueIndex, ttsLine, volumeFor, paceFor, intensity, isMyLine, play, stop]);
+      onEnded: () => setPlaybackState("ready"),
+    }).catch((error) => {
+      if (error?.name !== "AbortError") { setFailureReason(error?.message ?? null); setPlaybackState("error"); }
+    });
+  }, [cueIndex, ttsLine, volumeFor, paceFor, intensity, isMyLine, play, stop, unpause]);
 
   const togglePause = useCallback(() => {
-    setPaused((value) => {
-      if (!value) { stop(); setPlaybackState("paused"); pauseRecording(); }
-      else { resumeRecording(); }
-      return !value;
-    });
+    const pausing = !pausedRef.current;
+    // Ahead of the render, so a second toggle in the same tick sees this one.
+    pausedRef.current = pausing;
+    if (pausing) { stop(); setPlaybackState("paused"); pauseRecording(); }
+    else { resumeRecording(); }
+    setPaused(pausing);
   }, [stop, pauseRecording, resumeRecording]);
 
   // The camera dropped out mid-take (see useSelfTapeRecorder): pause the
@@ -466,16 +536,21 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     const onKey = (event: KeyboardEvent) => {
       if (startPhase !== "active") return;
       if (confirmingStop || runComplete) return;
-      if ((event.target as HTMLElement)?.matches("input, select, textarea, button")) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches("input, select, textarea")) return;
+      // A focused button keeps Space and Enter for itself; the rest still
+      // work, or the shortcuts would die after any tap on the control bar.
+      if (target?.matches("button, a") && (event.code === "Space" || event.key === "Enter")) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "ArrowRight") goNext();
       if (event.key === "ArrowLeft") goPrev();
       if (event.key.toLowerCase() === "r") replayCue();
-      if (event.key.toLowerCase() === "h") setLineMode((mode) => mode === "hidden" ? "full" : "hidden");
+      if (event.key.toLowerCase() === "h" && selectedRole) setLineMode((mode) => mode === "hidden" ? "full" : "hidden");
       if (event.code === "Space") { event.preventDefault(); togglePause(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [startPhase, confirmingStop, runComplete, goNext, goPrev, replayCue, togglePause]);
+  }, [startPhase, confirmingStop, runComplete, selectedRole, goNext, goPrev, replayCue, togglePause]);
 
   // Guard both an actual tab close/refresh and the in-app Exit paths below
   // while a take is in progress and not yet saved.
@@ -505,6 +580,11 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     return window.confirm("You have unsaved changes. Are you sure you want to leave?");
   }, [isRecordingActive]);
 
+  const trackingMyLine = isMyLine && !paused && startPhase === "active" && !lineDetected && playbackState !== "playing";
+  const micMissing = useElapsed(String(currentStepIndex), MIC_MISSING_AFTER_MS, trackingMyLine && !listening);
+  const lineStalled = useElapsed(`${currentStepIndex}:${matchedWordCount}`, STALLED_LINE_HINT_MS, trackingMyLine && listening);
+  const toggleLineMode = useCallback(() => setLineMode((mode) => mode === "hidden" ? "full" : "hidden"), []);
+
   if (!currentStep) return null;
   if (startPhase === "idle") {
     return (
@@ -529,44 +609,61 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
     );
   }
   const progress = ((currentStepIndex + 1) / steps.length) * 100;
-  const status = complete
-    ? { title: "Rehearsal complete", detail: "Saving your take…", kind: "complete" }
-    : paused && cameraInterrupted
-      ? { title: "Camera interrupted", detail: "Your phone paused the camera, so we paused your take. Resume once it’s back, or end the take to keep what you have.", kind: "paused" }
-    : paused
-      ? { title: "Rehearsal paused", detail: "Resume when you’re ready.", kind: "paused" }
-      : playbackState === "error"
-        ? { title: "Cue playback failed", detail: failureReason ?? "Replay the cue or continue manually.", kind: "error" }
-        : lineDetected
-          ? { title: "Got it", detail: "The next cue will play automatically.", kind: "detected" }
-          : isMyLine && listening
-            ? { title: "Listening for your line…", detail: "The next cue will play after your line is detected.", kind: "listening" }
-            : isMyLine
-              ? { title: "Your line", detail: "Microphone unavailable. Read aloud, then continue.", kind: "ready" }
-              : playbackState === "playing"
-                ? { title: `${currentSpeaker || "Scene partner"} is speaking…`, detail: "Listen for your cue.", kind: "playing" }
-                : { title: "Cue complete", detail: "Moving to the next line.", kind: "ready" };
+  const partnerName = currentSpeaker ? displayCharacterName(currentSpeaker) : "Scene partner";
+  const endLabel = recording ? "End take" : "Finish";
+  const carryOn = isLastStep ? `tap ${endLabel}` : "tap Next";
+  // The service's own wording is for whoever is debugging, not the actor.
+  const devFailureNote = import.meta.env.DEV && failureReason ? ` (${failureReason})` : "";
+  const status: RehearsalStatus = startPhase === "countdown"
+    ? { kind: "waiting", title: `Starting in ${countdown}`, detail: recording ? "Recording starts with the scene." : "" }
+    : complete
+      ? { kind: "done", title: "Scene complete", detail: "Saving your take…" }
+      : runComplete
+        ? { kind: "done", title: "Scene complete", detail: "" }
+        : paused && cameraInterrupted
+          ? { kind: "paused", title: "Paused", detail: `Your camera was interrupted. Tap Resume once it’s back, or ${endLabel} to keep what you have.` }
+          : paused
+            ? { kind: "paused", title: "Paused", detail: "Tap Resume when you’re ready." }
+            : playbackState === "error"
+              ? { kind: "error", title: `Couldn’t play ${isMyLine ? "your cue" : `${partnerName}’s line`}`, detail: `Tap Replay to try again, or ${carryOn} to carry on.${devFailureNote}` }
+              : lineDetected
+                ? { kind: "you", title: "Got it", detail: "" }
+                : isMyLine && micMissing
+                  ? { kind: "hint", title: "Your line", detail: `The mic isn’t following along. Say your line, then ${carryOn}.` }
+                  : isMyLine && lineStalled
+                    ? { kind: "hint", title: "Your line", detail: `Didn’t catch that. Keep going, or ${carryOn}.` }
+                    : isMyLine && playbackState === "playing"
+                      ? { kind: "partner", title: "Your cue", detail: "Replaying. Your line is next." }
+                      : isMyLine
+                        ? { kind: "you", title: "Your line", detail: "Listening. Go ahead." }
+                        : playbackState === "playing"
+                          ? { kind: "partner", title: partnerName, detail: selectedRole ? "Speaking. Listen for your cue." : "Speaking." }
+                          : !currentStep.verbalLine.trim()
+                            ? { kind: "waiting", title: "Stage direction", detail: isLastStep ? `Tap ${endLabel} when you’re done.` : "Carrying on in a moment." }
+                            : { kind: "waiting", title: partnerName, detail: "Up next…" };
 
   return (
     <main className="rehearsal-page">
       <h1 className="sr-only">Rehearsal: {fileName}</h1>
       <header className="rehearsal-header">
-        <div className="rehearsal-context">
-          <button
-            onClick={() => { if (confirmExit()) onBack(); }}
-            aria-label="Back to role and voice setup"
-            title="Back to setup"
-          >
-            ←
-          </button>
-          <span title={fileName}>{fileName}</span>
-        </div>
-        <p><strong>Rehearsal</strong><span>Line {currentStepIndex + 1} of {steps.length}</span></p>
-        <div>
-          <Link to="/" onClick={(event) => { if (!confirmExit()) event.preventDefault(); }}>Exit</Link>
-        </div>
+        <button
+          type="button"
+          className="rehearsal-back"
+          onClick={() => { if (confirmExit()) onBack(); }}
+          aria-label="Back to role and voice setup"
+          title="Back to setup"
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+        <span className="rehearsal-file" title={fileName}>{fileName}</span>
+        <p className="rehearsal-count">
+          <span className="sr-only">Rehearsal: </span>
+          Line {currentStepIndex + 1} of {steps.length}
+        </p>
+        <Link to="/" className="btn-ghost rehearsal-exit" onClick={(event) => { if (!confirmExit()) event.preventDefault(); }}>Exit</Link>
       </header>
       <div className="rehearsal-progress"><i style={{ width: `${progress}%` }} /></div>
+      <RehearsalStatusStrip status={status} />
 
       {/* Two columns only with the camera beside the script; just listening,
           the script takes the centre. */}
@@ -576,17 +673,13 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
             status={recorderStatus}
             stream={cameraStream}
             error={recorderError}
-            saving={recorderSaving}
-            paused={paused}
             practiceRun={!recording}
-            onTogglePause={togglePause}
-            onStop={requestStop}
             nativePreview={nativePreview}
             onRetry={nativePreview ? () => void requestCamera() : undefined}
           />
         )}
 
-        <section className="rehearsal-center" aria-live="polite">
+        <section className="rehearsal-center">
           <RehearsalLineList
             steps={steps}
             currentIndex={currentStepIndex}
@@ -594,49 +687,43 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
             lineMode={lineMode}
             isMyLine={isMyLine}
             matchedWordCount={matchedWordCount}
-            status={status}
-            canReplay={Boolean(cueStep)}
             onJump={goTo}
-            onPrev={goPrev}
-            onNext={goNext}
-            onReplay={replayCue}
-            onStop={requestStop}
-            stopLabel={recording ? "End take" : "Finish"}
           />
         </section>
 
         {startPhase === "countdown" && (
-          <div className="rehearsal-start-overlay">
-            <div className="rehearsal-countdown" key={countdown} role="timer" aria-live="assertive">{countdown}</div>
+          <div className="rehearsal-overlay">
+            {/* Announced by the status strip, the one live region. */}
+            <div className="rehearsal-countdown" key={countdown} aria-hidden="true">{countdown}</div>
           </div>
         )}
 
         {runComplete && (
-          <div className="rehearsal-start-overlay">
-            <div className="rehearsal-start-choice" role="dialog" aria-modal="true" aria-labelledby="rehearsal-done-title">
-              <h2 id="rehearsal-done-title">Scene complete</h2>
-              <p>
+          <div className="rehearsal-overlay">
+            <div className="rehearsal-done" role="dialog" aria-modal="true" aria-labelledby="rehearsal-done-title">
+              <h2 id="rehearsal-done-title" className="modal-title">Scene complete</h2>
+              <p className="modal-copy">
                 {willRecord
                   ? "Nice run. Go again, or record a take now that you’re warmed up."
                   : "That’s the whole scene."}
               </p>
-              <div className="rehearsal-start-actions">
+              <div className="rehearsal-done-actions">
                 {willRecord && (
-                  <button type="button" className="rehearsal-start-primary" onClick={() => runAgain(true)} autoFocus>
+                  <button type="button" className="btn-primary" onClick={() => runAgain(true)} autoFocus>
                     Record a take
                   </button>
                 )}
                 <button
                   type="button"
-                  className={willRecord ? undefined : "rehearsal-start-primary"}
+                  className={willRecord ? "btn-secondary" : "btn-primary"}
                   onClick={() => runAgain(false)}
                 >
                   Run it again
                 </button>
+                <button type="button" className="btn-ghost" onClick={onBack}>
+                  Back to setup
+                </button>
               </div>
-              <button type="button" className="rehearsal-start-back" onClick={onBack}>
-                ← Back to setup
-              </button>
             </div>
           </div>
         )}
@@ -659,6 +746,22 @@ export default function Rehearsal({ steps, selectedRole, characterVoices, charac
           </Modal>
         )}
       </div>
+      <RehearsalControlBar
+        disabled={startPhase !== "active" || complete || runComplete}
+        paused={paused}
+        onTogglePause={togglePause}
+        canPrev={currentStepIndex > 0}
+        onPrev={goPrev}
+        canNext={!isLastStep}
+        onNext={goNext}
+        canReplay={Boolean(cueStep)}
+        onReplay={replayCue}
+        linesHidden={lineMode === "hidden"}
+        onToggleLines={selectedRole ? toggleLineMode : undefined}
+        endLabel={endLabel}
+        ending={recorderSaving}
+        onEnd={requestStop}
+      />
     </main>
   );
 }

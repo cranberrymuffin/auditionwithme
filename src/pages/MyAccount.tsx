@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
+import ScriptName from "../components/ScriptName";
 import SiteNav from "../components/SiteNav";
 import StorageMeter from "../components/StorageMeter";
 import { useAuth } from "../contexts/AuthContext";
@@ -17,12 +18,12 @@ import {
 import {
   deleteScript as deleteScriptRecord,
   listScripts,
-  toReplayScript,
 } from "../lib/scriptStore";
-import { displayCharacterName } from "../lib/script";
+import { displayCharacterName, spokenLines } from "../lib/script";
 import { useToast } from "../lib/toast";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
 import type { SavedScript, SelfTape } from "../types";
+import { isStorageNoticeDismissed, rememberStorageNoticeDismissed } from "../lib/storageNotice";
 
 // Tapes recorded before the per-take role field existed have none saved.
 // When the script's only ever been read as one character, that's an
@@ -30,7 +31,7 @@ import type { SavedScript, SelfTape } from "../types";
 // showing nothing.
 function roleForTape(tape: SelfTape, script: SavedScript | null | undefined): string {
   if (tape.role) return tape.role;
-  return script?.roles_read.length === 1 ? script.roles_read[0] : "";
+  return script?.rolesRead.length === 1 ? script.rolesRead[0] : "";
 }
 
 export default function MyAccount() {
@@ -46,6 +47,7 @@ export default function MyAccount() {
   const [loading, setLoading] = useState(true);
   const [tapeUrls, setTapeUrls] = useState<Record<string, string>>({});
   const [expandedTapeId, setExpandedTapeId] = useState<string | null>(null);
+  const [storageNoticeDismissed, setStorageNoticeDismissed] = useState(isStorageNoticeDismissed);
   // Which previously-read role is picked in each script's "Practice as"
   // dropdown, keyed by script id — falls back to the most recent role read.
   const [roleChoice, setRoleChoice] = useState<Record<string, string>>({});
@@ -128,14 +130,14 @@ export default function MyAccount() {
   // saved cast — no RolePicker/VoiceCasting detour.
   const practiceAsRole = (script: SavedScript, role: string) => {
     navigate("/practice", {
-      state: { replayScript: toReplayScript(script), selectedRole: role },
+      state: { replayScript: script, selectedRole: role },
     });
   };
 
   // Recast (or the very first practice on this script): RolePicker, then
   // VoiceCasting if there's anyone else to voice.
   const practice = (script: SavedScript) => {
-    navigate("/practice", { state: { replayScript: toReplayScript(script) } });
+    navigate("/practice", { state: { replayScript: script } });
   };
 
   const scrollToScript = (scriptId: string) => {
@@ -305,7 +307,7 @@ export default function MyAccount() {
   }, [expandedTapeId]);
 
   return (
-    <main className="account-page">
+    <main className="page account-page">
       <Seo
         title="My Account"
         description="Manage your saved scripts and self-tape recordings."
@@ -314,28 +316,29 @@ export default function MyAccount() {
       />
       <SiteNav />
 
-      <section className="account-main">
-        <header className="account-header">
-          <h1>My Auditions</h1>
-          {user?.email && <p className="account-email">{user.email}</p>}
-          <p className="account-subtitle">
+      <div className="wrap grid doc-layout account-layout">
+        <header className="page-head doc-head account-head span-4">
+          <p className="slug">On this device</p>
+          <h1 className="title">My auditions</h1>
+          <p className="lead">
             Your scripts and self-tapes. They’re saved on this device only,
             so download any take you want to keep.
           </p>
+          {user?.email && <p className="account-email meta">{user.email}</p>}
+          {scripts.length > 0 && (
+            <button
+              type="button"
+              className="btn-primary account-upload"
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              Upload a script
+            </button>
+          )}
           {user && !loading && (
             <StorageMeter
               userId={user.id}
               refreshKey={`${scripts.length}:${selfTapes.length}`}
             />
-          )}
-          {scripts.length > 0 && (
-            <button
-              type="button"
-              className="account-upload-button"
-              onClick={() => uploadInputRef.current?.click()}
-            >
-              <span aria-hidden="true">+</span> Upload a script
-            </button>
           )}
         </header>
         <input
@@ -351,124 +354,168 @@ export default function MyAccount() {
           }}
         />
 
-        {loading ? (
-          <p className="account-empty">Loading your scripts…</p>
-        ) : scripts.length === 0 ? (
-          <div className="account-empty">
-            <p>You haven't uploaded a script on this device.</p>
-            <button type="button" onClick={() => uploadInputRef.current?.click()}>
-              Upload a script <span>→</span>
-            </button>
-          </div>
-        ) : (
-          <ul className="account-scripts">
-            {scripts.map((script) => {
-              const defaultRole =
-                script.roles_read[script.roles_read.length - 1] ?? "";
-              const selectedRoleForScript = roleChoice[script.id] ?? defaultRole;
-              // Tapes with no recorded role (saved before that field existed)
-              // can't be attributed to a specific read, so they stay visible
-              // no matter which role is picked rather than silently vanishing.
-              const tapes = selfTapes.filter(
-                (tape) =>
-                  tape.script_id === script.id &&
-                  (!tape.role || tape.role === selectedRoleForScript),
-              );
-              return (
-                <li
-                  key={script.id}
-                  className="account-script-row"
-                  ref={(el) => {
-                    if (el) scriptRowRefs.current.set(script.id, el);
-                    else scriptRowRefs.current.delete(script.id);
-                  }}
-                >
-                  <div className="account-script-header">
-                    <strong className="account-script-title">{script.title}</strong>
-                    <div className="account-script-corner">
-                      <button
-                        type="button"
-                        className={
-                          script.roles_read.length > 0
-                            ? "account-script-btn account-script-btn--outline"
-                            : "account-script-btn account-script-btn--solid"
-                        }
-                        onClick={() => practice(script)}
-                      >
-                        {script.roles_read.length > 0 ? "Change role or voices" : "Practice →"}
-                      </button>
-                      <button
-                        type="button"
-                        className="account-script-btn account-script-btn--danger"
-                        onClick={() => void deleteScript(script)}
-                        aria-label={`Delete "${script.title}"`}
-                        title="Delete"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18" />
-                          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" />
-                          <path d="M14 11v6" />
-                        </svg>
-                      </button>
+        <section className="account-body span-8 at-5" aria-label="Saved scripts">
+          {loading ? (
+            <p className="account-loading meta">Loading your scripts…</p>
+          ) : scripts.length === 0 ? (
+            <div className="account-empty">
+              <p className="slug">No scripts yet</p>
+              <p className="account-empty-title">
+                You haven’t uploaded a script on this device.
+              </p>
+              <p className="meta">
+                Upload your sides as a PDF, pick your role, and the script and
+                every take you record will be listed here.
+              </p>
+              <button
+                type="button"
+                className="btn-primary btn-lg"
+                onClick={() => uploadInputRef.current?.click()}
+              >
+                Upload a script <span className="btn-arrow" aria-hidden="true">→</span>
+              </button>
+            </div>
+          ) : (
+            <ul className="account-scripts">
+              {scripts.map((script) => {
+                const defaultRole =
+                  script.rolesRead[script.rolesRead.length - 1] ?? "";
+                const selectedRoleForScript = roleChoice[script.id] ?? defaultRole;
+                // Newest first, as listTapes returns them: a take's number
+                // is its place in the order they were recorded.
+                const scriptTapes = selfTapes.filter((tape) => tape.script_id === script.id);
+                // Tapes with no recorded role (saved before that field existed)
+                // can't be attributed to a specific read, so they stay visible
+                // no matter which role is picked rather than silently vanishing.
+                const tapes = scriptTapes.filter(
+                  (tape) => !tape.role || tape.role === selectedRoleForScript,
+                );
+                const hasRole = script.rolesRead.length > 0;
+                const yourLines = hasRole
+                  ? spokenLines(script.steps, selectedRoleForScript).length
+                  : 0;
+                return (
+                  <li
+                    key={script.id}
+                    className="script-row"
+                    ref={(el) => {
+                      if (el) scriptRowRefs.current.set(script.id, el);
+                      else scriptRowRefs.current.delete(script.id);
+                    }}
+                  >
+                    <div className="script-row-head">
+                      <div className="script-row-id">
+                        <h2 className="script-row-title">
+                          <ScriptName name={script.title} />
+                        </h2>
+                        <p className="script-row-meta">
+                          {hasRole && (
+                            <span className="script-row-role">
+                              {displayCharacterName(selectedRoleForScript)}
+                            </span>
+                          )}
+                          <span>
+                            {script.characters.length}{" "}
+                            {script.characters.length === 1 ? "character" : "characters"}
+                          </span>
+                          <span>
+                            {hasRole && yourLines > 0 ? `${yourLines} of ` : ""}
+                            {script.steps.length} {script.steps.length === 1 ? "line" : "lines"}
+                          </span>
+                          <span>Added {formatDay(script.createdAt)}</span>
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <span className="account-script-subtitle">
-                    {script.characters.length}{" "}
-                    {script.characters.length === 1 ? "character" : "characters"}
-                  </span>
-                  {script.roles_read.length > 0 && (
-                    <div className="account-script-actions">
-                      <label className="account-script-role-picker">
-                        <span>Rehearse as</span>
-                        <select
-                          aria-label="Choose which role to practice as"
-                          value={selectedRoleForScript}
-                          onChange={(event) =>
-                            setRoleChoice((prev) => ({
-                              ...prev,
-                              [script.id]: event.target.value,
-                            }))
-                          }
+                    <div className="script-row-bar">
+                      {hasRole ? (
+                        <div className="script-row-rehearse">
+                          <label className="script-row-role-picker">
+                            <span>Rehearse as</span>
+                            <select
+                              className="select"
+                              aria-label="Choose which role to practice as"
+                              value={selectedRoleForScript}
+                              onChange={(event) =>
+                                setRoleChoice((prev) => ({
+                                  ...prev,
+                                  [script.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              {script.rolesRead.map((role) => (
+                                <option key={role} value={role}>
+                                  {displayCharacterName(role)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => practiceAsRole(script, selectedRoleForScript)}
+                          >
+                            Rehearse <span className="btn-arrow" aria-hidden="true">→</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="script-row-rehearse">
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => practice(script)}
+                          >
+                            Practice <span className="btn-arrow" aria-hidden="true">→</span>
+                          </button>
+                        </div>
+                      )}
+                      <div className="script-row-manage">
+                        {hasRole && (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => practice(script)}
+                          >
+                            Change role or voices
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-ghost script-row-delete"
+                          onClick={() => void deleteScript(script)}
+                          aria-label={`Delete "${script.title}"`}
                         >
-                          {script.roles_read.map((role) => (
-                            <option key={role} value={role}>
-                              {displayCharacterName(role)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="button"
-                        className="account-script-btn account-script-btn--solid"
-                        onClick={() => practiceAsRole(script, selectedRoleForScript)}
-                      >
-                        Rehearse →
-                      </button>
+                          Delete
+                        </button>
+                      </div>
                     </div>
-                  )}
-                  {tapes.length > 0 && (
-                    <ul className="account-self-tapes">
-                      {tapes.map((tape) => (
-                        <li key={tape.id}>
-                          <SelfTapeTile
-                            tape={tape}
-                            role={roleForTape(tape, script)}
-                            url={tapeUrls[tape.id]}
-                            ensureUrl={ensureTapeUrl}
-                            onOpen={() => setExpandedTapeId(tape.id)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+                    {tapes.length > 0 && (
+                      <div className="script-row-takes">
+                        <p className="slug">
+                          {tapes.length} {tapes.length === 1 ? "take" : "takes"}
+                        </p>
+                        <ul className="take-list">
+                          {tapes.map((tape) => (
+                            <li key={tape.id}>
+                              <SelfTapeTile
+                                tape={tape}
+                                number={scriptTapes.length - scriptTapes.indexOf(tape)}
+                                role={roleForTape(tape, script)}
+                                url={tapeUrls[tape.id]}
+                                ensureUrl={ensureTapeUrl}
+                                onOpen={() => setExpandedTapeId(tape.id)}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
 
       {expandedTape && (
         <div className="tape-modal-overlay" onClick={closeExpanded}>
@@ -479,26 +526,23 @@ export default function MyAccount() {
             aria-label="Self-tape"
             onClick={(event) => event.stopPropagation()}
           >
-            <button
-              ref={tapeCloseRef}
-              type="button"
-              className="tape-modal-close"
-              onClick={closeExpanded}
-              aria-label="Close"
-            >
-              ✕
-            </button>
-            <div className="tape-modal-detail">
-              {expandedScript && <strong>{expandedScript.title}</strong>}
-              <span>
-                {expandedRole && `Reading as ${displayCharacterName(expandedRole)} · `}
-                {new Date(expandedTape.created_at).toLocaleString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}
-              </span>
+            <div className="tape-modal-head">
+              <div className="tape-modal-detail">
+                {expandedScript && <strong>{expandedScript.title}</strong>}
+                <span>
+                  {expandedRole && `Reading as ${displayCharacterName(expandedRole)} · `}
+                  {formatMoment(expandedTape.created_at)}
+                </span>
+              </div>
+              <button
+                ref={tapeCloseRef}
+                type="button"
+                className="btn-ghost tape-modal-close"
+                onClick={closeExpanded}
+                aria-label="Close"
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
             </div>
             {tapeUrls[expandedTape.id] ? (
               <video
@@ -506,24 +550,36 @@ export default function MyAccount() {
                 controls
                 // A tape that still owes feedback gets its review video
                 // playing inside FeedbackGate instead (mounted above this
-                // modal, z-index 200 vs. 60) — autoplaying it here too would
-                // just run silently/behind that overlay.
+                // modal in the stacking order) — autoplaying it here too
+                // would just run silently/behind that overlay.
                 autoPlay={!(expandedTape.feedback_required && !expandedTape.feedback_submitted_at)}
                 playsInline
               />
             ) : (
               <div className="tape-modal-loading">Loading video…</div>
             )}
+            {!storageNoticeDismissed && (
+              <p className="notice notice-accent tape-modal-keep-note">
+                This take is saved on this device only. Download it to keep a
+                copy you can send.
+              </p>
+            )}
             <div className="tape-modal-actions">
               <button
                 type="button"
-                onClick={() => void downloadTape(expandedTape)}
+                className="btn-primary tape-modal-download"
+                onClick={() => {
+                  // They know how to keep a take now: no need to say it again.
+                  rememberStorageNoticeDismissed();
+                  setStorageNoticeDismissed(true);
+                  void downloadTape(expandedTape);
+                }}
               >
                 Download
               </button>
               <button
                 type="button"
-                className="tape-modal-delete"
+                className="btn-danger tape-modal-delete"
                 onClick={() => void deleteTape(expandedTape)}
               >
                 Delete
@@ -536,18 +592,33 @@ export default function MyAccount() {
   );
 }
 
-/** A self-tape thumbnail that only reads its blob out of IndexedDB — and
- * mints the object URL the browser then decodes a preview frame from — once
- * it actually scrolls into view, instead of every tape on the account
- * loading at once. */
+function formatMoment(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** One take in a script's list: a still, its number, and when it was
+ * recorded. It only reads its blob out of IndexedDB — and mints the object
+ * URL the browser then decodes a preview frame from — once it actually
+ * scrolls into view, instead of every tape on the account loading at once. */
 function SelfTapeTile({
   tape,
+  number,
   role,
   url,
   ensureUrl,
   onOpen,
 }: {
   tape: SelfTape;
+  number: number;
   role: string;
   url: string | undefined;
   ensureUrl: (tape: SelfTape) => void;
@@ -578,11 +649,11 @@ function SelfTapeTile({
     <button
       ref={ref}
       type="button"
-      className="account-tape-tile"
+      className="take-row"
       onClick={onOpen}
-      aria-label={`Open self-tape${role ? ` as ${displayCharacterName(role)}` : ""}, recorded ${new Date(tape.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
+      aria-label={`Open self-tape${role ? ` as ${displayCharacterName(role)}` : ""}, recorded ${formatMoment(tape.created_at)}`}
     >
-      <span className="account-tape-tile-frame">
+      <span className="take-row-frame">
         {url ? (
           <video
             src={url}
@@ -599,30 +670,16 @@ function SelfTapeTile({
             }}
           />
         ) : (
-          <span className="account-tape-tile-loading" />
-        )}
-        <span className="account-tape-tile-play" aria-hidden="true">
-          ▶
-        </span>
-        {duration !== null && (
-          <span className="account-tape-tile-duration">
-            {Math.floor(Math.round(duration) / 60)}:{String(Math.round(duration) % 60).padStart(2, "0")}
-          </span>
-        )}
-        {role && (
-          <span className="account-tape-tile-role">
-            <span className="account-tape-tile-role-dot" aria-hidden="true" />
-            {displayCharacterName(role)}
-          </span>
+          <span className="take-row-loading" />
         )}
       </span>
-      <span className="account-tape-tile-date">
-        {new Date(tape.created_at).toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-        })}
+      <span className="take-row-number">Take {String(number).padStart(2, "0")}</span>
+      <span className="take-row-role">{role ? displayCharacterName(role) : ""}</span>
+      <span className="take-row-date">{formatMoment(tape.created_at)}</span>
+      <span className="take-row-duration">
+        {duration !== null
+          ? `${Math.floor(Math.round(duration) / 60)}:${String(Math.round(duration) % 60).padStart(2, "0")}`
+          : ""}
       </span>
     </button>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, type RefObject } from "react";
 import type { Step } from "../../types";
 import { normalizeSpeaker, splitStepContent } from "../../lib/script";
 import TrackedWords from "../TrackedWords";
@@ -49,7 +49,106 @@ function AudioDebugPanel() {
 }
 
 type LineMode = "full" | "hidden";
-type Status = { title: string; detail: string; kind: string };
+
+type LineRowProps = {
+  step: Step;
+  index: number;
+  selectedRole: string;
+  lineMode: LineMode;
+  active: boolean;
+  past: boolean;
+  /** Only ever set on the active row: the rest stay as they are (memo) while
+   * every Scribe partial moves the count. */
+  matchedWordCount: number;
+  showTracking: boolean;
+  activeRef: RefObject<HTMLDivElement | null> | undefined;
+  onJump: (index: number) => void;
+};
+
+const RehearsalLine = memo(function RehearsalLine({
+  step,
+  index,
+  selectedRole,
+  lineMode,
+  active,
+  past,
+  matchedWordCount,
+  showTracking,
+  activeRef,
+  onJump,
+}: LineRowProps) {
+  const speaker = normalizeSpeaker(step.speaker);
+  const isOwnLine = Boolean(selectedRole) && speaker === selectedRole;
+  const masked = isOwnLine && lineMode !== "full";
+
+  // The scene heading a step opens, if any, prints as a divider above
+  // it; directions before the speech sit above the speaker's name.
+  const { sceneHeading, leadIn, speech } = useMemo(() => splitStepContent(step), [step]);
+
+  // Render the speech in its real order so a stage direction that falls
+  // mid-speech lands between the spoken segments it actually splits,
+  // instead of every direction bunching ahead of the whole line.
+  let wordOffset = 0;
+  const bodyNodes = masked
+    ? step.verbalLine.trim() && <span className="is-masked">Line hidden</span>
+    : speech.map((item, i) => {
+        if (item.kind === "nonverbal") return <em key={i} className="sides-paren">{item.text}</em>;
+        const wordCount = item.text.split(/\s+/).filter(Boolean).length;
+        // Wrapped in a real <span> (not left as TrackedWords' bare word
+        // fragments) so `.sides-dialogue > span` — the highlighter over
+        // the actor's own lines — matches one element per spoken segment
+        // instead of one per word.
+        const node = (
+          <span key={i}>
+            {showTracking
+              ? <TrackedWords text={item.text} matchedCount={Math.max(0, matchedWordCount - wordOffset)} />
+              : item.text}
+          </span>
+        );
+        wordOffset += wordCount;
+        return node;
+      });
+
+  return (
+    <div
+      ref={activeRef}
+      className={`rehearsal-line ${active ? "is-active" : ""} ${isOwnLine ? "is-yours" : ""}`}
+    >
+      {sceneHeading && (
+        <p className="sides-slug rehearsal-scene-heading">
+          <span className="sr-only">New scene: </span>
+          {sceneHeading}
+        </p>
+      )}
+      <button
+        type="button"
+        className={`sides-line rehearsal-line-row ${active ? "is-active" : ""} ${isOwnLine ? "is-yours" : ""} ${past ? "is-past" : ""}`}
+        onClick={() => { if (!active) onJump(index); }}
+        aria-current={active ? "step" : undefined}
+        aria-label={`Line ${index + 1}, ${speaker || "stage direction"}${isOwnLine ? ", your line" : ""}`}
+      >
+        <span className="sides-num">{String(index + 1).padStart(2, "0")}</span>
+        <span className="rehearsal-line-copy">
+          {leadIn.length > 0 && (
+            <span className="sides-action rehearsal-line-action">
+              {leadIn.map((text, i) => <span key={i}>{text}</span>)}
+            </span>
+          )}
+          <span className="sides-cue">
+            {speaker || "Stage direction"}
+            {isOwnLine && <span className="tag tag-accent" aria-hidden="true">You</span>}
+          </span>
+          <span className="sides-dialogue">{bodyNodes}</span>
+        </span>
+      </button>
+      {active && SHOW_AUDIO_DEBUG && (
+        <div className="rehearsal-line-active-panel">
+          <AudioDebugPanel />
+        </div>
+      )}
+    </div>
+  );
+});
 
 export default function RehearsalLineList({
   steps,
@@ -58,14 +157,7 @@ export default function RehearsalLineList({
   lineMode,
   isMyLine,
   matchedWordCount,
-  status,
-  canReplay,
   onJump,
-  onPrev,
-  onNext,
-  onReplay,
-  onStop,
-  stopLabel,
 }: {
   steps: Step[];
   currentIndex: number;
@@ -73,21 +165,12 @@ export default function RehearsalLineList({
   lineMode: LineMode;
   isMyLine: boolean;
   matchedWordCount: number;
-  status: Status;
-  canReplay: boolean;
   onJump: (index: number) => void;
-  onPrev: () => void;
-  onNext: () => void;
-  onReplay: () => void;
-  onStop: () => void;
-  /** The last line's button: ends and saves the take, or finishes a run. */
-  stopLabel: string;
 }) {
   const activeRef = useRef<HTMLDivElement | null>(null);
 
-  // Align to the top, not the centre: the active block is line text plus a tall
-  // control panel, and centring that on a short phone pushes the text itself
-  // off the top of the script pane. Only the script pane scrolls —
+  // Align to the top, not the centre: on a short phone, centring a long
+  // line pushes its opening words off the top of the script pane. Only the script pane scrolls —
   // scrollIntoView would also scroll the page around it (overflow: hidden
   // still scrolls programmatically), sliding the line, and any scene heading
   // above it, under the sticky header.
@@ -100,104 +183,23 @@ export default function RehearsalLineList({
   }, [currentIndex]);
 
   return (
-    <div className="rehearsal-lines">
+    <div className="sides rehearsal-lines">
       {steps.map((step, index) => {
-        const speaker = normalizeSpeaker(step.speaker);
-        const isOwnLine = Boolean(selectedRole) && speaker === selectedRole;
         const active = index === currentIndex;
-        const masked = isOwnLine && lineMode !== "full";
-        const showTracking = !masked && active && isMyLine;
-
-        // The scene heading a step opens, if any, prints as a divider above
-        // it; directions before the speech sit above the speaker's name.
-        const { sceneHeading, leadIn, speech } = splitStepContent(step);
-
-        // Render the speech in its real order so a stage direction that falls
-        // mid-speech lands between the spoken segments it actually splits,
-        // instead of every direction bunching ahead of the whole line.
-        let wordOffset = 0;
-        const bodyNodes = masked
-          ? step.verbalLine.trim() && (
-              <span className={lineMode === "hidden" ? "is-masked" : undefined}>
-                {lineMode === "hidden" ? "Line hidden" : `${step.verbalLine.split(/\s+/).slice(0, 3).join(" ")}…`}
-              </span>
-            )
-          : speech.map((item, i) => {
-              if (item.kind === "nonverbal") return <em key={i}>{item.text}</em>;
-              const wordCount = item.text.split(/\s+/).filter(Boolean).length;
-              // Wrapped in a real <span> (not left as TrackedWords' bare word
-              // fragments) so `.rehearsal-line-copy > span` — which every
-              // spoken segment relies on for its block layout — still matches
-              // one element per segment instead of one per word.
-              const node = (
-                <span key={i}>
-                  {showTracking
-                    ? <TrackedWords text={item.text} matchedCount={Math.max(0, matchedWordCount - wordOffset)} />
-                    : item.text}
-                </span>
-              );
-              wordOffset += wordCount;
-              return node;
-            });
-
         return (
-          <div
+          <RehearsalLine
             key={index}
-            ref={active ? activeRef : undefined}
-            className={`rehearsal-line ${active ? "is-active" : ""} ${isOwnLine ? "is-user" : ""} ${index < currentIndex ? "is-past" : ""}`}
-          >
-            {sceneHeading && (
-              <p className="rehearsal-scene-heading">
-                <span className="sr-only">New scene: </span>
-                {sceneHeading}
-              </p>
-            )}
-            <button
-              type="button"
-              className="rehearsal-line-row"
-              onClick={() => { if (!active) onJump(index); }}
-              aria-current={active ? "step" : undefined}
-              aria-label={`Line ${index + 1}, ${speaker || "stage direction"}${isOwnLine ? ", your line" : ""}`}
-            >
-              <span className="rehearsal-line-number">{String(index + 1).padStart(2, "0")}</span>
-              <span className="rehearsal-line-copy">
-                {leadIn.length > 0 && (
-                  <span className="rehearsal-line-action">
-                    {leadIn.map((text, i) => <span key={i}>{text}</span>)}
-                  </span>
-                )}
-                <strong>
-                  {active && isOwnLine && <span className="rehearsal-live-dot" aria-hidden="true" />}
-                  {speaker || "Stage direction"}
-                  {isOwnLine && <span className="rehearsal-you-tag" aria-hidden="true">You</span>}
-                </strong>
-                {bodyNodes}
-              </span>
-            </button>
-            {active && (
-              <div className="rehearsal-line-active-panel">
-                {SHOW_AUDIO_DEBUG && <AudioDebugPanel />}
-                {status.kind === "error" && (
-                  <>
-                    <div className={`rehearsal-status is-${status.kind}`}>
-                      <span className="mic-meter" aria-hidden="true"><i /><i /><i /><i /></span>
-                      <div><strong>{status.title}</strong><span>{status.detail}</span></div>
-                    </div>
-                    <div className="rehearsal-controls">
-                      <button onClick={onReplay} disabled={!canReplay}>↻ Replay cue</button>
-                    </div>
-                  </>
-                )}
-                <footer>
-                  <button onClick={onPrev} disabled={index === 0}>← Previous</button>
-                  <span>Line {index + 1} of {steps.length}</span>
-                  {index >= steps.length - 1
-                    ? <button className="next-line" onClick={onStop}>{stopLabel}</button>
-                    : <button className="next-line" onClick={onNext}>Next →</button>}
-                </footer>
-              </div>
-            )}
-          </div>
+            step={step}
+            index={index}
+            selectedRole={selectedRole}
+            lineMode={lineMode}
+            active={active}
+            past={index < currentIndex}
+            matchedWordCount={active ? matchedWordCount : 0}
+            showTracking={active && isMyLine}
+            activeRef={active ? activeRef : undefined}
+            onJump={onJump}
+          />
         );
       })}
     </div>

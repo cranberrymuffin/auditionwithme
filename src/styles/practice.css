@@ -1,0 +1,1141 @@
+/* The practice flow's setup steps: script, role, scene partners (and the
+   optional coaching screen), get ready. Each is one page on the shared
+   grid — the step's title in the left columns, its decisions ruled down
+   the right — plus the dead-end screens step 1 can land on. The take
+   itself is rehearsal.css. */
+
+/* ── The page and its header ── */
+
+.setup-page {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+  /* Vertical overflow scrolls: See script can open the page past the fold. */
+  overflow-x: clip;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.setup-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  /* The top inset is 0 in browsers; in the iOS app it clears the status
+     bar, which the web view draws under (as .site-nav does). */
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--line);
+  background: var(--ground);
+}
+.setup-header-inner {
+  display: flex;
+  width: min(100% - 2 * var(--gutter), var(--page-max));
+  height: var(--nav-h);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-inline: auto;
+}
+.setup-header .brand-wordmark {
+  display: none;
+}
+
+/* StepProgress: the shared .steps list, numbered in the markup so a done
+   step's number is part of its button. The current step sits on a coral
+   bar on the header's rule; phones show numbers only. */
+.setup-progress .steps {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+.setup-progress .steps > li::before {
+  content: none;
+}
+.setup-step {
+  display: inline-flex;
+  min-width: var(--control-h);
+  height: var(--nav-h);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color var(--dur) var(--ease);
+}
+button.setup-step {
+  cursor: pointer;
+}
+button.setup-step:hover {
+  color: var(--ink);
+}
+.setup-progress li[aria-current] .setup-step {
+  border-bottom-color: var(--accent);
+}
+.setup-step-num {
+  font-family: var(--font-script);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.setup-step-name {
+  display: none;
+}
+
+/* ── Layout: title left, decisions right ── */
+
+.setup-layout {
+  flex: 1;
+  align-content: start;
+  row-gap: var(--space-6);
+  padding-block: var(--space-6) var(--space-8);
+}
+.setup-intro,
+.setup-body {
+  min-width: 0;
+}
+.setup-intro,
+.setup-body {
+  width: 100%;
+  max-width: 640px;
+}
+.setup-intro > .lead {
+  margin-top: var(--space-4);
+}
+.setup-intro > .lead:empty {
+  display: none;
+}
+.setup-intro > .lead strong {
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* StepHeader: a running header, like the top of a script page. The name
+   gets whatever room the step leaves and is cut short with "…". */
+.step-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.step-header-label {
+  flex: none;
+  margin: 0;
+}
+.step-header-script {
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-header-script .script-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+/* <wbr> breaks even where white-space says not to. */
+.step-header-script wbr {
+  display: none;
+}
+
+/* The closing row: Back on the left, the step's one coral button right. */
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+/* A text button's label, not its padding, sits on the column's edge. */
+.setup-actions > .btn-ghost,
+.rehearsal-setup-actions > .btn-ghost,
+.processing-preview .btn-ghost {
+  margin-left: calc(-1 * var(--space-3));
+}
+.setup-next-hint {
+  width: 100%;
+  margin: 0;
+  text-align: right;
+}
+
+/* A side option under a step's list: what it is, then its button. */
+.setup-alt,
+.coach-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.setup-alt p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* ── ScriptName ──
+   Reads as part of the text around it. At rest each line is underlined
+   (text decoration, so the rule runs under the words only); while editing
+   the name and its rule turn coral, as focus does everywhere. */
+
+.script-name-button,
+.script-name-input {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+.script-name-button {
+  margin: 0 -0.08em;
+  padding: 0 0.08em;
+  border-radius: var(--radius-sm);
+  text-align: inherit;
+  text-decoration: underline var(--accent-line);
+  text-decoration-thickness: max(1px, 0.04em);
+  text-underline-offset: 0.14em;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+.script-name-button:hover {
+  background: var(--ink-wash);
+}
+
+/* Editing: the field and an invisible copy of its text share one grid
+   cell; the copy sizes the field, wrapping at the line's width. The field
+   is ruled — a line under every line of text, the last included, across
+   its full width. The pencil takes a second column. */
+.script-name-editor {
+  display: inline-grid;
+  max-width: 100%;
+  grid-template-columns: minmax(0, auto) auto;
+  vertical-align: baseline;
+}
+.script-name-sizer,
+.script-name-editor .script-name-input {
+  grid-area: 1 / 1;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.script-name-sizer {
+  visibility: hidden;
+  pointer-events: none;
+}
+.script-name-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  /* One hard-edged stop per line of text: a ruled line, not a fade. */
+  background: linear-gradient(to top, var(--accent) max(1px, 0.04em), transparent 0) 0 0 / 100% 1lh;
+  overflow: hidden;
+  resize: none;
+}
+/* Outranks the site-wide input focus outline and colours. */
+.script-name.script-name-input,
+.script-name.script-name-input:focus,
+.script-name.script-name-input:focus-visible {
+  outline: none;
+  color: var(--accent);
+  caret-color: var(--accent);
+}
+.script-name.script-name-input::placeholder {
+  color: var(--ink-muted);
+  font: inherit;
+  letter-spacing: inherit;
+  opacity: 1;
+}
+/* By the last line of a wrapped name. */
+.script-name-icon {
+  grid-area: 1 / 2;
+  align-self: end;
+  width: 0.42em;
+  height: 0.42em;
+  margin: 0 0 0.2em 0.18em;
+  color: var(--accent);
+}
+
+/* ── Step 1: reading the script ── */
+
+/* Long file names wrap at their underscores and hyphens (see ScriptName),
+   and only break mid-word when one part alone is wider than the line. */
+.processing-script-name {
+  overflow-wrap: anywhere;
+}
+.setup-intro > .title.is-long-name {
+  font-size: var(--text-2xl);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+/* A long name starts its own line, so the lead-in above it never leaves
+   a word ("for") stranded. */
+.title.is-long-name .processing-script-name {
+  display: block;
+}
+.processing-rename-hint {
+  margin-top: var(--space-3);
+}
+
+/* What's done, what's happening, what's next: three ruled rows. */
+.processing-steps {
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.processing-steps li {
+  display: grid;
+  grid-template-columns: var(--space-5) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.processing-step-icon {
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.processing-steps strong,
+.processing-steps small {
+  display: block;
+  line-height: 1.4;
+}
+.processing-steps strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.processing-steps small {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+.processing-steps .is-complete .processing-step-icon {
+  color: var(--success);
+}
+.processing-steps .is-current .processing-step-icon i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  /* The one moving thing on the page: proof it hasn't stalled. */
+  animation: step-working 0.9s var(--ease) infinite alternate;
+}
+.processing-steps .is-pending strong {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+@keyframes step-working {
+  to {
+    opacity: 0.25;
+  }
+}
+.processing-note {
+  margin-top: var(--space-4);
+}
+
+.processing-preview .replace-script {
+  margin-top: var(--space-2);
+}
+
+/* The read script, counted: a slate. */
+.script-slate {
+  gap: var(--space-4) var(--space-7);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+.processing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+.processing-actions .btn-primary {
+  margin-left: auto;
+}
+
+/* See script: what we read, or the original PDF. */
+#uploaded-script {
+  margin-top: var(--space-6);
+}
+#uploaded-script > .sides {
+  margin-top: var(--space-4);
+}
+.script-read {
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+}
+.script-read .sides-body {
+  margin: 0;
+  list-style: none;
+}
+.script-read li + li {
+  margin-top: var(--space-4);
+}
+.script-read p {
+  margin-bottom: 0;
+}
+.script-read .sides-slug,
+.script-read .sides-action {
+  margin-bottom: var(--space-3);
+}
+/* A new scene: ruled off from the one before. */
+.script-read li + li:has(> .sides-slug) {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.script-read .sides-dialogue:empty {
+  display: none;
+}
+
+/* DocumentPreview: the PDF's first page, framed as a script page. */
+.document-panel {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.document-panel .sides-head strong {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.document-panel .sides-head span {
+  flex: none;
+}
+.document-frame {
+  height: min(57vh, 590px);
+  /* Paper shows behind the PDF while it loads. */
+  background: var(--ink-soft);
+}
+.document-frame embed {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.document-panel > p {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/* ── Step 1's dead ends (StageShell: ParseErrorScreen, LanguageChoiceScreen) ── */
+
+.stage {
+  flex: 1;
+  padding-block: var(--space-9) var(--space-8);
+}
+/* BackButton sits under the header; in the iOS app the header is taller
+   by the status bar's inset. */
+.stage-page .flow-back {
+  top: calc(var(--nav-h) + env(safe-area-inset-top, 0px) + var(--space-5));
+}
+.stage > .slug {
+  margin-bottom: var(--space-3);
+}
+.stage > .title {
+  max-width: 20ch;
+}
+.stage > .lead {
+  margin-top: var(--space-4);
+}
+/* What to try instead, on the errors a retry won't fix. */
+.stage-tips {
+  max-width: var(--measure);
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  list-style: none;
+}
+.stage-tips li {
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  line-height: 1.5;
+}
+.stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+/* ── Steps 2 and 3: the cast (CastGrid) ──
+   A ruled list, one character to a row: a mark (step 2's radio, step 3's
+   play button), the cue as the script prints it, a detail, a line of
+   theirs. */
+
+.cast-list {
+  border-top: 1px solid var(--line);
+}
+.cast-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+}
+.cast-row:disabled {
+  cursor: default;
+}
+.cast-mark {
+  position: relative;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.cast-row:hover:not(:disabled) .cast-mark,
+.cast-play:hover:not(:disabled) .cast-mark {
+  border-color: var(--ink);
+}
+/* Step 2's radio: the picked role fills in, takes the coral cue and is
+   tagged You — never colour alone. */
+.cast-row[role="radio"].is-selected .cast-mark {
+  border-color: var(--accent);
+}
+.cast-row[role="radio"].is-selected .cast-mark::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cast-row[role="radio"].is-selected .sides-cue {
+  color: var(--accent);
+}
+/* Step 3's play button: ink, and filled while that voice is playing. */
+.cast-row--play {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+.cast-row--play .cast-mark,
+.cast-play .cast-mark {
+  width: 36px;
+  height: 36px;
+  color: var(--ink);
+  font-size: var(--text-xs);
+}
+.cast-row--play.is-selected .cast-mark,
+.cast-play.is-selected .cast-mark {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--ground);
+}
+.cast-row--play:disabled .sides-cue {
+  color: var(--ink-muted);
+}
+.cast-play {
+  display: grid;
+  width: var(--control-h);
+  height: var(--control-h);
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+}
+.cast-play:disabled {
+  cursor: not-allowed;
+}
+
+.cast-copy {
+  min-width: 0;
+}
+.cast-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+.cast-head .sides-cue {
+  color: var(--ink);
+}
+.cast-head small {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+.cast-copy q,
+.voice-advanced-preview q {
+  display: -webkit-box;
+  max-width: 44ch;
+  margin-top: var(--space-1);
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-family: var(--font-script);
+  font-size: var(--text-script);
+  line-height: 1.5;
+  quotes: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ── Step 3: scene partners ── */
+
+.fold-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.voice-fold:not(.is-open) {
+  padding-block: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+.voice-advanced-panel {
+  padding-top: var(--space-5);
+}
+.speaker-tabs {
+  margin-bottom: var(--space-5);
+  overflow-x: auto;
+}
+.speaker-tabs > button {
+  flex: none;
+  font-family: var(--font-script);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* The play button and the line it reads, to hear the voice just picked. */
+.voice-advanced-preview {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+.voice-advanced-preview q {
+  margin-top: 0;
+}
+.voice-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+.voice-filter-bar .btn-ghost {
+  margin-right: calc(-1 * var(--space-3));
+}
+.voice-filter-bar h2 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+/* A labelled slider as a ruled row: name, track, value. Fixed columns
+   line Volume, Emotion and Pace up with each other. */
+.range-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) 7.5rem;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.range-row output {
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.voice-filter-note {
+  margin-top: var(--space-3);
+}
+
+.voice-setup-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-4);
+}
+.voice-setup-filters label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.voice-setup-filters .select {
+  text-overflow: ellipsis;
+}
+/* Changed because of a pick in another filter: says so, and the field's
+   border lights up until the highlight clears. */
+.voice-setup-filters .is-changed .field-label {
+  color: var(--ink);
+}
+.voice-setup-filters .is-changed .field-label::after {
+  content: " · changed";
+  font-weight: 400;
+}
+.voice-setup-filters .is-changed .select {
+  border-color: var(--ink);
+  animation: filter-changed 1.6s var(--ease);
+}
+@keyframes filter-changed {
+  from {
+    background-color: var(--surface-2);
+  }
+}
+.voice-advanced-save {
+  margin-top: var(--space-6);
+}
+
+/* The offer of the optional coaching screen (CoachScenePartners). */
+.coach-offer > div {
+  min-width: 0;
+  flex: 1;
+}
+.coach-offer strong {
+  font-weight: 600;
+}
+.coach-offer p {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+.coach-offer .btn-secondary {
+  flex: none;
+}
+
+/* ── Coaching: the scene as a script, the partner line being coached
+   opened up with its Record controls ── */
+
+.coach-help {
+  margin-top: var(--space-4);
+}
+.coach-help summary {
+  display: inline-flex;
+  min-height: var(--control-h);
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.coach-help summary:hover {
+  color: var(--ink);
+}
+.coach-help p {
+  max-width: var(--measure);
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.coach-script {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-script);
+  font-size: var(--text-script);
+  list-style: none;
+}
+/* The rule down the left edge marks the line being coached. */
+.coach-line {
+  position: relative;
+  padding: var(--space-4) 0 var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid transparent;
+  scroll-margin-block: calc(var(--nav-h) + var(--space-5));
+}
+.coach-line.is-active {
+  border-left-color: var(--ink);
+}
+.coach-speaker {
+  min-height: var(--space-5);
+  color: var(--ink);
+}
+.coach-line--yours .coach-speaker,
+.coach-line--yours .coach-text {
+  color: var(--ink-muted);
+}
+.coach-text {
+  display: block;
+  max-width: 52ch;
+  margin-top: var(--space-1);
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.coach-line.is-active .coach-text {
+  color: var(--ink);
+}
+.coach-line-select {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+/* Covers the whole row, speaker line included, under Hear it. */
+.coach-line-select::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.coach-line-select:hover:not(:disabled)::before {
+  background: var(--ink-wash);
+}
+.coach-line-select:disabled {
+  cursor: default;
+}
+.coach-line-select:focus-visible {
+  outline: none;
+}
+.coach-line-select:focus-visible::before {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* Above the row's stretched select button. */
+.coach-hear,
+.coach-line-actions {
+  position: relative;
+  z-index: 1;
+}
+.coach-hear {
+  margin-block: calc(-1 * var(--space-3));
+  margin-left: auto;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.coach-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  font-family: var(--font-sans);
+}
+.coach-record.is-recording {
+  font-variant-numeric: tabular-nums;
+}
+.coach-status {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+.coach-status:empty {
+  display: none;
+}
+.coach-next-line {
+  margin-left: auto;
+}
+.coach-error {
+  width: 100%;
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+.coach-empty {
+  margin: 0;
+  padding-block: var(--space-5);
+  color: var(--ink-soft);
+}
+.coach-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-3) max(var(--space-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--ground);
+}
+.coach-script + .coach-footer,
+.coach-empty + .coach-footer {
+  /* The list's last rule is the footer's own. */
+  margin-top: -1px;
+}
+.coach-count {
+  color: var(--ink-soft);
+  font-family: var(--font-script);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Step 4: get ready ── */
+
+/* The camera preview: the one box on the screen (its picture is styled
+   with the take's, in rehearsal.css). */
+.rehearsal-setup-camera {
+  margin-top: var(--space-5);
+}
+.rehearsal-setup-camera .camera-zoom {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-bottom: 0;
+}
+.rehearsal-setup-camera .camera-zoom .range {
+  grid-row: auto;
+  grid-column: auto;
+}
+.rehearsal-setup-camera .self-tape-hint {
+  margin-top: var(--space-2);
+}
+
+/* Camera, microphone, speakers: label / state or picker / action. */
+.rehearsal-setup-devices {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.rehearsal-setup-devices li {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: var(--space-4) 6.5rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.device-mark {
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  text-align: center;
+}
+.rehearsal-setup-devices .is-complete .device-mark {
+  color: var(--success);
+}
+.rehearsal-setup-devices .is-failed .device-mark,
+.rehearsal-setup-devices .is-failed small {
+  color: var(--danger);
+}
+.rehearsal-setup-devices strong {
+  font-weight: 600;
+}
+.rehearsal-setup-devices small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Picks a different camera, mic or speaker, in place of the device's name. */
+.device-picker {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+/* The microphone's live level: bars light up as the actor speaks. */
+.mic-level {
+  display: inline-flex;
+  height: var(--space-4);
+  align-items: flex-end;
+  justify-self: end;
+  gap: 3px;
+}
+.mic-level i {
+  width: 4px;
+  background: var(--line-strong);
+  transition: background-color 80ms linear;
+}
+.mic-level i:nth-child(1) { height: 30%; }
+.mic-level i:nth-child(2) { height: 45%; }
+.mic-level i:nth-child(3) { height: 60%; }
+.mic-level i:nth-child(4) { height: 80%; }
+.mic-level i:nth-child(5) { height: 100%; }
+.mic-level i.is-lit {
+  background: var(--ink);
+}
+
+/* Camera or mic trouble, and "your takes stay on this device": a notice
+   with its one action beside it. */
+.device-problem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+.device-problem p {
+  flex: 1;
+  margin: 0;
+}
+.device-problem button {
+  flex: none;
+}
+
+/* What Start is waiting on (a meter and a line of status), then the start
+   button itself, whose label is always a verb. */
+.setup-start-status {
+  margin-top: var(--space-6);
+}
+.setup-start-meter {
+  height: 4px;
+  background: var(--line);
+}
+.setup-start-meter i {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+  transition: width var(--dur) var(--ease);
+}
+.setup-start-status p {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.45;
+}
+.setup-start-status p > span {
+  display: block;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.setup-start-status .setup-start-note {
+  margin-top: var(--space-1);
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.setup-start {
+  margin-top: var(--space-4);
+}
+/* Back, and a run without the tape, under the start button. */
+.rehearsal-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* ── Phones ── */
+
+@media (max-width: 559px) {
+  /* Thumb reach: the step's primary action spans the row. */
+  .processing-actions .btn-primary {
+    order: 1;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .setup-actions .btn-primary {
+    flex: 1 1 auto;
+  }
+  .stage-actions > * {
+    flex: 1 1 100%;
+  }
+  .coach-offer,
+  .device-problem {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .device-problem button {
+    align-self: flex-start;
+  }
+  .device-problem .btn-ghost {
+    margin-left: calc(-1 * var(--space-3));
+  }
+  /* The slider under its name and value, at the row's full width. */
+  .range-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 var(--space-4);
+    padding-top: var(--space-3);
+  }
+  .range-row .range {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .rehearsal-setup-devices li {
+    grid-template-columns: var(--space-4) 5.5rem minmax(0, 1fr) auto;
+    gap: var(--space-2);
+  }
+  .document-frame {
+    height: min(50vh, 420px);
+  }
+}
+
+@media (min-width: 560px) {
+  .setup-progress li[aria-current] .setup-step-name {
+    display: inline;
+  }
+  .setup-step {
+    padding-inline: var(--space-3);
+  }
+  /* The last step's text ends on the page's right edge. */
+  .setup-progress .steps {
+    margin-right: calc(-1 * var(--space-3));
+  }
+}
+
+@media (min-width: 900px) {
+  .setup-layout {
+    padding-block: var(--space-8) var(--space-9);
+  }
+  .setup-intro {
+    max-width: none;
+  }
+  /* The body's first rule lines up with the one under the step row. */
+  .setup-body {
+    max-width: none;
+    padding-top: calc(var(--text-xs) * 1.3 + var(--space-3));
+  }
+  .setup-step-name {
+    display: inline;
+  }
+  /* A long scene scrolls under a title that stays put. */
+  .coaching-page .setup-intro {
+    position: sticky;
+    top: calc(var(--nav-h) + var(--space-8));
+    align-self: start;
+  }
+}
+
+@media (min-width: 1200px) {
+  .setup-header .brand-wordmark {
+    display: inline;
+  }
+}
+
+/* Phones on their side: less air above the fold. */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Wide but short: two columns, so the step's actions aren't a long
+     scroll below its title (and step 4's camera). */
+  .setup-layout {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--space-5);
+    padding-block: var(--space-5) var(--space-6);
+  }
+  .setup-intro {
+    grid-column: 1 / span 5;
+    max-width: none;
+  }
+  .setup-body {
+    grid-column: 7 / span 6;
+    max-width: none;
+    padding-top: calc(var(--text-xs) * 1.3 + var(--space-3));
+  }
+  .stage {
+    padding-block: var(--space-8) var(--space-6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .processing-steps .is-current .processing-step-icon i,
+  .voice-setup-filters .is-changed .select {
+    animation: none;
+  }
+}

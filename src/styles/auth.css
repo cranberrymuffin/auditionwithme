@@ -1,0 +1,100 @@
+/* Log in, sign up, forgot/reset password. A form on the ground, aligned to
+   the grid's left edge; on wide screens a marked-up script page keeps it
+   company (AuthAside). No card, no photograph. */
+
+.auth-layout {
+  flex: 1;
+  align-items: start;
+  padding-block: clamp(var(--space-6), 7vw, var(--space-9));
+}
+.auth-form {
+  width: 100%;
+  max-width: 420px;
+}
+.auth-head {
+  margin-bottom: var(--space-6);
+}
+.auth-head .slug {
+  margin-bottom: var(--space-3);
+  color: var(--accent);
+}
+.auth-forgot {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  text-align: right;
+}
+.auth-submit {
+  margin-top: var(--space-6);
+}
+.auth-form .auth-error {
+  margin-top: var(--space-4);
+}
+.auth-form .auth-error + .auth-submit {
+  margin-top: var(--space-4);
+}
+/* The other way in, under the form's rule. */
+.auth-alt {
+  margin: var(--space-6) 0 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+.auth-alt .link {
+  font-weight: 600;
+}
+
+/* Signup: where the script goes, in plain words, above the agreement. */
+.signup-data-note {
+  margin-block: var(--space-6) var(--space-4);
+}
+.signup-data-note .external-link {
+  white-space: nowrap;
+}
+
+/* "Check your email" and "that link has expired". */
+.auth-success p {
+  margin: var(--space-5) 0 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.auth-success .auth-email {
+  color: var(--ink);
+  font-weight: 600;
+  /* Moves to its own line whole rather than splitting at a hyphen; only
+     an address wider than the form breaks, anywhere. */
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.auth-success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+.auth-success .auth-notice {
+  margin-top: var(--space-4);
+  color: var(--success);
+  font-size: var(--text-sm);
+}
+
+.auth-aside {
+  display: none;
+}
+@media (min-width: 900px) {
+  .auth-aside {
+    display: block;
+    /* Starts level with the form's title, not its label. */
+    margin-top: var(--space-6);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .auth-layout {
+    padding-block: var(--space-5);
+  }
+  .auth-head {
+    margin-bottom: var(--space-4);
+  }
+}

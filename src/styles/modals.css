@@ -1,0 +1,129 @@
+/* The dialog shell (Modal.tsx) and its title, copy and action row. What
+   goes inside a particular dialog is styled with that dialog's area. */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--scrim);
+}
+.modal-content {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  padding: var(--space-6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+}
+.modal-content:focus {
+  outline: none;
+}
+.modal-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.modal-copy {
+  margin: calc(-1 * var(--space-1)) 0 var(--space-5);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+/* The action row's buttons take the shared button looks (components.css)
+   under the names dialogs already use. */
+.modal-actions button {
+  min-height: var(--control-h);
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.modal-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.modal-secondary {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.modal-secondary:hover:not(:disabled) {
+  border-color: var(--ink-muted);
+  background: var(--ink-wash);
+}
+.modal-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.modal-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.modal-danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+  color: var(--danger);
+}
+.modal-danger:hover:not(:disabled) {
+  background: var(--danger-wash);
+}
+
+/* Phones: a dialog is a full-screen sheet. 520px, not 560: the checkout
+   and feedback dialogs key their own phone rules to this number. */
+@media (max-width: 520px) {
+  .modal-overlay {
+    padding: 0;
+  }
+  .modal-content {
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    overflow-y: hidden;
+    border: none;
+    border-radius: 0;
+    padding: var(--space-5) 20px calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  }
+  .modal-content .modal-title {
+    flex: 0 0 auto;
+  }
+  /* Short confirmations stay a panel instead of taking the whole screen. */
+  .modal-content.is-compact {
+    width: calc(100% - 32px);
+    height: auto;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+  }
+  .modal-content.is-compact .modal-actions button {
+    flex: 1 1 100%;
+  }
+}
+
+/* `.modal-actions button` above outranks the single-class looks, so its
+   transparent border hid theirs: restate the outline buttons' borders. */
+.modal-actions .modal-secondary {
+  border-color: var(--line-strong);
+}
+.modal-actions .modal-secondary:hover:not(:disabled) {
+  border-color: var(--ink-muted);
+}
+.modal-actions .modal-danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
+}

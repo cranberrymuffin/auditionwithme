@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import SiteFooter from "../components/SiteFooter";
+import RehearsalMock from "../components/marketing/RehearsalMock";
+import HowSteps from "../components/marketing/HowSteps";
+import DataLedger from "../components/marketing/DataLedger";
+import StartCta from "../components/marketing/StartCta";
 import { useAuth } from "../contexts/AuthContext";
 import { useEntitlement } from "../hooks/useEntitlement";
 import { useToast } from "../lib/toast";
@@ -10,6 +15,31 @@ import { TRIAL_DAYS, hasPlanAccess } from "../lib/plan";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
 
 type HomeState = { intent?: string } | null;
+
+// Rendered here, not hard-coded in index.html, so the offer it states is
+// the one this build actually makes (beta, or trial then subscription).
+const appSchema = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "AuditionWithMe",
+  url: "https://www.auditionwithme.com/",
+  applicationCategory: "EntertainmentApplication",
+  operatingSystem: "Any (web-based)",
+  description:
+    "A browser-based rehearsal tool for actors that turns PDF scripts and audition sides into interactive scenes, reads other characters aloud, and keeps the actor's lines easy to follow.",
+  // The subscription's price lives in Stripe, so outside the beta no price
+  // is claimed here: the Pricing page shows the live one.
+  ...(IS_BETA_TESTING
+    ? {
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          description: "Free during beta",
+        },
+      }
+    : {}),
+};
 
 export default function Home() {
   const { user } = useAuth();
@@ -27,7 +57,20 @@ export default function Home() {
   const needsPlan = !IS_BETA_TESTING && !!entitlement && !isSubscribed;
   // A past subscription means the trial's been used (api/billing.ts).
   const trialAvailable = !entitlement?.stripe_subscription_id;
-  const uploadHint = "PDF supported";
+
+  // One line under the button: what it costs, or what it takes.
+  const offer = IS_BETA_TESTING
+    ? "Now in beta · Free for testers"
+    : `${TRIAL_DAYS}-day free trial · Cancel anytime`;
+  const heroNote = !user
+    ? offer
+    : needsPlan
+      ? trialAvailable
+        ? `${TRIAL_DAYS} days free · Cancel anytime`
+        : "Your saved scripts are waiting"
+      : isSubscribed
+        ? "PDF supported"
+        : `PDF supported · ${offer}`;
 
   // A visitor who clicked the upload CTA while signed out lands back here
   // after authenticating — draw their eye straight to the upload flow.
@@ -63,7 +106,7 @@ export default function Home() {
 
   return (
     <main
-      className="cinematic-page home-page"
+      className="page home-page"
       onDragOver={(event) => {
         event.preventDefault();
         setDragging(true);
@@ -87,129 +130,138 @@ export default function Home() {
         }
         path="/"
       />
-      <div className="cinematic-backdrop" aria-hidden="true" />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(appSchema) }}
+      />
       <SiteNav />
 
-      <section className="hero-editorial">
-        <div className="hero-copy" id="upload">
-          <p className="hero-kicker">A rehearsal partner for actors</p>
-          <h1 className="hero-title">
-            <span className="hero-title-roman">Own the room</span>
-            <span className="hero-title-italic">before you walk in.</span>
-          </h1>
-          <p className="hero-description">
-            Upload your script, choose your character, and rehearse every scene
-            with responsive scene partners.
-          </p>
+      <section className="hero">
+        <div className="hero-photo" aria-hidden="true" />
+        <div className="wrap hero-inner">
+          <div className="hero-copy" id="upload">
+            <p className="slug">A rehearsal partner for actors</p>
+            <h1 className="display">Rehearse your sides out loud.</h1>
+            <p className="lead">
+              Upload the PDF and choose your role. The app reads every other
+              character, follows your lines as you speak them, and records
+              the take.
+            </p>
 
-          <div className="hero-actions">
-            {user ? (
-              needsPlan ? (
-                <button
-                  type="button"
-                  className="upload-cta"
-                  onClick={() => navigate("/pricing")}
-                >
-                  <span className="upload-copy">
-                    <strong>
-                      {trialAvailable
-                        ? "Start your free trial"
-                        : "Subscribe to keep rehearsing"}
-                    </strong>
-                    <small>
-                      {trialAvailable
-                        ? `${TRIAL_DAYS} days free · Cancel anytime`
-                        : "Your saved scripts are waiting"}
-                    </small>
-                  </span>
-                </button>
+            <div className="hero-actions">
+              {user ? (
+                needsPlan ? (
+                  <button
+                    type="button"
+                    className="btn-primary btn-lg"
+                    onClick={() => navigate("/pricing")}
+                  >
+                    {trialAvailable
+                      ? "Start your free trial"
+                      : "Subscribe to keep rehearsing"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`btn-primary btn-lg hero-upload ${dragging ? "is-dragging" : ""} ${
+                      pulsing ? "is-pulsing" : ""
+                    }`}
+                    onClick={() => inputRef.current?.click()}
+                  >
+                    {dragging ? "Drop your script" : "Upload your script"}
+                  </button>
+                )
               ) : (
                 <button
                   type="button"
-                  className={`upload-cta ${dragging ? "is-dragging" : ""} ${
-                    pulsing ? "is-pulsing" : ""
-                  }`}
-                  onClick={() => inputRef.current?.click()}
+                  className={`btn-primary btn-lg hero-upload ${dragging ? "is-dragging" : ""}`}
+                  onClick={requestAuthForUpload}
                 >
-                  <span className="upload-icon" aria-hidden="true">
-                    <svg
-                      width="19"
-                      height="19"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
-                    </svg>
-                  </span>
-                  <span className="upload-copy">
-                    <strong>
-                      {dragging ? "Drop your script" : "Upload your script"}
-                    </strong>
-                    <small>{uploadHint}</small>
-                  </span>
+                  Start rehearsing free
                 </button>
-              )
-            ) : (
-              <button
-                type="button"
-                className={`upload-cta ${dragging ? "is-dragging" : ""}`}
-                onClick={requestAuthForUpload}
-              >
-                <span className="upload-icon" aria-hidden="true">
-                  <svg
-                    width="19"
-                    height="19"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14.5v3.75A1.75 1.75 0 006.75 20h10.5A1.75 1.75 0 0019 18.25V14.5" />
-                  </svg>
-                </span>
-                <span className="upload-copy">
-                  <strong>Start rehearsing free</strong>
-                  <small>
-                    {IS_BETA_TESTING
-                      ? "Upload a script to begin"
-                      : `${TRIAL_DAYS}-day free trial`}
-                  </small>
-                </span>
-              </button>
-            )}
-            {!user && (
-              <a className="demo-cta" href="/how-it-works">
-                <span className="demo-play" aria-hidden="true">
-                  ▶
-                </span>
-                <span className="demo-cta-text">See how it works</span>
-              </a>
-            )}
+              )}
+              {!user && (
+                <Link className="btn-secondary btn-lg" to="/how-it-works">
+                  See how it works
+                </Link>
+              )}
+            </div>
+
+            <p className="hero-note">{heroNote}</p>
+
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) handleFile(file);
+              }}
+            />
           </div>
-
-          {/* The trial CTA already says this when the paywall is showing. */}
-          {!isSubscribed && !needsPlan && (
-            <p className="hero-trust">
-              {IS_BETA_TESTING
-                ? "Now in beta · Free for testers"
-                : `${TRIAL_DAYS}-day free trial · Cancel anytime`}
-            </p>
-          )}
-
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) handleFile(file);
-            }}
-          />
         </div>
       </section>
+
+      <section className="section" aria-labelledby="home-screen-title">
+        <div className="wrap grid">
+          <header className="section-head span-4">
+            <p className="slug">The rehearsal screen</p>
+            <h2 id="home-screen-title" className="title">
+              Your scene, on one page.
+            </h2>
+            <p className="lead">
+              Your lines are highlighted and follow along as you say them, so
+              you can keep your eyes near the camera. When it’s someone
+              else’s line, you hear it and the page waits for you.
+            </p>
+          </header>
+          <div className="span-7 at-6">
+            <RehearsalMock />
+          </div>
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="home-how-title">
+        <div className="wrap">
+          <header className="section-head section-head--wide">
+            <p className="slug">How it works</p>
+            <h2 id="home-how-title" className="title">
+              From the PDF to a take you can send.
+            </h2>
+          </header>
+          <HowSteps layout="columns" />
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="home-data-title">
+        <div className="wrap grid">
+          <header className="section-head span-4">
+            <p className="slug">Your material</p>
+            <h2 id="home-data-title" className="title">
+              Where your script and takes go.
+            </h2>
+            <p className="lead">
+              Sides are often confidential. Here is what stays with you, what
+              leaves your device to make a rehearsal work, and what we keep.
+            </p>
+          </header>
+          <div className="span-7 at-6">
+            <DataLedger />
+          </div>
+        </div>
+      </section>
+
+      <section className="section closing" aria-labelledby="home-closing-title">
+        <div className="wrap">
+          <h2 id="home-closing-title" className="title">
+            Bring the sides for your next audition.
+          </h2>
+          <StartCta />
+        </div>
+      </section>
+
+      <SiteFooter />
     </main>
   );
 }

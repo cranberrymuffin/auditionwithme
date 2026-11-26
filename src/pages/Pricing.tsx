@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Modal from "../components/Modal";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
-import StripeElementsForm from "../components/billing/StripeElementsForm";
+import SiteFooter from "../components/SiteFooter";
 import ConsentCheckbox from "../components/ConsentCheckbox";
 import ExternalLink from "../components/ExternalLink";
 import { apiFetch } from "../lib/api";
@@ -12,6 +12,10 @@ import { useEntitlement } from "../hooks/useEntitlement";
 import { usePlan } from "../hooks/usePlan";
 import { TRIAL_DAYS, formatPlanPrice, hasPlanAccess } from "../lib/plan";
 import { TERMS_VERSION } from "../lib/termsText";
+
+// Stripe loads with the checkout modal, not with the page: this page is
+// part of the marketing bundle (and prerendered), the card form isn't.
+const StripeElementsForm = lazy(() => import("../components/billing/StripeElementsForm"));
 
 const features = [
   "Unlimited rehearsals of any script or sides",
@@ -63,9 +67,36 @@ export default function Pricing() {
   // create-subscription).
   const needsTerms =
     Boolean(user) && (termsRequired || entitlement?.terms_version !== TERMS_VERSION);
-  // The trial is for a first subscription only (api/billing.ts enforces it;
-  // this just keeps the copy honest). Any past subscription leaves its ID.
-  const trialEligible = !entitlement?.stripe_subscription_id;
+  // The trial is for a first subscription only, and only the server knows
+  // for sure (api/billing.ts: a past subscription under this customer, or
+  // this email's trial already used on another account). Its answer decides
+  // the offer; the cached subscription ID only stands in if it can't be had.
+  const [serverTrialEligible, setServerTrialEligible] = useState<boolean | null>(null);
+  const [trialCheckDone, setTrialCheckDone] = useState(false);
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    apiFetch("/api/billing")
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => null)) as { trialEligible?: unknown } | null;
+        if (active && response.ok && typeof payload?.trialEligible === "boolean") {
+          setServerTrialEligible(payload.trialEligible);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setTrialCheckDone(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+  const trialEligible = serverTrialEligible ?? !entitlement?.stripe_subscription_id;
+  // Signed in and not yet answered: don't promise (or start) either offer.
+  const checkingTrial = Boolean(user) && !isSubscribed && !trialCheckDone;
+  // The server found a subscription this page didn't know about (409).
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
   const trialDays = plan?.trialDays ?? TRIAL_DAYS;
   const price = plan ? formatPlanPrice(plan) : null;
   const interval = plan?.interval ?? "month";
@@ -109,6 +140,7 @@ export default function Pricing() {
     if (!consentGiven) return;
     setBusy(true);
     setError(null);
+    setAlreadySubscribed(false);
     try {
       const response = await apiFetch(
         "/api/billing?action=create-subscription",
@@ -124,6 +156,12 @@ export default function Pricing() {
       if (response.status === 403 && payload?.reason === "terms_required") {
         setTermsRequired(true);
         setError(payload.error);
+        return;
+      }
+      if (response.status === 409) {
+        setAlreadySubscribed(true);
+        // The cached plan may just be behind: look again.
+        refreshRef.current();
         return;
       }
       if (!response.ok || !payload?.clientSecret) {
@@ -179,7 +217,7 @@ export default function Pricing() {
             };
 
   return (
-    <main className="pricing-page">
+    <main className="page pricing-page">
       <Seo
         title="Pricing"
         description={`Try Audition Plus free for ${trialDays} days — unlimited rehearsals with AI scene partners. Cancel anytime.`}
@@ -187,26 +225,23 @@ export default function Pricing() {
       />
       <SiteNav />
 
-      <section className="pricing-main">
-        <div className="pricing-intro">
-          <p>{intro.eyebrow}</p>
-          <h1>{intro.title}</h1>
-          <div>{intro.sub}</div>
+      <section className="wrap grid pricing-main">
+        <div className="pricing-intro span-6">
+          <p className="slug">{intro.eyebrow}</p>
+          <h1 className="title">{intro.title}</h1>
+          <p className="lead">{intro.sub}</p>
 
           {offerTrial && !confirming && (
             <ol className="trial-timeline" aria-label="How the free trial works">
               <li>
-                <span className="trial-timeline-dot" aria-hidden="true" />
                 <strong>Today</strong>
                 <p>Full access starts the moment you add a card.</p>
               </li>
               <li>
-                <span className="trial-timeline-dot" aria-hidden="true" />
                 <strong>Anytime before {trialEndLabel}</strong>
                 <p>Cancel from Billing in two clicks — you won't be charged.</p>
               </li>
               <li>
-                <span className="trial-timeline-dot" aria-hidden="true" />
                 <strong>{trialEndLabel}</strong>
                 <p>
                   {price ? `${price}/${interval}` : "Your plan"} begins. Cancel
@@ -220,14 +255,14 @@ export default function Pricing() {
             <div className="pricing-intro-actions">
               <button
                 type="button"
-                className="pricing-primary"
+                className="btn-primary"
                 onClick={() => navigate("/#upload")}
               >
-                Upload a script <span aria-hidden="true">→</span>
+                Upload a script <span className="btn-arrow" aria-hidden="true">→</span>
               </button>
               <button
                 type="button"
-                className="pricing-secondary"
+                className="btn-secondary"
                 onClick={() => navigate("/billing")}
               >
                 Manage billing
@@ -237,7 +272,7 @@ export default function Pricing() {
         </div>
 
         <article
-          className={`pricing-card ${isSubscribed ? "is-current" : ""}`}
+          className={`pricing-plan span-5 at-8 ${isSubscribed ? "is-current" : ""}`}
           aria-labelledby="plan-name"
         >
           <header>
@@ -246,10 +281,10 @@ export default function Pricing() {
               <span>For actors with auditions on the calendar</span>
             </div>
             {isSubscribed ? (
-              <span className="pricing-badge is-current">Current plan</span>
+              <span className="tag tag-success">Current plan</span>
             ) : (
               offerTrial && (
-                <span className="pricing-badge">{trialDays} days free</span>
+                <span className="tag tag-accent">{trialDays} days free</span>
               )
             )}
           </header>
@@ -269,18 +304,17 @@ export default function Pricing() {
 
           <ul>
             {features.map((feature) => (
-              <li key={feature}>
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M3.5 8.5l3 3 6-7" />
-                </svg>
-                {feature}
-              </li>
+              <li key={feature}>{feature}</li>
             ))}
           </ul>
 
           {isSubscribed ? (
-            <button type="button" onClick={() => navigate("/billing")}>
-              Manage subscription <span aria-hidden="true">→</span>
+            <button
+              type="button"
+              className="btn-primary btn-lg btn-block"
+              onClick={() => navigate("/billing")}
+            >
+              Manage subscription <span className="btn-arrow" aria-hidden="true">→</span>
             </button>
           ) : (
             <>
@@ -295,14 +329,21 @@ export default function Pricing() {
               )}
               <button
                 type="button"
+                className="btn-primary btn-lg btn-block"
                 onClick={startSubscription}
                 disabled={
                   busy ||
                   confirming ||
+                  checkingTrial ||
                   !consentGiven
                 }
               >
-                {confirming ? (
+                {checkingTrial ? (
+                  <>
+                    <span className="billing-spinner" aria-hidden="true" />
+                    Checking your plan…
+                  </>
+                ) : confirming ? (
                   <>
                     <span className="billing-spinner" aria-hidden="true" />
                     Confirming…
@@ -314,7 +355,7 @@ export default function Pricing() {
                   </>
                 ) : (
                   <>
-                    {ctaLabel} <span aria-hidden="true">→</span>
+                    {ctaLabel} <span className="btn-arrow" aria-hidden="true">→</span>
                   </>
                 )}
               </button>
@@ -323,10 +364,6 @@ export default function Pricing() {
 
           {!isSubscribed && (
             <p className="pricing-fineprint">
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <rect x="3" y="7" width="10" height="7" rx="1.5" />
-                <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
-              </svg>
               {offerTrial
                 ? "$0 due today · Secure checkout by Stripe"
                 : "Secure checkout by Stripe · Cancel anytime"}
@@ -336,6 +373,12 @@ export default function Pricing() {
           {error && (
             <p className="plan-error" role="alert">
               {error}
+            </p>
+          )}
+          {alreadySubscribed && (
+            <p className="plan-error" role="alert">
+              You already have a subscription. Manage it from{" "}
+              <Link to="/billing">Billing</Link>.
             </p>
           )}
         </article>
@@ -350,16 +393,18 @@ export default function Pricing() {
           <h2 id="checkout-modal-title" className="modal-title">
             {offerTrial ? "Start your free trial" : "Subscribe to Audition Plus"}
           </h2>
-          <StripeElementsForm
-            clientSecret={clientSecret}
-            submitLabel={offerTrial ? "Start free trial" : "Subscribe"}
-            showTotal
-            onCancel={() => setClientSecret(null)}
-            onConfirmed={() => {
-              setClientSecret(null);
-              setConfirming(true);
-            }}
-          />
+          <Suspense fallback={null}>
+            <StripeElementsForm
+              clientSecret={clientSecret}
+              submitLabel={offerTrial ? "Start free trial" : "Subscribe"}
+              showTotal
+              onCancel={() => setClientSecret(null)}
+              onConfirmed={() => {
+                setClientSecret(null);
+                setConfirming(true);
+              }}
+            />
+          </Suspense>
           <p className="checkout-secure-note">
             Payments are processed securely by Stripe. Audition With Me never
             sees your card number.
@@ -367,53 +412,54 @@ export default function Pricing() {
         </Modal>
       )}
 
-      <section className="pricing-details" aria-labelledby="pricing-questions">
-        <header>
-          <p>Before you begin</p>
-          <h2 id="pricing-questions">Plan details</h2>
-        </header>
-        <div>
-          {[
-            [
-              "How does the free trial work?",
-              `Your first ${trialDays} days of Audition Plus are free. You add a card to start, and you're only charged ${price ? `${price}/${interval}` : "the monthly price"} if you keep your plan past the trial.`,
-            ],
-            [
-              "Will I be charged if I cancel during the trial?",
-              "No. Cancel from Billing any time before your trial ends and you won't be charged at all. You keep access until the trial's last day.",
-            ],
-            [
-              "Can I cancel after the trial?",
-              "Yes. The plan renews monthly and you can cancel whenever you like — you keep access through the end of the month you've paid for.",
-            ],
-            [
-              "What counts as a rehearsal?",
-              "Each script you upload and prepare. With Audition Plus they're unlimited, and replaying a scene never counts again.",
-            ],
-            [
-              "What files can I upload?",
-              "PDF audition sides and full scripts, including scanned pages.",
-            ],
-            [
-              "Where is my script stored?",
-              "Your scripts and self-tapes are saved on your device. The PDF is processed only to identify characters, dialogue, and directions for your rehearsal.",
-            ],
-          ].map(([question, answer], index) => (
-            <details key={question} open={index === 0}>
-              <summary>
-                {question}
-                <span aria-hidden="true">+</span>
-              </summary>
-              <p>{answer}</p>
-            </details>
-          ))}
+      <section className="section" aria-labelledby="pricing-questions">
+        <div className="wrap grid">
+          <header className="section-head span-4">
+            <p className="slug">Before you begin</p>
+            <h2 id="pricing-questions" className="title">
+              Plan details
+            </h2>
+          </header>
+          <div className="qa span-7 at-6">
+            {[
+              [
+                "How does the free trial work?",
+                `Your first ${trialDays} days of Audition Plus are free. You add a card to start, and you're only charged ${price ? `${price}/${interval}` : "the monthly price"} if you keep your plan past the trial.`,
+              ],
+              [
+                "Will I be charged if I cancel during the trial?",
+                "No. Cancel from Billing any time before your trial ends and you won't be charged at all. You keep access until the trial's last day.",
+              ],
+              [
+                "Can I cancel after the trial?",
+                "Yes. The plan renews monthly and you can cancel whenever you like — you keep access through the end of the month you've paid for.",
+              ],
+              [
+                "What counts as a rehearsal?",
+                "Each script you upload and prepare. With Audition Plus they're unlimited, and replaying a scene never counts again.",
+              ],
+              [
+                "What files can I upload?",
+                "PDF audition sides and full scripts, including scanned pages.",
+              ],
+              [
+                "Where is my script stored?",
+                "Your scripts and self-tapes are saved only on your device, never in our database. To run a rehearsal, your script’s text is sent to Anthropic and ElevenLabs, and your microphone audio to ElevenLabs, to be processed. The FAQ has the details.",
+              ],
+            ].map(([question, answer], index) => (
+              <details key={question} open={index === 0}>
+                <summary>
+                  {question}
+                  <span className="qa-icon" aria-hidden="true" />
+                </summary>
+                <p>{answer}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
-      <footer className="pricing-footer">
-        <span>Audition With Me</span>
-        <span>Questions about the plan? Contact <a href="mailto:team@auditionwithme.com">team@auditionwithme.com</a></span>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

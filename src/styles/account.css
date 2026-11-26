@@ -1,0 +1,477 @@
+/* The signed-in account screens: My auditions and Account settings (and
+   the page shell Billing shares). Title on the left, the working list or
+   form on the right, on the same grid as the FAQ and Terms (.doc-layout). */
+
+.account-layout {
+  flex: 1;
+}
+.account-head .lead {
+  font-size: var(--text-base);
+}
+.account-email {
+  margin: var(--space-4) 0 0;
+  overflow-wrap: anywhere;
+}
+.account-upload {
+  margin-top: var(--space-5);
+}
+
+/* ── Storage on this device (StorageMeter) ── */
+.storage-meter {
+  max-width: 420px;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.storage-meter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+.storage-meter-free {
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.storage-meter-track {
+  display: block;
+  height: 4px;
+  margin-top: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+.storage-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink-soft);
+  transition: width var(--dur) var(--ease);
+}
+.storage-meter-detail {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.storage-meter--low .storage-meter-fill {
+  background: var(--warn);
+}
+.storage-meter-warning {
+  margin-top: var(--space-3);
+}
+
+/* ── Loading and empty ── */
+.account-loading {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+.account-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.account-empty-title {
+  max-width: 24ch;
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.account-empty .meta {
+  max-width: 46ch;
+  margin: 0 0 var(--space-5);
+}
+
+/* ── Saved scripts ──
+   Each script is a ruled row that reads like the header of its sides:
+   file name in the script face, role in caps, counts, then its takes. */
+.account-scripts {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+.script-row {
+  padding-block: var(--space-5);
+  border-top: 1px solid var(--line);
+  /* Closing a take scrolls its script back into view. */
+  scroll-margin-top: var(--space-4);
+}
+.script-row-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+.script-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+/* The dot trails its item, so a wrapped line never starts with one. */
+.script-row-meta > span:not(:last-child)::after {
+  content: "\00b7";
+  margin-left: var(--space-2);
+  font-weight: 400;
+}
+.script-row-role {
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+/* What you do with a script: rehearse it on the left, manage it on the right. */
+.script-row-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-4);
+}
+.script-row-rehearse {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.script-row-role-picker {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.script-row-role-picker .select {
+  width: auto;
+  min-width: 10rem;
+  max-width: 16rem;
+  min-height: var(--control-h);
+  flex: 1 1 auto;
+  text-overflow: ellipsis;
+}
+.script-row-manage {
+  display: flex;
+  flex-wrap: wrap;
+  /* The ghost buttons' labels line up with the row's edges. */
+  margin-inline: calc(-1 * var(--space-3));
+}
+.script-row-manage .btn-ghost {
+  font-weight: 400;
+}
+.script-row-delete:hover:not(:disabled),
+.script-row-delete:focus-visible {
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+
+/* ── Takes ── a slate per take: still, number, role, when, how long. */
+.script-row-takes {
+  margin-top: var(--space-4);
+}
+.take-list {
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.take-list > li {
+  border-top: 1px solid var(--line);
+}
+.take-row {
+  display: grid;
+  width: 100%;
+  min-height: 64px;
+  grid-template-columns: 80px 5.5rem minmax(0, 1fr) auto 3rem;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding-block: var(--space-2);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+.take-row:hover {
+  background: var(--ink-wash);
+}
+.take-row:active {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.take-row:focus-visible {
+  outline-offset: -2px;
+}
+.take-row-frame {
+  display: block;
+  overflow: hidden;
+  /* Takes are recorded 16:9: the still shows the whole frame. */
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.take-row-frame video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.take-row-loading {
+  display: block;
+  height: 100%;
+}
+.take-row-number,
+.take-row-duration {
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.take-row-duration {
+  text-align: right;
+}
+.take-row-role {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.take-row-date {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.take-row:hover .take-row-date {
+  color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+  .script-row-rehearse {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+  .script-row-rehearse > * {
+    flex: 1 1 100%;
+  }
+  .script-row-role-picker .select {
+    min-width: 0;
+    max-width: none;
+  }
+  /* Two lines beside the still: number and length, then role and date. */
+  .take-row {
+    grid-template-columns: 80px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "frame number duration"
+      "frame role date";
+    align-content: center;
+    column-gap: var(--space-3);
+  }
+  .take-row-frame { grid-area: frame; }
+  .take-row-number { grid-area: number; }
+  .take-row-duration { grid-area: duration; }
+  .take-row-role { grid-area: role; }
+  .take-row-date { grid-area: date; }
+}
+
+/* ── One take, opened ──
+   Its own dialog rather than Modal.tsx: the feedback form can sit over it. */
+.tape-modal-overlay {
+  position: fixed;
+  inset: 0;
+  /* Under the shared modal layer, which the feedback form uses. */
+  z-index: var(--z-menu);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--scrim);
+}
+.tape-modal {
+  display: flex;
+  width: min(720px, 100%);
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+  color: var(--ink);
+}
+.tape-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.tape-modal-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.tape-modal-detail strong {
+  font-family: var(--font-script);
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  overflow-wrap: anywhere;
+}
+.tape-modal-detail span {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.tape-modal-close {
+  width: var(--control-h);
+  flex: none;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-2)) 0 0;
+  padding: 0;
+}
+.tape-modal video {
+  display: block;
+  width: 100%;
+  max-height: 64dvh;
+  border-radius: var(--radius-md);
+  background: var(--ground);
+}
+.tape-modal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  background: var(--ground);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+.tape-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+/* Download is what a saved take is for: the one solid button. */
+.tape-modal-download {
+  flex: 1 1 12rem;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .tape-modal-overlay {
+    align-items: flex-start;
+    padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right)) var(--space-3)
+      max(var(--space-4), env(safe-area-inset-left));
+  }
+  .tape-modal {
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+  .tape-modal video {
+    max-height: calc(100dvh - 150px);
+    object-fit: contain;
+  }
+}
+
+/* ── Account settings ── email, password, delete: three ruled sections. */
+.settings-sections {
+  border-bottom: 1px solid var(--line);
+}
+.settings-section {
+  padding-block: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+.settings-section:first-child {
+  padding-top: var(--space-5);
+}
+.settings-section h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.settings-copy {
+  max-width: 56ch;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.settings-copy strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.settings-fields {
+  max-width: 420px;
+  margin-top: var(--space-5);
+}
+.settings-fields > .field-label:first-child {
+  margin-top: 0;
+}
+.settings-submit {
+  align-self: flex-start;
+  margin-top: var(--space-5);
+}
+.settings-fields .auth-error + .settings-submit,
+.settings-fields .settings-notice + .settings-submit {
+  margin-top: var(--space-4);
+}
+.settings-notice {
+  margin-top: var(--space-4);
+  overflow-wrap: anywhere;
+}
+.settings-reset {
+  margin: var(--space-5) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.settings-reset strong {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+/* A button that reads as a link: it sends an email, it doesn't navigate.
+   Padded so the line of text is still a 44px target. */
+.settings-text-button {
+  margin-block: calc(-1 * var(--space-3));
+  padding-block: var(--space-3);
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-text-button:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+  text-decoration: none;
+}
+
+@media (max-width: 560px) {
+  .settings-submit {
+    align-self: stretch;
+  }
+}

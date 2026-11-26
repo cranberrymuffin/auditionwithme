@@ -6,11 +6,12 @@ import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { StaticRouter } from "react-router-dom";
 import { AppRoutes } from "./App";
-import { ssrSeo, type ResolvedSeo } from "./components/Seo";
+import { ssrSeo, type ResolvedSeo } from "./lib/seo";
 
 // Lets the prerender skip /pricing while beta testing turns it into a redirect.
 export { IS_BETA_TESTING } from "./lib/beta";
 
+// eslint-disable-next-line react-refresh/only-export-components -- build-time entry, never hot-reloaded
 export function render(url: string): { html: string; seo: ResolvedSeo | null } {
   ssrSeo.current = null;
   const html = renderToString(

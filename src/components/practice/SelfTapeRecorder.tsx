@@ -14,24 +14,15 @@ export default function SelfTapeRecorder({
   status,
   stream,
   error,
-  saving,
-  paused,
   practiceRun,
-  onTogglePause,
-  onStop,
   nativePreview = false,
   onRetry,
 }: {
   status: RecorderStatus;
   stream: MediaStream | null;
   error: string | null;
-  saving: boolean;
-  /** Rehearsal-wide pause state — mirrors the recorder's own paused status. */
-  paused: boolean;
   /** Running lines without recording: the camera only mirrors the actor. */
   practiceRun: boolean;
-  onTogglePause: () => void;
-  onStop: () => void;
   /** iOS app: the camera is drawn natively, and there's no stream. */
   nativePreview?: boolean;
   /** Offered with an error: turns the camera and mic back on (the iOS app,
@@ -71,45 +62,36 @@ export default function SelfTapeRecorder({
           <div className={`self-tape-placeholder ${status === "error" && onRetry ? "has-retry" : ""}`}>
             {status === "requesting" ? "Waiting for camera access…" : error ?? "Camera preview"}
             {status === "error" && onRetry && (
-              <button type="button" className="speaker-test" onClick={onRetry}>
+              <button type="button" className="btn-secondary" onClick={onRetry}>
                 Try again
               </button>
             )}
           </div>
         )}
+      </div>
+      {/* Beside or under the picture, never over it: the iOS app draws the
+          camera as a native layer above the page, which would hide them. */}
+      <div className="self-tape-info">
+        {isRecording && (
+          <p className={`self-tape-rec ${status === "paused" ? "is-paused" : ""}`}>
+            <span>
+              <i aria-hidden="true" />
+              {status === "paused" ? "Paused" : "Rec"}
+            </span>
+            <time aria-label={`${formatElapsed(elapsed)} recorded`}>{formatElapsed(elapsed)}</time>
+          </p>
+        )}
+        {practiceRun && cameraOn && (
+          <p className="self-tape-rec is-practice">
+            <span>Practice run</span> <small>Not recording</small>
+          </p>
+        )}
         {showCenterStageHint && (
-          <p className="self-tape-hint">
+          <p className="field-hint self-tape-hint">
             Tip: turn off Center Stage in Control Center for steady framing.
           </p>
         )}
-        {isRecording && (
-          <span className={`self-tape-rec ${status === "paused" ? "is-paused" : ""}`}>
-            <i aria-hidden="true" />
-            {status === "paused" ? "Paused" : "Rec"}
-            <time aria-label={`${formatElapsed(elapsed)} recorded`}>{formatElapsed(elapsed)}</time>
-          </span>
-        )}
-        {practiceRun && cameraOn && (
-          <span className="self-tape-rec is-practice">Practice run · not recording</span>
-        )}
       </div>
-      {isRecording && (
-        <div className="self-tape-controls">
-          <button type="button" onClick={onTogglePause} aria-pressed={paused}>
-            <span aria-hidden="true">{paused ? "▶︎" : "❚❚"}</span>
-            {paused ? "Resume" : "Pause"}
-          </button>
-          <button
-            type="button"
-            className="self-tape-end"
-            onClick={onStop}
-            disabled={saving}
-          >
-            <span aria-hidden="true">■</span>
-            {saving ? "Saving…" : "End take"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,0 +1,267 @@
+/* Billing: the plan as a ruled block of facts, receipts as a list. Also
+   the card form (StripeElementsForm) and the checkout dialog the Pricing
+   page opens around it. The page shell is account.css's. */
+
+/* ── The plan ── */
+.billing-plan {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}
+.billing-plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+.billing-plan h2 {
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.billing-plan-price {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The one sentence that says where the plan stands. */
+.billing-headline {
+  max-width: 52ch;
+  margin: var(--space-4) 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-lg);
+  line-height: 1.5;
+}
+.billing-warning {
+  max-width: 52ch;
+  margin-top: var(--space-5);
+  color: var(--ink);
+  font-size: var(--text-base);
+}
+.billing-facts {
+  margin-top: var(--space-6);
+  font-variant-numeric: tabular-nums;
+}
+.billing-facts dt {
+  color: var(--ink-soft);
+}
+.billing-facts dd {
+  color: var(--ink);
+}
+.billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+/* Cancelling is never what the page is for: quiet, at the far end, and in
+   the danger ink once it's pointed at. */
+.billing-cancel {
+  margin-left: auto;
+  /* Its label lines up with the column's right edge. */
+  margin-right: calc(-1 * var(--space-3));
+}
+.billing-cancel:hover:not(:disabled),
+.billing-cancel:focus-visible {
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+.billing-plan .plan-error {
+  margin-top: var(--space-4);
+}
+
+/* No plan yet */
+.billing-empty h2 {
+  margin-top: var(--space-3);
+}
+
+/* Loading: three bars where the plan's name, price and status will be. */
+.billing-plan.is-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.billing-skeleton {
+  display: block;
+  width: 55%;
+  height: var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  animation: billing-pulse 1.4s var(--ease) infinite alternate;
+}
+.billing-skeleton.is-wide {
+  width: 40%;
+  height: var(--space-6);
+}
+.billing-skeleton.is-short {
+  width: 30%;
+}
+@keyframes billing-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+/* Also the busy mark in the Pricing page's button. */
+.billing-spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: billing-spin 0.7s linear infinite;
+}
+@keyframes billing-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .billing-skeleton {
+    animation: none;
+  }
+  .billing-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* ── Receipts ── */
+.billing-history {
+  margin-top: var(--space-8);
+}
+.billing-history ul {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  list-style: none;
+}
+.billing-history li {
+  display: grid;
+  min-height: 56px;
+  /* Fixed tracks: each row is its own grid, and the columns must agree. */
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 7rem 4.5rem;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding-block: var(--space-2);
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.billing-history-amount {
+  color: var(--ink);
+  font-weight: 600;
+}
+.billing-history-status {
+  justify-self: start;
+}
+/* The link is one word: padded out to a 44px target. */
+.billing-history li a {
+  padding: var(--space-3) 0;
+  font-weight: 600;
+  justify-self: end;
+}
+
+@media (max-width: 560px) {
+  .billing-actions > button {
+    flex: 1 1 100%;
+  }
+  .billing-cancel {
+    margin-inline: 0;
+  }
+  .billing-history li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .billing-history-amount {
+    justify-self: end;
+  }
+}
+
+/* ── The card form (StripeElementsForm) ──
+   Stripe draws the fields in an iframe, styled to match through the
+   `appearance` object in the component. This is everything around them. */
+.modal-content.checkout-modal {
+  max-width: 480px;
+}
+.stripe-elements-form,
+.stripe-elements-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.stripe-elements-form-fields .plan-error {
+  margin: 0;
+}
+.stripe-elements-form-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.stripe-elements-form-actions .btn-primary {
+  flex: 1;
+}
+.stripe-elements-loading {
+  display: flex;
+  min-height: 160px;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* What's being bought, as ruled lines: the plan, the trial, what's due. */
+.checkout-summary dl {
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+.checkout-summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.checkout-summary dd {
+  margin: 0;
+  text-align: right;
+}
+.checkout-summary dl > .checkout-summary-total {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.checkout-summary-note,
+.checkout-secure-note {
+  margin: var(--space-3) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.checkout-secure-note {
+  margin-top: var(--space-4);
+}
+
+/* The phone sheet (modals.css, 520px): the fields scroll, and the buttons
+   stay in reach under them however tall Stripe's form grows. */
+@media (max-width: 520px) {
+  .modal-content .stripe-elements-form {
+    min-height: 0;
+    flex: 1 1 auto;
+  }
+  .modal-content .stripe-elements-form-fields {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+  }
+  .modal-content .stripe-elements-form-actions,
+  .modal-content .checkout-secure-note {
+    flex: none;
+  }
+}

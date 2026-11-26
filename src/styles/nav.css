@@ -1,0 +1,288 @@
+/* Site header (SiteNav) and footer (SiteFooter). */
+
+.site-nav {
+  position: relative;
+  z-index: var(--z-nav);
+  /* The top inset is 0 in browsers; in the iOS app it clears the status
+     bar and Dynamic Island, which the web view draws under. */
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid var(--line);
+  background: var(--ground);
+}
+.site-nav-inner {
+  display: flex;
+  width: min(100% - 2 * var(--gutter), var(--page-max));
+  height: var(--nav-h);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-inline: auto;
+}
+
+/* iOS app only (html.is-native, set in main.tsx): the header stays pinned
+   at the top like a native navigation bar, and the page doesn't rubber-band,
+   which dragged every header down past the top and back. */
+html.is-native,
+html.is-native body {
+  overscroll-behavior: none;
+}
+html.is-native .site-nav {
+  position: sticky;
+  top: 0;
+  background: var(--ground);
+}
+
+/* BrandMark: the clapper icon in each header's corner. */
+.brand-mark {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+}
+.site-nav-brand {
+  display: inline-flex;
+  min-height: var(--control-h);
+  align-items: center;
+  gap: var(--space-3);
+}
+.brand-wordmark {
+  color: var(--ink);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.site-nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  height: 100%;
+}
+/* Full header height, so the target is tall and the active bar can sit on
+   the header's bottom rule. */
+.site-nav-link {
+  position: relative;
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0;
+  transition: color var(--dur) var(--ease);
+}
+.site-nav-link:hover {
+  color: var(--ink);
+}
+.site-nav-link.is-active {
+  color: var(--ink);
+}
+.site-nav-link.is-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* The header's primary button is drawn compact; ::after keeps it tappable. */
+.site-nav-cta {
+  position: relative;
+  min-height: 36px;
+  padding-inline: var(--space-4);
+  font-size: var(--text-sm);
+}
+.site-nav-cta::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
+
+.site-nav-mobile {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.site-nav-menu {
+  display: grid;
+  width: var(--control-h);
+  height: var(--control-h);
+  margin-right: -10px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+.site-nav-menu:hover {
+  background: var(--ink-wash);
+}
+
+.site-nav-drawer {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) var(--gutter) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--ground);
+  box-shadow: var(--shadow-2);
+}
+.site-nav-drawer .site-nav-link {
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-base);
+}
+.site-nav-drawer .site-nav-link.is-active {
+  color: var(--accent);
+}
+.site-nav-drawer .site-nav-link.is-active::after {
+  display: none;
+}
+.site-nav-drawer .site-nav-cta {
+  min-height: var(--control-h);
+  margin-top: var(--space-4);
+}
+.site-nav-drawer-heading {
+  margin: var(--space-5) 0 var(--space-1);
+  color: var(--ink-muted);
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.site-nav-drawer-sublink {
+  padding-left: var(--space-4);
+}
+
+.site-nav-account {
+  position: relative;
+  height: 100%;
+}
+.site-nav-account-trigger {
+  gap: 6px;
+}
+.site-nav-account-caret {
+  transition: transform var(--dur) var(--ease);
+}
+.site-nav-account-trigger[aria-expanded="true"] .site-nav-account-caret {
+  transform: rotate(180deg);
+}
+.site-nav-account-menu {
+  position: absolute;
+  top: calc(100% + 1px);
+  right: 0;
+  z-index: var(--z-menu);
+  display: flex;
+  min-width: 210px;
+  flex-direction: column;
+  padding: var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-2);
+}
+.site-nav-account-menu-item {
+  display: flex;
+  min-height: var(--control-h);
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.site-nav-account-menu-item:hover {
+  background: var(--ink-wash);
+  color: var(--ink);
+}
+.site-nav-account-menu-item.is-active {
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .site-nav-links {
+    display: none;
+  }
+  .site-nav-mobile {
+    display: flex;
+  }
+}
+/* Too narrow for the name beside Start free and the menu: icon only. */
+@media (max-width: 380px) {
+  .brand-wordmark {
+    display: none;
+  }
+}
+/* Phones on their side have ~390px of height: a shorter header. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .site-nav-inner {
+    --nav-h: 52px;
+    width: calc(100% - max(var(--gutter), env(safe-area-inset-left)) - max(var(--gutter), env(safe-area-inset-right)));
+  }
+}
+
+/* ── Footer ── */
+.site-footer {
+  border-top: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-8);
+  padding-block: var(--space-7) calc(var(--space-7) + env(safe-area-inset-bottom, 0px));
+}
+.site-footer-brand {
+  max-width: 34ch;
+}
+.site-footer-brand strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+.site-footer-brand p {
+  margin: 0;
+  line-height: 1.55;
+}
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.site-footer-links a {
+  display: inline-flex;
+  min-height: var(--control-h);
+  align-items: center;
+  color: var(--ink-soft);
+  font-weight: 600;
+  transition: color var(--dur) var(--ease);
+}
+.site-footer-links a:hover {
+  color: var(--ink);
+}
+.site-footer-note {
+  flex-basis: 100%;
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+}

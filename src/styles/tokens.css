@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+/* NOTE: trial files — replace with licensed Britti Sans webfonts before launch.
+   Only the faces the CSS asks for are shipped: 400/500, 400 italic, 600, 700. */
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Regular.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-RegularItalic.woff2") format("woff2");
+  font-weight: 400 500;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Britti Sans";
+  src: url("/fonts/BrittiSans-Bold.woff2") format("woff2");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Courier Prime, self-hosted from @fontsource (woff2 only; the package's
+   own CSS would also ship a woff copy of each). The script face. */
+@font-face {
+  font-family: "Courier Prime";
+  src: url("@fontsource/courier-prime/files/courier-prime-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("@fontsource/courier-prime/files/courier-prime-latin-400-italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("@fontsource/courier-prime/files/courier-prime-latin-700-normal.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* main.tsx always sets `.dark`; the variant stays so Tailwind's dark:
+   utilities keep resolving. There is one palette: night. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens ──────────────────────────────────────────────────────
+   Breakpoints (media queries can't read variables, so use the numbers):
+     560px   phone → large phone / small tablet
+     900px   single column → the 12-column grid
+     1200px  the grid reaches its full width
+   Phones on their side: @media (orientation: landscape) and (max-height: 500px)
+   Two content-driven exceptions: the header's links fold into the menu at
+   720px, and its wordmark hides at 380px.
+   ─────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Colour: one ground, two surface steps, three inks, one accent. */
+  --ground: #0e1622;
+  --surface-1: #151f2e; /* panels, inputs, the script page */
+  --surface-2: #1d293a; /* raised: menus, modals, hover on surface-1 */
+  --ink: #f4eee4; /* text, 15.7:1 on ground */
+  --ink-soft: #c5bfb4; /* secondary text, 9.9:1 */
+  --ink-muted: #969188; /* captions and meta, 5.8:1 (4.7:1 on surface-2) — the floor */
+  --line: #283344; /* hairlines */
+  --line-strong: #606e85; /* input and outline-button borders, 3:1 on surface-1 */
+  --accent: #ef8f6f; /* coral: primary action, "your line", focus */
+  --accent-hover: #f5a488;
+  --accent-ink: #1b1210; /* text on accent, 7.7:1 */
+  --danger: #f2646a;
+  --success: #74c69d;
+  --warn: #e3b55a;
+
+  /* Tints: always mixed from the tokens above, never a new hex. */
+  --accent-wash: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 55%, transparent);
+  --danger-wash: color-mix(in srgb, var(--danger) 14%, transparent);
+  --success-wash: color-mix(in srgb, var(--success) 14%, transparent);
+  --warn-wash: color-mix(in srgb, var(--warn) 14%, transparent);
+  --ink-wash: color-mix(in srgb, var(--ink) 6%, transparent);
+  --scrim: color-mix(in srgb, #05090f 72%, transparent);
+
+  /* Type scale. Display sizes are for Playfair page titles only. */
+  --text-xs: 0.8125rem; /* 13 — meta, legal small print */
+  --text-sm: 0.875rem; /* 14 — labels, captions, nav */
+  --text-base: 1rem; /* 16 — body, controls */
+  --text-lg: 1.125rem; /* 18 — lead paragraphs, list questions */
+  --text-xl: 1.375rem; /* 22 — section sub-heads */
+  --text-2xl: 1.75rem; /* 28 — small titles (modals, forms) */
+  --text-title: clamp(2rem, 3.4vw, 2.875rem); /* section and page titles */
+  --text-display: clamp(2.5rem, 5.6vw, 4.75rem); /* the home hero only */
+  --text-script: 1.0625rem; /* the script page at reading size */
+  --text-script-lg: clamp(1.375rem, 2.4vw, 1.75rem); /* the line being spoken */
+  --leading-tight: 1.08;
+  --leading-snug: 1.3;
+  --leading-body: 1.6;
+  --measure: 64ch;
+
+  /* Space: 4px base. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --space-10: 128px;
+
+  /* Layout */
+  --page-max: 1200px;
+  --gutter: clamp(20px, 5vw, 64px);
+  --nav-h: 64px;
+  --control-h: 44px;
+
+  /* Shape and depth: two radii, a pill only for status tags, two shadows. */
+  --radius-sm: 4px; /* controls, tags, highlights */
+  --radius-md: 8px; /* panels, modals, media */
+  --radius-pill: 999px;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 18px 48px rgb(0 0 0 / 0.5); /* modals, menus, toasts */
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 160ms;
+
+  --z-base: 0;
+  --z-sticky: 20;
+  --z-nav: 50;
+  --z-menu: 60;
+  --z-modal: 200; /* the take player and feedback gate already sit at 200 */
+  --z-toast: 210;
+  --z-skip: 1000;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+}
+
+@theme {
+  /* One rule per face (see base.css): Playfair for page titles, Britti Sans
+     for all interface and body text, Courier Prime for script content. */
+  --font-display: "Playfair Display", "Didot", "Bodoni MT", Georgia, serif;
+  --font-sans: "Britti Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-script: "Courier Prime", "Courier New", Courier, monospace;
+}

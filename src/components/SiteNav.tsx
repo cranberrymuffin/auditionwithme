@@ -6,14 +6,23 @@ import { useIsAdmin } from "../hooks/useIsAdmin";
 import { supabase } from "../lib/supabase";
 import { IS_BETA_TESTING } from "../lib/beta";
 
-/** The brand in every header's corner: the clapper app icon, the same
- * one in the browser tab. Decorative — its link carries the label. */
+/** The brand in every header's corner: the clapper app icon, sized for the
+ * 36px it's drawn at. Decorative — its link carries the label. */
 export function BrandMark() {
-  return <img className="brand-mark" src="/icons/apple-touch-icon.png" alt="" width={36} height={36} />;
+  return (
+    <img
+      className="brand-mark"
+      src="/images/brand-mark-72.png"
+      srcSet="/images/brand-mark-72.png 2x, /images/brand-mark-108.png 3x"
+      alt=""
+      width={36}
+      height={36}
+    />
+  );
 }
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
-  return `eyebrow site-nav-link ${isActive ? "is-active" : ""}`;
+  return `site-nav-link ${isActive ? "is-active" : ""}`;
 }
 
 export default function SiteNav() {
@@ -128,7 +137,7 @@ export default function SiteNav() {
       <button
         ref={accountTriggerRef}
         type="button"
-        className={`eyebrow site-nav-link site-nav-account-trigger ${
+        className={`site-nav-link site-nav-account-trigger ${
           isAccountAreaActive ? "is-active" : ""
         }`}
         aria-expanded={accountMenuOpen}
@@ -204,7 +213,7 @@ export default function SiteNav() {
       {accountDropdown}
       <button
         type="button"
-        className="eyebrow site-nav-link"
+        className="site-nav-link"
         onClick={handleLogout}
       >
         Log out
@@ -215,7 +224,7 @@ export default function SiteNav() {
       <NavLink to="/login" className={navLinkClass} onClick={closeMenu}>
         Log in
       </NavLink>
-      <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
+      <Link to="/signup" className="btn-primary site-nav-cta" onClick={closeMenu}>
         Start free
       </Link>
     </>
@@ -223,50 +232,52 @@ export default function SiteNav() {
 
   return (
     <nav className="site-nav" aria-label="Main">
-      <Link to="/" className="site-nav-brand" aria-label="Audition With Me home">
-        <BrandMark />
-        <span className="brand-wordmark" aria-hidden="true">
-          Audition <em>With Me</em>
-        </span>
-      </Link>
+      <div className="site-nav-inner">
+        <Link to="/" className="site-nav-brand" aria-label="Audition With Me home">
+          <BrandMark />
+          <span className="brand-wordmark" aria-hidden="true">
+            Audition With Me
+          </span>
+        </Link>
 
-      <div className="site-nav-links">
-        {sharedLinks}
-        {authLinks}
-      </div>
+        <div className="site-nav-links">
+          {sharedLinks}
+          {authLinks}
+        </div>
 
-      <div className="site-nav-mobile">
-        {!loading && !user && (
-          <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
-            Start free
-          </Link>
-        )}
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="site-nav-menu"
-          aria-label={menuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={menuOpen}
-          aria-controls="site-nav-drawer"
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
+        <div className="site-nav-mobile">
+          {!loading && !user && (
+            <Link to="/signup" className="btn-primary site-nav-cta" onClick={closeMenu}>
+              Start free
+            </Link>
+          )}
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="site-nav-menu"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="site-nav-drawer"
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            {menuOpen ? (
-              <path d="M5 5l14 14M19 5L5 19" />
-            ) : (
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            )}
-          </svg>
-        </button>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              {menuOpen ? (
+                <path d="M5 5l14 14M19 5L5 19" />
+              ) : (
+                <path d="M4 7h16M4 12h16M4 17h16" />
+              )}
+            </svg>
+          </button>
+        </div>
       </div>
 
       {menuOpen && (
@@ -318,7 +329,7 @@ export default function SiteNav() {
               )}
               <button
                 type="button"
-                className="eyebrow site-nav-link"
+                className="site-nav-link"
                 onClick={handleLogout}
               >
                 Log out
@@ -329,7 +340,7 @@ export default function SiteNav() {
               <NavLink to="/login" className={navLinkClass} onClick={closeMenu}>
                 Log in
               </NavLink>
-              <Link to="/signup" className="site-nav-cta" onClick={closeMenu}>
+              <Link to="/signup" className="btn-primary site-nav-cta" onClick={closeMenu}>
                 Start free
               </Link>
             </>

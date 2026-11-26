@@ -1,10 +1,9 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 /**
- * The cards of a setup step's cast (step 2's roles, step 3's voices): two
- * to a row, wrapping onto as many rows as the cast needs, an odd last card
- * centered under the others. Everyone's always in view — no sideways
- * scrolling. On phones, one column.
+ * A setup step's cast (step 2's roles, step 3's voices) as a ruled list,
+ * one character to a row, the way a cast list reads on a call sheet.
+ * Everyone's always in view — nothing scrolls sideways.
  */
 export default function CastGrid<T>({
   items,
@@ -14,27 +13,25 @@ export default function CastGrid<T>({
 }: {
   items: T[];
   label: string;
-  /** E.g. "radiogroup" when the cards are radios. */
+  /** E.g. "radiogroup" when the rows are radios. */
   role?: string;
   /** `index` is the item's place in `items`. */
   renderCard: (item: T, index: number) => ReactNode;
 }) {
   return (
-    <div
-      className={`role-grid ${items.length === 1 ? "is-single" : ""}`}
-      role={role}
-      aria-label={label}
-    >
+    <div className="cast-list" role={role} aria-label={label}>
       {items.map((item, index) => renderCard(item, index))}
     </div>
   );
 }
 
-/** One card in a CastGrid: a mark on the left (a radio, a play button),
- * then the name, a detail line and a quoted line from the script. */
+/** One row in a CastGrid: a mark on the left (a radio, a play button),
+ * then the character's cue, a detail line and a line of theirs from the
+ * script. */
 export function CastCard({
   mark,
   name,
+  tag,
   detail,
   quote,
   active,
@@ -45,6 +42,8 @@ export function CastCard({
   /** In the circle on the left. */
   mark: ReactNode;
   name: string;
+  /** A short state beside the name ("You"). */
+  tag?: ReactNode;
   detail: string;
   quote: string;
   /** Selected (step 2) or playing (step 3). */
@@ -55,15 +54,20 @@ export function CastCard({
     <button
       type="button"
       ref={buttonRef}
-      className={`role-option ${active ? "is-selected" : ""} ${className}`}
+      className={`cast-row ${active ? "is-selected" : ""} ${className}`}
       {...buttonProps}
     >
-      <span className="role-radio" aria-hidden="true">
+      <span className="cast-mark" aria-hidden="true">
         {mark}
       </span>
-      <span className="role-option-copy">
-        <strong>{name}</strong>
-        <small>{detail}</small>
+      <span className="cast-copy">
+        <span className="cast-head">
+          <strong className="sides-cue">
+            {name}
+            {tag}
+          </strong>
+          <small>{detail}</small>
+        </span>
         <q>{quote.length > 120 ? `${quote.slice(0, 120)}…` : quote}</q>
       </span>
     </button>

@@ -1,4 +1,4 @@
-export function formatFileSize(bytes: number) {
+function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
@@ -13,9 +13,9 @@ export default function DocumentPreview({
   fileSize?: number;
 }) {
   return (
-    <figure className="document-panel" aria-label={`Document preview of ${fileName}`}>
-      <figcaption>
-        <span>Document preview</span>
+    <figure className="sides document-panel" aria-label={`Document preview of ${fileName}`}>
+      <figcaption className="sides-head">
+        <strong>{fileName}</strong>
         <span>Page 1</span>
       </figcaption>
       <div className="document-frame">
@@ -25,10 +25,7 @@ export default function DocumentPreview({
           title={`Preview of ${fileName}`}
         />
       </div>
-      <p>
-        <strong>{fileName}</strong>
-        <span>Read-only preview{fileSize != null ? ` · ${formatFileSize(fileSize)}` : ""}</span>
-      </p>
+      <p>Read-only preview{fileSize != null ? ` · ${formatFileSize(fileSize)}` : ""}</p>
     </figure>
   );
 }
