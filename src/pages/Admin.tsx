@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
 import { apiFetch } from "../lib/api";
@@ -40,7 +40,13 @@ type Feedback = {
   video_height?: number | null;
 };
 
-type Overview = { users: AdminUser[]; feedback: Feedback[] };
+type Overview = {
+  users: AdminUser[];
+  /** The newest rows, a page at a time (api/admin.ts ?feedbackOffset). */
+  feedback: Feedback[];
+  /** Every feedback row there is, loaded or not. */
+  feedbackTotal?: number;
+};
 
 type Tab = "users" | "feedback";
 
@@ -67,11 +73,6 @@ function timeAgo(iso: string | null) {
 
 function withinDays(iso: string | null, days: number) {
   return Boolean(iso) && Date.now() - new Date(iso!).getTime() < days * DAY_MS;
-}
-
-/** One letter for the avatar: the email's first letter or digit. */
-function initial(email: string | null) {
-  return (email ?? "?").match(/[\p{L}\p{N}]/u)?.[0]?.toUpperCase() ?? "?";
 }
 
 /** Five stars, the first `value` (rounded to the nearest half) lit. */
@@ -109,6 +110,33 @@ export default function Admin() {
   const [reloadKey, setReloadKey] = useState(0);
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  /** The next page of older feedback, added under what's loaded. */
+  const loadMoreFeedback = async () => {
+    if (!overview || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await apiFetch(`/api/admin?feedbackOffset=${overview.feedback.length}`);
+      await throwIfError(res, "Could not load more feedback");
+      const page = (await res.json()) as Overview;
+      setOverview((current) => {
+        if (!current) return current;
+        // Rows submitted since the first load shift the pages: skip repeats.
+        const seen = new Set(current.feedback.map((row) => row.id));
+        return {
+          ...current,
+          feedback: [...current.feedback, ...page.feedback.filter((row) => !seen.has(row.id))],
+          feedbackTotal: page.feedbackTotal ?? current.feedbackTotal,
+        };
+      });
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load more feedback");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -187,6 +215,9 @@ export default function Admin() {
       activeThisWeek: allUsers.filter((user) => withinDays(user.last_sign_in_at, 7)).length,
       onboarded: allUsers.filter((user) => user.email_confirmed_at && (user.nda_accepted_at || user.terms_accepted_at)).length,
       feedback: allFeedback.length,
+      // The true count; everything else about feedback here is worked out
+      // from the rows loaded so far.
+      feedbackTotal: Math.max(overview?.feedbackTotal ?? 0, allFeedback.length),
       feedbackThisWeek: allFeedback.filter((row) => withinDays(row.submitted_at, 7)).length,
       reviewers: new Set(allFeedback.map((row) => row.user_id)).size,
       average: averageRating(allFeedback),
@@ -197,18 +228,21 @@ export default function Admin() {
   }, [overview]);
 
   const onboardedShare = stats.users ? stats.onboarded / stats.users : 0;
+  const feedbackPartial = stats.feedback < stats.feedbackTotal;
+  // Said beside each figure that only covers the loaded rows.
+  const latestNote = feedbackPartial ? `latest ${stats.feedback}` : null;
 
   return (
-    <main className="account-page admin-page">
+    <main className="page account-page admin-page">
       <Seo title="Admin" description="Users and audition feedback." path="/admin" noindex />
       <SiteNav />
 
-      <section className="account-main admin-main">
+      <section className="wrap admin-main">
         <header className="admin-header">
           <div>
-            <p className="admin-eyebrow">Admin</p>
-            <h1>Users &amp; feedback</h1>
-            <p className="admin-subtitle">
+            <p className="slug">Admin</p>
+            <h1 className="title">Users &amp; feedback</h1>
+            <p className="meta admin-subtitle">
               {loadedAt
                 ? `Everyone in the beta and what they're telling us · updated ${timeAgo(new Date(loadedAt).toISOString()).toLowerCase()}`
                 : "Everyone in the beta and what they're telling us"}
@@ -220,16 +254,12 @@ export default function Admin() {
             onClick={() => setReloadKey((key) => key + 1)}
             disabled={refreshing}
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={refreshing ? "is-spinning" : undefined}>
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <path d="M21 4v5h-5" />
-            </svg>
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </header>
 
         {error && (
-          <div className="admin-error" role="alert">
+          <div className="notice notice-danger admin-error" role="alert">
             <p>{error}</p>
             <button type="button" className="btn-secondary" onClick={() => setReloadKey((key) => key + 1)}>
               Try again
@@ -272,14 +302,15 @@ export default function Admin() {
               </div>
               <div className="admin-kpi">
                 <dt>Feedback</dt>
-                <dd>{stats.feedback}</dd>
+                <dd>{stats.feedbackTotal}</dd>
                 <p>
                   {stats.feedbackThisWeek > 0 ? <strong>+{stats.feedbackThisWeek}</strong> : "None"}
                   {" this week"} · from {stats.reviewers} {stats.reviewers === 1 ? "actor" : "actors"}
+                  {latestNote && ` (${latestNote})`}
                 </p>
               </div>
               <div className="admin-kpi">
-                <dt>Average rating</dt>
+                <dt>Average rating{latestNote && ` (${latestNote})`}</dt>
                 <dd>
                   {stats.average === null ? "—" : stats.average.toFixed(1)}
                   {stats.average !== null && <span className="admin-kpi-unit">/ 5</span>}
@@ -292,11 +323,15 @@ export default function Admin() {
               </div>
             </dl>
 
-            <div className="admin-insights">
-              <section className="admin-panel" aria-labelledby="admin-ratings-title">
-                <h2 id="admin-ratings-title">Ratings</h2>
-                <p className="admin-panel-sub">
-                  {stats.feedback} {stats.feedback === 1 ? "take" : "takes"} rated
+            <div className="grid admin-insights">
+              <section className="span-5" aria-labelledby="admin-ratings-title">
+                <h2 id="admin-ratings-title" className="admin-section-title">
+                  Ratings
+                </h2>
+                <p className="meta">
+                  {feedbackPartial
+                    ? `Latest ${stats.feedback} of ${stats.feedbackTotal} takes rated`
+                    : `${stats.feedback} ${stats.feedback === 1 ? "take" : "takes"} rated`}
                 </p>
                 <ol className="admin-distribution">
                   {stats.distribution.map((row) => {
@@ -319,10 +354,12 @@ export default function Admin() {
                 </ol>
               </section>
 
-              <section className="admin-panel" aria-labelledby="admin-latest-title">
-                <h2 id="admin-latest-title">Latest comments</h2>
+              <section className="span-7" aria-labelledby="admin-latest-title">
+                <h2 id="admin-latest-title" className="admin-section-title">
+                  Latest comments
+                </h2>
                 {stats.latestComments.length === 0 ? (
-                  <p className="admin-empty">No comments yet.</p>
+                  <p className="meta admin-empty">No comments yet.</p>
                 ) : (
                   <ul className="admin-latest">
                     {stats.latestComments.map((row) => (
@@ -341,7 +378,7 @@ export default function Admin() {
             </div>
 
             <div className="admin-toolbar">
-              <div className="admin-tabs" role="tablist" aria-label="Admin views">
+              <div className="tabs admin-tabs" role="tablist" aria-label="Admin views">
                 <button
                   type="button"
                   role="tab"
@@ -358,121 +395,196 @@ export default function Admin() {
                   className={`admin-tab ${tab === "feedback" ? "is-active" : ""}`}
                   onClick={() => setTab("feedback")}
                 >
-                  All feedback <span className="admin-tab-count">{feedback.length}</span>
+                  All feedback{" "}
+                  <span className="admin-tab-count">
+                    {needle || !feedbackPartial ? feedback.length : stats.feedbackTotal}
+                  </span>
                 </button>
               </div>
-              <label className="admin-search">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <input
-                  type="search"
-                  placeholder={tab === "users" ? "Search by email" : "Search email or comment"}
-                  aria-label="Search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
+              <input
+                type="search"
+                className="input admin-search"
+                placeholder={tab === "users" ? "Search by email" : "Search email or comment"}
+                aria-label="Search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
             </div>
 
             {tab === "users" ? (
-              <div className="admin-table">
-                <div className="admin-table-head" aria-hidden="true">
-                  <span>User</span>
-                  <span>Joined</span>
-                  <span>Last active</span>
-                  <span>Feedback</span>
-                  <span />
-                </div>
-                {users.length === 0 && <p className="admin-empty admin-table-empty">No matching users.</p>}
-                {users.map((user) => {
-                  const rows = feedbackByUser.get(user.id) ?? [];
-                  const average = averageRating(rows);
-                  const expanded = expandedUserId === user.id;
-                  return (
-                    <div key={user.id} className={`admin-user ${expanded ? "is-expanded" : ""}`}>
-                      <button
-                        type="button"
-                        className="admin-user-summary"
-                        aria-expanded={expanded}
-                        onClick={() => setExpandedUserId(expanded ? null : user.id)}
-                      >
-                        <span className="admin-user-cell">
-                          <span className="admin-avatar" aria-hidden="true">{initial(user.email)}</span>
-                          <span className="admin-user-identity">
-                            <span className="admin-user-email">{user.email ?? user.id}</span>
-                            <span className="admin-badges">
-                              {user.is_admin && <span className="admin-badge">Admin</span>}
-                              {!user.email_confirmed_at && (
-                                <span className="admin-badge admin-badge--muted">Unconfirmed</span>
+              // Focusable so the keyboard can scroll it where it's narrower
+              // than its table.
+              <div className="admin-table-wrap" role="region" aria-label="Users" tabIndex={0}>
+                <table className="admin-table admin-users">
+                  <thead>
+                    <tr>
+                      <th scope="col">User</th>
+                      <th scope="col">Joined</th>
+                      <th scope="col">Last active</th>
+                      <th scope="col" className="is-num">Sessions</th>
+                      <th scope="col" className="is-num">Feedback</th>
+                      <th scope="col">Average rating</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="admin-empty">
+                          No matching users.
+                        </td>
+                      </tr>
+                    )}
+                    {users.map((user) => {
+                      const rows = feedbackByUser.get(user.id) ?? [];
+                      const average = averageRating(rows);
+                      const expanded = expandedUserId === user.id;
+                      return (
+                        <Fragment key={user.id}>
+                          {/* The button carries the control for keyboards and
+                              screen readers; a click anywhere on the row
+                              reaches the same handler. */}
+                          <tr
+                            className={`admin-user ${expanded ? "is-expanded" : ""}`}
+                            onClick={() => setExpandedUserId(expanded ? null : user.id)}
+                          >
+                            <th scope="row">
+                              <button type="button" className="admin-user-toggle" aria-expanded={expanded}>
+                                <span className="admin-user-email">{user.email ?? user.id}</span>
+                              </button>
+                              <span className="admin-badges">
+                                {user.is_admin && <span className="tag tag-accent">Admin</span>}
+                                {!user.email_confirmed_at && <span className="tag">Unconfirmed</span>}
+                                {!user.nda_accepted_at && !user.terms_accepted_at && (
+                                  <span className="tag">No agreement</span>
+                                )}
+                                {user.subscription_status && user.subscription_status !== "free" && (
+                                  <span className="tag">{user.subscription_status}</span>
+                                )}
+                              </span>
+                            </th>
+                            <td title={formatDate(user.created_at)}>{timeAgo(user.created_at)}</td>
+                            <td title={formatDate(user.last_sign_in_at)}>{timeAgo(user.last_sign_in_at)}</td>
+                            <td className="is-num">{user.free_sessions_used ?? "—"}</td>
+                            <td className="is-num">{rows.length}</td>
+                            <td>
+                              {average === null ? (
+                                <span className="admin-muted">—</span>
+                              ) : (
+                                <span className="admin-rating">
+                                  <span className="admin-rating-value">{average.toFixed(1)}</span>
+                                  <Stars value={average} />
+                                </span>
                               )}
-                              {!user.nda_accepted_at && !user.terms_accepted_at && (
-                                <span className="admin-badge admin-badge--muted">No agreement</span>
-                              )}
-                              {user.subscription_status && user.subscription_status !== "free" && (
-                                <span className="admin-badge admin-badge--muted">{user.subscription_status}</span>
-                              )}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="admin-cell" title={formatDate(user.created_at)}>
-                          <span className="admin-cell-label">Joined </span>
-                          {timeAgo(user.created_at)}
-                        </span>
-                        <span className="admin-cell" title={formatDate(user.last_sign_in_at)}>
-                          <span className="admin-cell-label">Last active </span>
-                          {timeAgo(user.last_sign_in_at)}
-                        </span>
-                        <span className="admin-cell admin-cell-feedback">
-                          <span className="admin-cell-label">Feedback </span>
-                          {rows.length === 0 ? (
-                            <span className="admin-muted">None</span>
-                          ) : (
-                            <>
-                              <strong>{rows.length}</strong>
-                              {average !== null && <Stars value={average} />}
-                            </>
+                            </td>
+                          </tr>
+                          {expanded && (
+                            <tr className="admin-user-detail">
+                              <td colSpan={6}>
+                                <div className="admin-user-detail-body">
+                                <p className="admin-user-facts">
+                                  Joined {formatDate(user.created_at)} · Last sign-in {formatDate(user.last_sign_in_at)}
+                                  {user.free_sessions_used !== null && ` · ${user.free_sessions_used} sessions used`}
+                                </p>
+                                {rows.length === 0 ? (
+                                  <p className="meta admin-empty">No feedback yet.</p>
+                                ) : (
+                                  <ul className="admin-list">
+                                    {rows.map((row) => (
+                                      <FeedbackItem key={row.id} feedback={row} />
+                                    ))}
+                                  </ul>
+                                )}
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </span>
-                        <span className="admin-chevron" aria-hidden="true">
-                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m6 9 6 6 6-6" />
-                          </svg>
-                        </span>
-                      </button>
-                      {expanded && (
-                        <div className="admin-user-feedback">
-                          <p className="admin-user-facts">
-                            Joined {formatDate(user.created_at)} · Last sign-in {formatDate(user.last_sign_in_at)}
-                            {user.free_sessions_used !== null && ` · ${user.free_sessions_used} sessions used`}
-                          </p>
-                          {rows.length === 0 ? (
-                            <p className="admin-empty">No feedback yet.</p>
-                          ) : (
-                            <ul className="admin-list">
-                              {rows.map((row) => (
-                                <FeedbackItem key={row.id} feedback={row} />
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <ul className="admin-list">
-                {feedback.length === 0 && <li className="admin-empty">No matching feedback.</li>}
-                {feedback.map((row) => (
-                  <FeedbackItem
-                    key={row.id}
-                    feedback={row}
-                    email={emailById.get(row.user_id) ?? row.user_id}
-                  />
-                ))}
-              </ul>
+              <div className="admin-table-wrap" role="region" aria-label="All feedback" tabIndex={0}>
+                <table className="admin-table admin-feedback-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Sent</th>
+                      <th scope="col">Rating</th>
+                      <th scope="col">User</th>
+                      <th scope="col">Comment</th>
+                      <th scope="col">Device</th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Reader latency in milliseconds: median / slowest">Latency ms</abbr>
+                      </th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Lines the app advanced on hearing them finished">Auto</abbr>
+                      </th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Lines advanced with the Next button">Manual</abbr>
+                      </th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Lines advanced on a semantic match">Sem.</abbr>
+                      </th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Lines advanced after silence">Sil.</abbr>
+                      </th>
+                      <th scope="col" className="is-num">
+                        <abbr title="Lines the actor went back to after an automatic advance">Back</abbr>
+                      </th>
+                      <th scope="col" className="is-num">Video</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feedback.length === 0 && (
+                      <tr>
+                        <td colSpan={12} className="admin-empty">
+                          No matching feedback.
+                        </td>
+                      </tr>
+                    )}
+                    {feedback.map((row) => (
+                      <tr key={row.id}>
+                        <td title={formatDate(row.submitted_at)}>{timeAgo(row.submitted_at)}</td>
+                        <td>
+                          <Stars value={row.rating} label={`${row.rating} out of 5 stars`} />
+                        </td>
+                        <td className="admin-cell-email">{emailById.get(row.user_id) ?? row.user_id}</td>
+                        <td className="admin-cell-comment">
+                          {row.comment ? row.comment : <span className="admin-muted">No comment</span>}
+                        </td>
+                        <td>{row.device_class ?? <span className="admin-muted">—</span>}</td>
+                        <td className="is-num">
+                          {row.reader_latency_ms_p50 != null
+                            ? `${row.reader_latency_ms_p50} / ${row.reader_latency_ms_max ?? "—"}`
+                            : "—"}
+                        </td>
+                        <td className="is-num">{row.lines_auto_detected ?? "—"}</td>
+                        <td className="is-num">{row.lines_manual_next ?? "—"}</td>
+                        <td className="is-num">{row.lines_semantic_advanced ?? "—"}</td>
+                        <td className="is-num">{row.lines_silence_advanced ?? "—"}</td>
+                        <td className="is-num">{row.lines_backtracked_after_auto ?? "—"}</td>
+                        <td className="is-num">
+                          {row.video_width != null && row.video_height != null
+                            ? `${row.video_width}×${row.video_height}`
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {feedbackPartial && (
+              <div className="admin-load-more">
+                <p className="meta">
+                  Showing the latest {stats.feedback} of {stats.feedbackTotal} feedback
+                  rows. Search and each user’s feedback cover only what’s loaded.
+                </p>
+                <button type="button" className="btn-secondary" disabled={loadingMore} onClick={() => void loadMoreFeedback()}>
+                  {loadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
             )}
           </>
         )}
@@ -497,7 +609,9 @@ function AdminSkeleton() {
   );
 }
 
-function FeedbackItem({ feedback, email }: { feedback: Feedback; email?: string | null }) {
+/** One piece of feedback under its author's row: rating, comment, and the
+ * take's metrics as a line of short fields. */
+function FeedbackItem({ feedback }: { feedback: Feedback }) {
   const chips = [
     feedback.device_class && { label: "Device", value: feedback.device_class },
     feedback.reader_latency_ms_p50 != null && {
@@ -523,12 +637,6 @@ function FeedbackItem({ feedback, email }: { feedback: Feedback; email?: string 
     <li className="admin-feedback">
       <div className="admin-feedback-head">
         <Stars value={feedback.rating} label={`${feedback.rating} out of 5 stars`} />
-        {email && (
-          <span className="admin-feedback-author">
-            <span className="admin-avatar admin-avatar--small" aria-hidden="true">{initial(email)}</span>
-            {email}
-          </span>
-        )}
         <span className="admin-feedback-time" title={formatDate(feedback.submitted_at)}>
           {timeAgo(feedback.submitted_at)}
         </span>

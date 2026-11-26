@@ -9,7 +9,7 @@
 // changing it costs nothing.
 
 /** -1 (very reserved) … 0 (natural, the old fixed read) … 1 (very expressive). */
-export const DEFAULT_CHARACTER_EMOTION = 0;
+const DEFAULT_CHARACTER_EMOTION = 0;
 export const CHARACTER_EMOTION_STEP = 0.5;
 
 const EMOTION_LABELS: Record<string, string> = {
@@ -34,7 +34,7 @@ export const characterEmotionLabel = (emotion: number) =>
 
 /** Playback rate: 1 = as generated. Kept to a range that still sounds like
  * someone talking rather than a fast-forward. */
-export const DEFAULT_CHARACTER_PACE = 1;
+const DEFAULT_CHARACTER_PACE = 1;
 export const MIN_CHARACTER_PACE = 0.8;
 export const MAX_CHARACTER_PACE = 1.25;
 

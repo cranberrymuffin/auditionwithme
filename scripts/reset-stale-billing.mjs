@@ -15,32 +15,9 @@
 // project, in the environment or .env.development.local. STRIPE_SECRET_KEY must be a live
 // key: checking against the sandbox would reset every real subscriber.
 
-import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
-
-async function loadEnvLocal() {
-  try {
-    const text = await readFile(new URL("../.env.development.local", import.meta.url), "utf8");
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      if (process.env[key] === undefined) process.env[key] = value;
-    }
-  } catch {
-    // no .env.development.local, fall back to whatever is already in process.env
-  }
-}
+import { loadEnvLocal } from "./_env.mjs";
 
 async function customerExists(stripe, customerId) {
   try {

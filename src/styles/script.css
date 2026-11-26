@@ -1,0 +1,198 @@
+/* The script page: how sides look wherever the product shows them — the
+   marketing illustrations now, the rehearsal view, script preview and
+   account lists as they are restyled. Set in the script face throughout.
+
+   .sides                the page (a surface; the one place a panel is right)
+   .sides-head           running header: title left, page/scene right
+   .sides-slug           scene heading
+   .sides-action         stage direction
+   .sides-line           one speech: line number in the margin, cue, dialogue
+     .is-yours           the actor's line: coral cue, highlighter over the words
+     .is-active          the line being spoken: larger
+     .is-past            already played: dimmed
+   .sides-note           a pencilled margin note
+   .turn                 whose turn it is, above the page
+   .slate                scene / take / time, in tabular digits */
+
+.sides {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-script);
+  font-size: var(--text-script);
+  line-height: 1.5;
+}
+
+.sides-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.sides-body {
+  padding: var(--space-5);
+}
+
+.sides-slug {
+  margin: 0 0 var(--space-3);
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sides-action {
+  max-width: 52ch;
+  margin: 0 0 var(--space-4);
+  color: var(--ink-muted);
+}
+
+/* The margin holds the line number, as a numbered shooting script does. */
+.sides-line {
+  display: grid;
+  grid-template-columns: 2.25em minmax(0, 1fr);
+  padding-block: var(--space-3);
+  transition: opacity var(--dur) var(--ease);
+}
+.sides-line + .sides-line {
+  border-top: 1px solid var(--line);
+}
+.sides-num {
+  padding-top: 0.15em;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.sides-cue {
+  display: flex;
+  font-family: var(--font-script);
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sides-paren {
+  margin: 0;
+  color: var(--ink-muted);
+}
+.sides-dialogue {
+  max-width: 38ch;
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+}
+
+.sides-line.is-yours .sides-cue {
+  color: var(--accent);
+}
+/* Highlighter: drawn across each wrapped line of the words, short of the
+   full line height, the way a marker sits on paper. */
+.sides-line.is-yours .sides-dialogue > span {
+  padding: 0.12em 0.3em;
+  margin-inline: -0.3em;
+  border-radius: 2px;
+  background: var(--accent-wash);
+  color: var(--ink);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.sides-line.is-active .sides-dialogue {
+  max-width: 26ch;
+  margin-top: var(--space-2);
+  font-size: var(--text-script-lg);
+  font-weight: 700;
+  line-height: 1.35;
+}
+.sides-line.is-past {
+  opacity: 0.5;
+}
+
+/* Words as the app hears them: said, the one it's waiting for, to come. */
+.sides-word.is-said {
+  color: var(--ink-muted);
+}
+.sides-word.is-current {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 5px;
+}
+
+.sides-note {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+.sides-note::before {
+  content: "\2014\00a0";
+}
+
+/* ── Whose turn ── */
+.turn {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+.turn strong {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.turn span {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+/* The actor's turn is the one solid coral surface in the product. */
+.turn.is-you {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.turn.is-you span {
+  color: inherit;
+}
+.turn + .sides {
+  border-top: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* ── Slate ── a <dl> of short fields. */
+.slate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+  font-family: var(--font-script);
+}
+.slate dt {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.slate dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}

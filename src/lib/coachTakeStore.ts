@@ -57,10 +57,6 @@ export async function saveCoachTake(record: CoachTakeRecord): Promise<void> {
   });
 }
 
-export async function deleteCoachTake(id: string): Promise<void> {
-  await withStore(COACH_TAKES_STORE, "readwrite", (store) => store.delete(id));
-}
-
 export function deleteCoachTakesForScript(scriptId: string): Promise<number> {
   return deleteByIndex(COACH_TAKES_STORE, "scriptId", scriptId);
 }

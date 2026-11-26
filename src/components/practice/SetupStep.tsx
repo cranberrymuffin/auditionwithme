@@ -3,40 +3,40 @@ import SetupHeader from "./SetupHeader";
 import StepHeader from "./StepHeader";
 
 /**
- * The page every practice setup step sits in: the header with its step
- * bars, then one centered column opening with the step's row (step number
- * and script name). Each step brings only its own content.
+ * The page every practice setup step sits in: the header with its numbered
+ * steps, then the shared 12-column grid. The step's title and what it's
+ * for sit in the left columns (`intro`); its decisions run down the right
+ * (`children`). One column on phones. Each step brings only its own content.
  */
 export default function SetupStep({
   step,
   scriptName,
   onGoToStep,
-  aside,
+  intro,
+  className,
   children,
   ...mainProps
 }: {
   /** 1-based. */
   step: number;
   scriptName: string;
-  /** Back to an earlier step (1-based), from the header's step bars. */
+  /** Back to an earlier step (1-based), from the header's steps. */
   onGoToStep?: (step: number) => void;
-  /** Shown in a second column beside the step, e.g. step 1's PDF preview. */
-  aside?: ReactNode;
+  /** The step's title and lead-in, under the step row. */
+  intro: ReactNode;
   children: ReactNode;
 } & HTMLAttributes<HTMLElement>) {
   return (
-    <main className="processing-page" {...mainProps}>
+    <main className={`setup-page ${className ?? ""}`} {...mainProps}>
       <SetupHeader step={step} onGoToStep={onGoToStep} />
 
-      <section
-        className={`processing-layout ${aside ? "" : "processing-layout--single"}`}
-      >
-        <div className="processing-status">
+      <div className="wrap grid setup-layout">
+        <div className="setup-intro span-4">
           <StepHeader step={step} scriptName={scriptName} />
-          {children}
+          {intro}
         </div>
-        {aside}
-      </section>
+        <div className="setup-body span-7 at-6">{children}</div>
+      </div>
     </main>
   );
 }

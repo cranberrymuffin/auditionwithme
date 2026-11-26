@@ -299,7 +299,10 @@ export function useReaderAudioPregen({
       await Promise.all(
         items.map(async ({ index, key }) => {
           if (peekTtsCache(key)) return; // generate() settles it in order
-          const stored = await loadReaderAudio(key).catch(() => null);
+          const stored = await loadReaderAudio(key).catch((err) => {
+            console.warn("Couldn't read stored reader audio; generating it again:", err);
+            return null;
+          });
           if (stored && !cancelled) {
             noteUntagged(key);
             seedTtsCache(key, stored);

@@ -1,25 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
 import { requireAuth } from "./_entitlement.js";
 import { handleCors } from "./_cors.js";
+import { serviceClient } from "./_supabase.js";
+import { stripeClient } from "./_stripe.js";
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Same service-role client pattern as api/_entitlement.ts — needed for
-// auth.admin.deleteUser and to read the caller's entitlements row.
-function serviceClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
-    );
-  }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 // Checks the password the same way the login form does. A bearer token alone
 // isn't enough to delete an account — it may be from a session someone left
@@ -37,8 +24,10 @@ async function passwordMatches(email: string, password: string): Promise<boolean
 
 // Permanently deletes the caller's account — the self-serve version of
 // scripts/delete-user.mjs. Deleting the auth user cascades entitlements,
-// self_tape_feedback and rate_limit_buckets via FK; scripts and self-tapes
+// self_tape_feedback and api_rate_limits via FK; scripts and self-tapes
 // live in IndexedDB, which the client clears itself after this succeeds.
+// trial_uses is deliberately left alone: it is what stops a deleted account's
+// email from earning another free trial (api/_trial.ts).
 async function deleteAccount(
   req: VercelRequest,
   res: VercelResponse,
@@ -75,10 +64,7 @@ async function deleteAccount(
         console.error("STRIPE_SECRET_KEY must be set");
         return res.status(500).json({ error: "Could not delete your account" });
       }
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: "2026-07-29.dahlia",
-      });
-      await stripe.customers.del(customerId);
+      await stripeClient().customers.del(customerId);
       console.log(`stripe customer ${customerId} deleted for user ${auth.userId}`);
     }
 

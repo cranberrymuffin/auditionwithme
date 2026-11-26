@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!auth) return;
 
   const grant = await issueRehearsalGrant(auth.userId, res);
-  if (!grant) return; // 402 already sent
+  if (!grant) return; // 402 or 429 already sent
 
   return res.status(200).json({ grant });
 }

@@ -47,7 +47,8 @@ export async function loadUpload(id: string): Promise<File | null> {
       store.get(id),
     );
     return record?.file ?? null;
-  } catch {
+  } catch (err) {
+    console.warn("Couldn't read the stored upload:", err);
     return null;
   }
 }

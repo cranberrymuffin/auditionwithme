@@ -1,0 +1,713 @@
+/* The take: a calm, dark stage with the script page as the hero. Top to
+   bottom — a slim header, whose turn it is (.turn), the script page
+   (.sides) with the camera beside or above it, and the control bar.
+   Built on script.css; what's here is the layout and the one deliberate
+   departure from it: the line being spoken is set in the interface face,
+   large, because it has to be read from a phone propped up across the
+   room and the script face's wide, light letters don't carry that far. */
+
+.rehearsal-page {
+  display: flex;
+  height: 100vh;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  /* Not even scrollable by script or focus — only the script pane scrolls,
+     so the header can never slide over the active line. */
+  overflow: clip;
+  background: var(--ground);
+  color: var(--ink);
+  /* Script page plus camera column, the width the wide layout centres. */
+  --stage-w: 1148px;
+}
+
+/* ── Header: back, the script's name, where you are, exit ── */
+
+.rehearsal-header {
+  display: flex;
+  height: calc(56px + env(safe-area-inset-top, 0px));
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  /* Clears the status bar in the iOS app; the inset is 0 in browsers. */
+  padding: env(safe-area-inset-top, 0px) max(var(--space-2), env(safe-area-inset-right)) 0
+    max(var(--space-2), env(safe-area-inset-left));
+  background: var(--ground);
+}
+.rehearsal-back {
+  display: grid;
+  width: var(--control-h);
+  height: var(--control-h);
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-lg);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.rehearsal-back:hover {
+  background: var(--ink-wash);
+  color: var(--ink);
+}
+.rehearsal-file,
+.rehearsal-count {
+  font-family: var(--font-script);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.rehearsal-file {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rehearsal-count {
+  flex: none;
+  margin: 0 var(--space-2);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.rehearsal-exit {
+  flex: none;
+}
+
+/* How far through the scene: the header's bottom rule, filling in. */
+.rehearsal-progress {
+  height: 2px;
+  flex: none;
+  background: var(--line);
+}
+.rehearsal-progress i {
+  display: block;
+  height: 100%;
+  background: var(--ink-soft);
+  transition: width var(--dur) var(--ease);
+}
+
+/* ── Whose turn (RehearsalStatusStrip, on .turn) ──
+   Big enough to read from across the room. Each state has its own icon
+   and its own surface or edge, not just its own colour: the actor's turn
+   is the solid coral strip; a partner speaking carries an ink bar down
+   the left; paused is framed in dashes; trouble is barred in red. */
+
+.rehearsal-turn {
+  min-height: 64px;
+  flex: none;
+  align-items: center;
+  padding: var(--space-2) max(var(--space-4), env(safe-area-inset-right)) var(--space-2)
+    max(var(--space-4), env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+.rehearsal-turn svg {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+.rehearsal-turn p {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+  margin: 0;
+}
+.rehearsal-turn p:empty {
+  display: none;
+}
+.rehearsal-turn strong {
+  font-size: var(--text-2xl);
+  line-height: 1.15;
+}
+.rehearsal-turn span {
+  font-size: var(--text-base);
+  line-height: 1.3;
+}
+.rehearsal-turn.is-you {
+  border-bottom-color: transparent;
+}
+.rehearsal-turn.is-partner {
+  box-shadow: inset 6px 0 0 var(--ink);
+}
+.rehearsal-turn.is-waiting,
+.rehearsal-turn.is-done {
+  background: var(--surface-1);
+}
+.rehearsal-turn.is-waiting strong,
+.rehearsal-turn.is-waiting svg {
+  color: var(--ink-soft);
+}
+.rehearsal-turn.is-done svg {
+  color: var(--success);
+}
+.rehearsal-turn.is-paused {
+  background: var(--ground);
+  outline: 1px dashed var(--line-strong);
+  outline-offset: -5px;
+}
+.rehearsal-turn.is-error {
+  background: var(--danger-wash);
+  box-shadow: inset 6px 0 0 var(--danger);
+}
+.rehearsal-turn.is-error svg {
+  color: var(--danger);
+}
+.rehearsal-turn.is-error span {
+  color: var(--ink);
+}
+
+/* ── Workspace: the camera above the script; beside it with room ── */
+
+.rehearsal-workspace {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.rehearsal-center {
+  min-width: 0;
+  grid-row: 2;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) var(--space-6)
+    max(var(--space-3), env(safe-area-inset-left));
+}
+
+/* ── The script page (RehearsalLineList, on .sides) ── */
+
+.rehearsal-lines {
+  width: min(760px, 100%);
+  margin-inline: auto;
+  overflow: hidden;
+}
+.rehearsal-line {
+  scroll-margin-top: var(--space-3);
+}
+.rehearsal-line + .rehearsal-line {
+  border-top: 1px solid var(--line);
+}
+/* Each line is a button (tap to jump to it) laid out as a .sides-line:
+   the line number in the margin, then cue and dialogue. */
+.rehearsal-line-row {
+  position: relative;
+  width: 100%;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-3);
+  text-align: left;
+  cursor: pointer;
+}
+.rehearsal-line-row:hover:not(.is-active) {
+  background: var(--ink-wash);
+}
+.rehearsal-line-row:focus-visible {
+  outline-offset: -3px;
+}
+.rehearsal-line-copy {
+  display: block;
+  min-width: 0;
+}
+.rehearsal-line .sides-dialogue {
+  display: block;
+  max-width: 46ch;
+  margin-top: var(--space-1);
+}
+.rehearsal-line .sides-dialogue:empty {
+  display: none;
+}
+/* A direction mid-speech takes its own line between the words it splits. */
+.rehearsal-line .sides-dialogue > .sides-paren {
+  display: block;
+  margin-block: var(--space-1);
+}
+/* Directions before anyone speaks: above the name, like the page. */
+.rehearsal-line-action {
+  display: block;
+  max-width: 52ch;
+  margin-bottom: var(--space-2);
+}
+.rehearsal-line-action > span {
+  display: block;
+}
+.rehearsal-line-action > span + span {
+  margin-top: var(--space-1);
+}
+/* A new scene: its heading across the page, on the dialogue's margin. */
+.rehearsal-scene-heading {
+  margin: 0;
+  padding: var(--space-4) var(--space-4) 0 calc(var(--space-3) + 2.25em);
+}
+
+/* The line being spoken. A bar down the page's edge — coral when it's the
+   actor's — and the words large, in the interface face (see the note at
+   the top of this file). Cue, number and directions stay in script type. */
+.rehearsal-line-row.is-active {
+  box-shadow: inset 4px 0 0 var(--ink);
+  cursor: default;
+}
+.rehearsal-line-row.is-active.is-yours {
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+.rehearsal-line-row.is-active .sides-dialogue {
+  max-width: 34em;
+  margin-top: var(--space-2);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.32;
+}
+/* No highlighter under the large line: the coral bar, cue and tag already
+   say whose it is, and plain ground keeps every word at full contrast. */
+.rehearsal-line-row.is-active.is-yours .sides-dialogue > span {
+  margin-inline: 0;
+  padding: 0;
+  background: none;
+}
+.rehearsal-line-row.is-active .sides-paren {
+  font-family: var(--font-script);
+  font-size: var(--text-script);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+/* Word tracking (TrackedWords): said words fall back, the word the app is
+   waiting for is underlined in coral, the rest stay at full strength — the
+   next thing to say is always the easiest thing to read. */
+.rehearsal-line-row.is-active .sides-word.is-current {
+  text-decoration-thickness: 4px;
+  text-underline-offset: 6px;
+}
+/* The actor's own line, hidden to test their memory. */
+.rehearsal-line .is-masked {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.rehearsal-line-row.is-active .is-masked {
+  font-weight: 400;
+}
+
+.rehearsal-line-active-panel {
+  padding: 0 var(--space-4) var(--space-4) calc(var(--space-3) + 2.25em);
+}
+/* Diagnostics for chasing mobile audio problems. Never shown to actors:
+   dev builds, or a tester's ?audioDebug=1 (RehearsalLineList). */
+.audio-debug-panel {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--warn);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+.audio-debug-panel strong {
+  display: block;
+  color: var(--warn);
+}
+
+/* ── The camera (SelfTapeRecorder) ──
+   The picture, and beside it the tape's state as a slate: REC and the
+   running time. Nothing is drawn over the picture — in the iOS app it's
+   a native layer above the page. */
+
+.self-tape-setting {
+  display: grid;
+  width: min(760px + 2 * var(--space-3), 100%);
+  grid-row: 1;
+  grid-template-columns: minmax(0, 42%) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  margin-inline: auto;
+  padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) 0
+    max(var(--space-3), env(safe-area-inset-left));
+}
+.self-tape-video {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+.self-tape-preview {
+  display: block;
+  width: 100%;
+  /* Matches the 16:9 frame useSelfTapeRecorder requests, so the preview
+     shows exactly what ends up on the tape instead of a cropped 4:3 view. */
+  aspect-ratio: 16 / 9;
+  background: var(--surface-1);
+  object-fit: cover;
+}
+.self-tape-placeholder {
+  display: flex;
+  aspect-ratio: 16 / 9;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-align: center;
+}
+.self-tape-placeholder.has-retry {
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.self-tape-info {
+  min-width: 0;
+}
+.self-tape-rec {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-family: var(--font-script);
+}
+.self-tape-rec > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.self-tape-rec i {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--danger);
+}
+/* Paused: the dot goes hollow, and the label says so. */
+.self-tape-rec.is-paused i {
+  border: 1px solid var(--ink-muted);
+  background: transparent;
+}
+.self-tape-rec time {
+  color: var(--ink);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.self-tape-rec.is-paused time {
+  color: var(--ink-soft);
+}
+.self-tape-rec small {
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+.self-tape-info .self-tape-hint {
+  margin-top: var(--space-2);
+}
+/* iOS app: the box only reserves the native camera layer's place, and
+   carries the corner radius that layer copies. */
+.self-tape-video.is-native-preview {
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+}
+.self-tape-video.is-native-preview .self-tape-preview {
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+/* ── Control bar (RehearsalControlBar) ──
+   The same controls in every mode, as ruled cells: quiet, even, each at
+   least 48px tall and clear of the home indicator. Next is the one lit
+   cell; End is the one in red. */
+
+.rehearsal-bar {
+  display: grid;
+  flex: none;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  border-top: 1px solid var(--line);
+  background: var(--ground);
+}
+.rehearsal-bar button {
+  display: flex;
+  min-width: 0;
+  min-height: 60px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.1;
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+.rehearsal-bar button + button {
+  border-left: 1px solid var(--line);
+}
+.rehearsal-bar svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.rehearsal-bar button:hover:not(:disabled) {
+  background: var(--ink-wash);
+  color: var(--ink);
+}
+.rehearsal-bar button:focus-visible {
+  outline-offset: -3px;
+}
+.rehearsal-bar button:disabled {
+  color: var(--line-strong);
+  cursor: not-allowed;
+}
+.rehearsal-bar .is-next:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.rehearsal-bar .is-next:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ink) 14%, var(--surface-2));
+}
+.rehearsal-bar .is-end:not(:disabled) {
+  color: var(--danger);
+}
+.rehearsal-bar .is-end:hover:not(:disabled) {
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+/* Narrow: the short label; with room: the full one. */
+.rehearsal-bar-label > span {
+  display: none;
+}
+.rehearsal-bar-label::before {
+  content: attr(data-short);
+}
+.rehearsal-bar kbd {
+  display: none;
+}
+
+/* ── Over the stage: the countdown, and "Scene complete" ── */
+
+.rehearsal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-nav);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--scrim);
+}
+/* A slate's digit, as large as the display size goes, on its own plate so
+   the script behind never tangles with it. */
+.rehearsal-countdown {
+  min-width: 2.2ch;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--ground);
+  color: var(--ink);
+  text-align: center;
+  font-family: var(--font-script);
+  font-size: calc(2 * var(--text-display));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+/* After a run without a tape: go again, record, or back. */
+.rehearsal-done {
+  width: min(440px, 100%);
+  padding: var(--space-6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-2);
+}
+.rehearsal-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.rehearsal-done-actions .btn-ghost {
+  margin-left: calc(-1 * var(--space-3));
+}
+
+/* ── Wide: the camera in its own column, the bar's labels in full ── */
+
+@media (min-width: 900px) {
+  .rehearsal-header {
+    padding-inline: max(var(--space-4), env(safe-area-inset-left)) max(var(--space-4), env(safe-area-inset-right));
+  }
+  /* The strip's words start on the script page's left edge. */
+  .rehearsal-turn {
+    padding-inline: max(var(--space-6), calc((100% - var(--stage-w)) / 2));
+  }
+  .rehearsal-workspace {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  /* The camera's column only when it's there; otherwise the script is
+     centred across the full width. Page and camera sit together, centred. */
+  .rehearsal-workspace.has-camera {
+    grid-template-columns: minmax(0, 760px) clamp(240px, 26vw, 340px);
+    justify-content: center;
+    column-gap: var(--space-7);
+    padding-inline: var(--space-6);
+  }
+  .rehearsal-workspace.has-camera .rehearsal-center {
+    padding-inline: 0;
+  }
+  .rehearsal-center {
+    grid-row: auto;
+    grid-column: 1;
+    padding: var(--space-6) var(--space-6) var(--space-7);
+  }
+  .rehearsal-line-row {
+    padding: var(--space-4) var(--space-6) var(--space-4) var(--space-5);
+  }
+  .rehearsal-scene-heading,
+  .rehearsal-line-active-panel {
+    padding-left: calc(var(--space-5) + 2.25em);
+  }
+  .self-tape-setting {
+    display: block;
+    width: auto;
+    grid-row: auto;
+    grid-column: 2;
+    align-self: start;
+    margin: 0;
+    padding: var(--space-6) 0 0;
+  }
+  .self-tape-info {
+    margin-top: var(--space-3);
+  }
+  .rehearsal-bar {
+    grid-auto-columns: minmax(132px, auto);
+    justify-content: center;
+  }
+  .rehearsal-bar button {
+    flex-direction: row;
+    gap: var(--space-2);
+    padding-inline: var(--space-4);
+    font-size: var(--text-sm);
+  }
+  .rehearsal-bar button:first-child {
+    border-left: 1px solid var(--line);
+  }
+  .rehearsal-bar button:last-child {
+    border-right: 1px solid var(--line);
+  }
+  .rehearsal-bar-label > span {
+    display: inline;
+  }
+  .rehearsal-bar-label::before {
+    content: none;
+  }
+}
+
+/* Shortcut hints only where there's a keyboard to press them on. */
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .rehearsal-bar kbd {
+    display: inline-block;
+    padding: 0 var(--space-1);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    color: var(--ink-muted);
+    font-family: var(--font-script);
+    font-size: var(--text-xs);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+}
+
+/* ── A phone on its side, propped up: the primary way to rehearse ──
+   320–440px of height. The header and bar keep their touch size but give
+   every spare pixel to the script; the camera takes a narrow column on
+   the right. After the wide rules: the largest phones are over 900px
+   across on their side. */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .rehearsal-header {
+    height: var(--control-h);
+    padding-top: 0;
+  }
+  .rehearsal-turn {
+    min-height: 48px;
+    padding-block: var(--space-1);
+    padding-inline: max(var(--space-4), env(safe-area-inset-left)) max(var(--space-4), env(safe-area-inset-right));
+  }
+  .rehearsal-workspace {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .rehearsal-workspace.has-camera {
+    grid-template-columns: minmax(0, 1fr) clamp(160px, 26vw, 240px);
+    column-gap: 0;
+    padding-inline: 0;
+  }
+  .rehearsal-workspace.has-camera .rehearsal-center {
+    padding: var(--space-3) var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-left));
+  }
+  .rehearsal-center {
+    grid-row: 1;
+    grid-column: 1;
+    padding: var(--space-3) var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-left));
+  }
+  .rehearsal-workspace:not(.has-camera) .rehearsal-center {
+    padding-right: max(var(--space-3), env(safe-area-inset-right));
+  }
+  .rehearsal-line-row {
+    padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  }
+  .rehearsal-scene-heading,
+  .rehearsal-line-active-panel {
+    padding-left: calc(var(--space-3) + 2.25em);
+  }
+  .self-tape-setting {
+    display: block;
+    width: auto;
+    grid-row: 1;
+    grid-column: 2;
+    align-self: start;
+    margin: 0;
+    padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right)) 0 0;
+  }
+  .self-tape-info {
+    margin-top: var(--space-2);
+  }
+  .rehearsal-bar {
+    grid-auto-columns: minmax(0, 1fr);
+    justify-content: stretch;
+  }
+  .rehearsal-bar button {
+    min-height: 48px;
+    flex-direction: row;
+    gap: var(--space-2);
+    padding-inline: var(--space-1);
+    font-size: var(--text-xs);
+  }
+  .rehearsal-bar button:first-child {
+    border-left: 0;
+  }
+  .rehearsal-bar button:last-child {
+    border-right: 0;
+  }
+  .rehearsal-bar-label > span {
+    display: none;
+  }
+  .rehearsal-bar-label::before {
+    content: attr(data-short);
+  }
+  .rehearsal-bar kbd {
+    display: none;
+  }
+  .rehearsal-countdown {
+    font-size: calc(1.5 * var(--text-display));
+  }
+}

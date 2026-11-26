@@ -13,6 +13,7 @@ import { useToast } from "../lib/toast";
 import { deleteScript, listScripts } from "../lib/scriptStore";
 import { deleteTape, listTapes } from "../lib/selfTapeStore";
 import { forgetSelfTapeUrl } from "../lib/selfTapeUrl";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from "../lib/passwordRules";
 
 // Changing the email or password re-checks the current password first, the
 // same way the login form does, so a session someone left open on a shared
@@ -46,7 +47,7 @@ export default function AccountSettings() {
   const pendingEmail = user?.new_email ?? null;
 
   return (
-    <main className="account-page">
+    <main className="page account-page">
       <Seo
         title="Account Settings"
         description="Change your email or password, or delete your account."
@@ -55,18 +56,19 @@ export default function AccountSettings() {
       />
       <SiteNav />
 
-      <section className="account-main settings-main">
-        <header className="account-header settings-header">
-          <h1>Account settings</h1>
-          {email && <p className="account-email">{email}</p>}
+      <div className="wrap grid doc-layout account-layout">
+        <header className="page-head doc-head account-head span-4">
+          <p className="slug">Your account</p>
+          <h1 className="title">Account settings</h1>
+          <p className="lead">Change your email or password, or delete your account.</p>
         </header>
 
-        <div className="settings-sections">
+        <div className="settings-sections span-7 at-6">
           <ChangeEmail email={email} pendingEmail={pendingEmail} />
           <ChangePassword email={email} />
           <DeleteAccount email={email} userId={user?.id ?? ""} />
         </div>
-      </section>
+      </div>
     </main>
   );
 }
@@ -123,7 +125,7 @@ function ChangeEmail({ email, pendingEmail }: { email: string; pendingEmail: str
   }
 
   return (
-    <form className="auth-card settings-card" onSubmit={handleSubmit}>
+    <form className="settings-section" onSubmit={handleSubmit}>
       <header>
         <h2>Email</h2>
         <p className="settings-copy">
@@ -135,35 +137,40 @@ function ChangeEmail({ email, pendingEmail }: { email: string; pendingEmail: str
           </p>
         )}
       </header>
-      <label htmlFor="settings-new-email">New email</label>
-      <input
-        id="settings-new-email"
-        type="email"
-        value={newEmail}
-        autoComplete="email"
-        required
-        onChange={(event) => setNewEmail(event.target.value)}
-      />
-      <PasswordField
-        id="settings-email-password"
-        label="Current password"
-        value={password}
-        autoComplete="current-password"
-        onChange={setPassword}
-      />
-      {error && (
-        <p className="auth-error" role="alert">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="settings-notice" role="status">
-          {notice}
-        </p>
-      )}
-      <button type="submit" disabled={submitting}>
-        {submitting ? "Sending…" : "Change email"}
-      </button>
+      <div className="form settings-fields">
+        <label className="field-label" htmlFor="settings-new-email">
+          New email
+        </label>
+        <input
+          id="settings-new-email"
+          className="input"
+          type="email"
+          value={newEmail}
+          autoComplete="email"
+          required
+          onChange={(event) => setNewEmail(event.target.value)}
+        />
+        <PasswordField
+          id="settings-email-password"
+          label="Current password"
+          value={password}
+          autoComplete="current-password"
+          onChange={setPassword}
+        />
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p className="notice notice-success settings-notice" role="status">
+            {notice}
+          </p>
+        )}
+        <button type="submit" className="btn-secondary settings-submit" disabled={submitting}>
+          {submitting ? "Sending…" : "Change email"}
+        </button>
+      </div>
     </form>
   );
 }
@@ -214,34 +221,36 @@ function ChangePassword({ email }: { email: string }) {
   }
 
   return (
-    <form className="auth-card settings-card" onSubmit={handleSubmit}>
+    <form className="settings-section" onSubmit={handleSubmit}>
       <header>
         <h2>Password</h2>
       </header>
-      <PasswordField
-        id="settings-current-password"
-        label="Current password"
-        value={currentPassword}
-        autoComplete="current-password"
-        onChange={setCurrentPassword}
-      />
-      <PasswordField
-        id="settings-new-password"
-        label="New password"
-        value={newPassword}
-        autoComplete="new-password"
-        minLength={6}
-        hint="At least 6 characters."
-        onChange={setNewPassword}
-      />
-      {error && (
-        <p className="auth-error" role="alert">
-          {error}
-        </p>
-      )}
-      <button type="submit" disabled={submitting}>
-        {submitting ? "Saving…" : "Change password"}
-      </button>
+      <div className="form settings-fields">
+        <PasswordField
+          id="settings-current-password"
+          label="Current password"
+          value={currentPassword}
+          autoComplete="current-password"
+          onChange={setCurrentPassword}
+        />
+        <PasswordField
+          id="settings-new-password"
+          label="New password"
+          value={newPassword}
+          autoComplete="new-password"
+          minLength={PASSWORD_MIN_LENGTH}
+          hint={PASSWORD_HINT}
+          onChange={setNewPassword}
+        />
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="btn-secondary settings-submit" disabled={submitting}>
+          {submitting ? "Saving…" : "Change password"}
+        </button>
+      </div>
       <p className="settings-reset">
         {resetState === "sent" ? (
           <span role="status">
@@ -252,7 +261,7 @@ function ChangePassword({ email }: { email: string }) {
             Forgot your current password?{" "}
             <button
               type="button"
-              className="settings-text-button"
+              className="link settings-text-button"
               disabled={resetState === "sending"}
               onClick={() => void sendResetLink()}
             >
@@ -313,7 +322,7 @@ function DeleteAccount({ email, userId }: { email: string; userId: string }) {
   return (
     <>
       <form
-        className="auth-card settings-card settings-card--danger"
+        className="settings-section"
         onSubmit={(event) => {
           event.preventDefault();
           setError(null);
@@ -328,26 +337,29 @@ function DeleteAccount({ email, userId }: { email: string; userId: string }) {
             you want to keep first. This can’t be undone.
           </p>
         </header>
-        <PasswordField
-          id="settings-delete-password"
-          label="Current password"
-          value={password}
-          autoComplete="current-password"
-          onChange={setPassword}
-        />
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="settings-danger-button" disabled={deleting}>
-          Delete my account
-        </button>
+        <div className="form settings-fields">
+          <PasswordField
+            id="settings-delete-password"
+            label="Current password"
+            value={password}
+            autoComplete="current-password"
+            onChange={setPassword}
+          />
+          {error && (
+            <p className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button type="submit" className="btn-danger settings-submit" disabled={deleting}>
+            Delete my account
+          </button>
+        </div>
       </form>
 
       {confirming && (
         <Modal
           labelledBy="delete-account-title"
+          className="is-compact"
           onClose={() => {
             if (!deleting) setConfirming(false);
           }}

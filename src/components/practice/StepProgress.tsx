@@ -1,17 +1,17 @@
-// The four practice steps' names, as the header's bars announce them.
-// One name per step, used everywhere the step is named.
-export const STEP_NAMES = ["Script", "Your role", "Scene partners", "Get ready"];
+import { STEP_NAMES } from "./stepNames";
+
 const STEPS = STEP_NAMES;
 
 /**
- * The bars in a practice setup step's header, one per step and all the
- * same width: done steps filled (each a button back to that step), the
- * current one coral, later ones outlined. The way back between setup steps
- * — there's no separate Back button.
+ * The numbered steps in a practice setup step's header (the shared .steps
+ * list): done steps are buttons back to that step, the current one is
+ * marked, later ones are muted. The way back between setup steps — there's
+ * no separate Back button up here.
  *
- * The bars themselves are decorative; each step's name and status is
+ * What's drawn (number, name) is decorative; each step's name and status is
  * spoken from visually hidden text, the current step is marked with
  * aria-current, and the done steps are real buttons with a tall hit area.
+ * Narrow screens show the numbers and only the current step's name.
  */
 export default function StepProgress({
   current,
@@ -24,36 +24,44 @@ export default function StepProgress({
 }) {
   return (
     <nav className="setup-progress" aria-label="Practice setup steps">
-      <ol>
+      <ol className="steps">
         {STEPS.map((name, index) => {
           const step = index + 1;
           const done = step < current;
           const label = `Step ${step} of ${STEPS.length}: ${name}`;
-          const bar = (
-            <span
-              className={`step-bar ${done ? "is-done" : step === current ? "is-active" : ""}`}
-              aria-hidden="true"
-            />
+          const mark = (
+            <>
+              <span className="setup-step-num" aria-hidden="true">
+                {String(step).padStart(2, "0")}
+              </span>
+              <span className="setup-step-name" aria-hidden="true">
+                {name}
+              </span>
+            </>
           );
           if (done && onGoToStep) {
             return (
-              <li key={name}>
+              <li key={name} className="is-done">
                 <button
                   type="button"
-                  className="step-bar-button"
+                  className="setup-step"
                   title={`Back to ${name}`}
                   onClick={() => onGoToStep(step)}
                 >
-                  {bar}
+                  {mark}
                   <span className="sr-only">{label}, done. Go back to this step</span>
                 </button>
               </li>
             );
           }
           return (
-            <li key={name} aria-current={step === current ? "step" : undefined}>
-              <span className="step-bar-slot">
-                {bar}
+            <li
+              key={name}
+              className={done ? "is-done" : undefined}
+              aria-current={step === current ? "step" : undefined}
+            >
+              <span className="setup-step">
+                {mark}
                 <span className="sr-only">
                   {label}, {step === current ? "current step" : done ? "done" : "not started"}
                 </span>

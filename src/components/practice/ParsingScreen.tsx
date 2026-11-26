@@ -41,8 +41,11 @@ export default function ParsingScreen({
   const name = title ?? file?.name ?? "Your script";
   // On to step 2: the step's one primary action.
   const nextButton = onContinue && (
-    <button type="button" className="setup-next" onClick={onContinue}>
-      Choose your role <span aria-hidden="true">→</span>
+    <button type="button" className="btn-primary btn-lg" onClick={onContinue}>
+      Choose your role{" "}
+      <span className="btn-arrow" aria-hidden="true">
+        →
+      </span>
     </button>
   );
   const parsedSteps = steps ?? [];
@@ -58,7 +61,7 @@ export default function ParsingScreen({
   const replaceButton = (
     <button
       type="button"
-      className="btn-secondary replace-script"
+      className="btn-ghost replace-script"
       onClick={() => replaceInputRef.current?.click()}
     >
       Replace script
@@ -78,60 +81,129 @@ export default function ParsingScreen({
       scriptName={name}
       aria-live="polite"
       aria-busy={!done}
-      aside={
-        // While it's being read the PDF shows alongside; once read it
-        // folds away under See script.
-        !done && (
-          <div className="processing-preview">
-            {file && previewUrl && (
-              <DocumentPreview
-                src={previewUrl}
-                fileName={file.name}
-                fileSize={file.size}
-              />
+      intro={
+        <>
+          <h1 className={`title ${done && name.length > 26 ? "is-long-name" : ""}`}>
+            {done ? (
+              <>
+                Your rehearsal is set up for{" "}
+                <span className="processing-script-name">
+                  <ScriptName
+                    name={name}
+                    onRename={onRename}
+                    onEditingChange={setEditingName}
+                  />
+                </span>
+              </>
+            ) : (
+              "Preparing your rehearsal"
             )}
-            {replaceButton}
-          </div>
-        )
+          </h1>
+          {done && onRename && !editingName && (
+            <p className="field-hint processing-rename-hint">Tap the name to rename it.</p>
+          )}
+          <p className="lead">
+            {done ? (
+              parsedSteps.length > 0 && (
+                <>
+                  We read {characterCount}{" "}
+                  {characterCount === 1 ? "character" : "characters"} and{" "}
+                  {lineCount} {lineCount === 1 ? "line" : "lines"}
+                  {sceneCount > 1 && <> across {sceneCount} scenes</>}. Check
+                  them under See script.
+                </>
+              )
+            ) : (
+              <>
+                We’re identifying characters, dialogue, and scene directions in
+                <strong> {name}</strong>. This usually takes under a minute.
+              </>
+            )}
+          </p>
+
+          {/* Progress only while the script is being read; once it's
+              parsed there's nothing left to wait on. */}
+          {!done && (
+            <ol className="processing-steps" aria-label="Processing progress">
+              <li className="is-complete">
+                <span className="processing-step-icon" aria-label="Complete">
+                  ✓
+                </span>
+                <div>
+                  <strong>Upload complete</strong>
+                  <small>Your document arrived safely.</small>
+                </div>
+              </li>
+              <li className="is-current" aria-current="step">
+                <span className="processing-step-icon" aria-label="In progress">
+                  <i />
+                </span>
+                <div>
+                  <strong>
+                    {phase === "extracting"
+                      ? "Extracting script text"
+                      : "Analyzing your script"}
+                  </strong>
+                  <small>
+                    {phase === "extracting"
+                      ? "Reading the text layer directly from your PDF."
+                      : "Identifying dialogue, characters, and directions."}
+                  </small>
+                </div>
+              </li>
+              <li className="is-pending">
+                <span className="processing-step-icon" aria-label="Pending">
+                  ○
+                </span>
+                <div>
+                  <strong>Building your rehearsal</strong>
+                  <small>Voice casting comes next.</small>
+                </div>
+              </li>
+            </ol>
+          )}
+
+          {!done && (
+            <p className="field-hint processing-note">
+              Keep this tab open while we process your file. Usually under a minute.
+            </p>
+          )}
+        </>
       }
     >
-      <h1 className={done && name.length > 26 ? "is-long-name" : undefined}>
-        {done ? (
-          <>
-            Your rehearsal is set up for{" "}
-            <span className="processing-script-name">
-              <ScriptName
-                name={name}
-                onRename={onRename}
-                onEditingChange={setEditingName}
-              />
-            </span>
-          </>
-        ) : (
-          "Preparing your rehearsal"
-        )}
-      </h1>
-      {done && onRename && !editingName && (
-        <p className="processing-rename-hint">Tap the name to rename it.</p>
+      {/* While it's being read the PDF shows alongside; once read it
+          folds away under See script. */}
+      {!done && (
+        <div className="processing-preview">
+          {file && previewUrl && (
+            <DocumentPreview
+              src={previewUrl}
+              fileName={file.name}
+              fileSize={file.size}
+            />
+          )}
+          {replaceButton}
+        </div>
       )}
-      <p className="processing-explanation">
-        {done ? (
-          parsedSteps.length > 0 && (
-            <>
-              We read {characterCount}{" "}
-              {characterCount === 1 ? "character" : "characters"} and{" "}
-              {lineCount} {lineCount === 1 ? "line" : "lines"}
-              {sceneCount > 1 && <> across {sceneCount} scenes</>}. Check
-              them under See script.
-            </>
-          )
-        ) : (
-          <>
-            We’re identifying characters, dialogue, and scene directions in
-            <strong> {name}</strong>. This usually takes under a minute.
-          </>
-        )}
-      </p>
+      {done && parsedSteps.length > 0 && (
+        // The lead-in beside it says the same in words, to screen readers too.
+        <dl className="slate script-slate" aria-hidden="true">
+          <div>
+            <dt>Characters</dt>
+            <dd>{characterCount}</dd>
+          </div>
+          <div>
+            <dt>Lines</dt>
+            <dd>{lineCount}</dd>
+          </div>
+          {sceneCount > 1 && (
+            <div>
+              <dt>Scenes</dt>
+              <dd>{sceneCount}</dd>
+            </div>
+          )}
+        </dl>
+      )}
       {done && !editingName && (
         <>
           <div className="processing-actions">
@@ -152,7 +224,7 @@ export default function ParsingScreen({
           {scriptOpen && (
             <div id="uploaded-script">
               {hasPdf && parsedSteps.length > 0 && (
-                <div className="script-view-tabs" role="tablist" aria-label="Script view">
+                <div className="tabs" role="tablist" aria-label="Script view">
                   <button
                     type="button"
                     role="tab"
@@ -199,70 +271,6 @@ export default function ParsingScreen({
           if (next) onReplace(next);
         }}
       />
-
-      {/* Progress only while the script is being read; once it's
-              parsed there's nothing left to wait on. */}
-      {!done && (
-        <ol className="processing-steps" aria-label="Processing progress">
-          <li className="is-complete">
-            <span className="processing-step-icon" aria-label="Complete">
-              ✓
-            </span>
-            <div>
-              <strong>Upload complete</strong>
-              <small>Your document arrived safely.</small>
-            </div>
-          </li>
-          <li
-            className={done ? "is-complete" : "is-current"}
-            aria-current={done ? undefined : "step"}
-          >
-            <span
-              className="processing-step-icon"
-              aria-label={done ? "Complete" : "In progress"}
-            >
-              {done ? "✓" : <i />}
-            </span>
-            <div>
-              <strong>
-                {done
-                  ? "Script analyzed"
-                  : phase === "extracting"
-                    ? "Extracting script text"
-                    : "Analyzing your script"}
-              </strong>
-              <small>
-                {done
-                  ? "Dialogue, characters, and directions identified."
-                  : phase === "extracting"
-                    ? "Reading the text layer directly from your PDF."
-                    : "Identifying dialogue, characters, and directions."}
-              </small>
-            </div>
-          </li>
-          <li
-            className={done ? "is-current" : "is-pending"}
-            aria-current={done ? "step" : undefined}
-          >
-            <span
-              className="processing-step-icon"
-              aria-label={done ? "Ready" : "Pending"}
-            >
-              {done ? <i /> : "○"}
-            </span>
-            <div>
-              <strong>Building your rehearsal</strong>
-              <small>Voice casting comes next.</small>
-            </div>
-          </li>
-        </ol>
-      )}
-
-      {!done && (
-        <p className="processing-note">
-          Keep this tab open while we process your file. Usually under a minute.
-        </p>
-      )}
     </SetupStep>
   );
 }

@@ -49,6 +49,28 @@ export async function fetchElevenLabs(
   }
 }
 
+/**
+ * Answers a failed ElevenLabs call (log its body before calling this — it
+ * is not sent on). A 429 keeps its status and Retry-After, which the client
+ * waits out. Everything else becomes a 502: a rejected key or spent quota
+ * (401/402/403) is our misconfiguration, and must not reach the client as a
+ * status it could take for its own sign-in or subscription.
+ */
+export function sendVoiceServiceError(
+  upstream: Response,
+  res: VercelResponse,
+  message: string,
+) {
+  if (upstream.status === 429) {
+    const retryAfter = upstream.headers.get("retry-after");
+    if (retryAfter) res.setHeader("Retry-After", retryAfter);
+    return res
+      .status(429)
+      .json({ error: "The voice service is busy. Please try again in a moment." });
+  }
+  return res.status(502).json({ error: message });
+}
+
 export async function fetchVoices(apiKey: string): Promise<Voice[]> {
   if (voiceCache && voiceCache.expiresAt > Date.now()) {
     return voiceCache.voices;

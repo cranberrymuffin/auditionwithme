@@ -1,35 +1,19 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import type { Entitlement } from "../src/types.js";
+import { serviceClient } from "./_supabase.js";
+import { stripeClient } from "./_stripe.js";
+import { isTrialEmailHash, recordTrialUse } from "./_trial.js";
 
 // Signature verification needs the exact bytes Stripe signed, so Vercel must
-// not parse the body for us (precedent for route-level config: parse-script.ts).
+// not parse the body for us.
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Same service-role client pattern as api/_entitlement.ts. Webhooks are the
-// sole writer of subscription state (plan Principle 3).
-function serviceClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
-    );
-  }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2026-07-29.dahlia",
-});
+// Webhooks are the sole writer of subscription state (plan Principle 3).
 
 async function readRawBody(
   req: VercelRequest & { bodyRaw?: Buffer },
@@ -70,9 +54,7 @@ function idOf(
 
 /**
  * Writes the row matched by stripe_customer_id — present on every event we
- * handle, unlike stripe_subscription_id. State is always derived fresh from
- * the subscription object rather than incrementally patched, so replays and
- * out-of-order deliveries converge (plan Pre-mortem 2).
+ * handle, unlike stripe_subscription_id.
  */
 async function writeState(
   customerId: string,
@@ -88,6 +70,74 @@ async function writeState(
     .update({ ...state, updated_at: new Date().toISOString() })
     .eq("stripe_customer_id", customerId);
   if (error) throw new Error(`entitlements update failed: ${error.message}`);
+}
+
+// How much a subscription in this state should win over the customer's
+// others when deciding what the row says: one that grants access, then one
+// in payment trouble, then anything that never started or has ended.
+function statusRank(status: Stripe.Subscription.Status): number {
+  const mapped = mapStatus(status);
+  if (mapped === "active") return 0;
+  if (mapped === "past_due") return 1;
+  return 2;
+}
+
+/**
+ * The subscription the customer's row should reflect, read from Stripe now.
+ * An event only carries a snapshot from when it was sent, and Stripe retries
+ * and reorders deliveries — so a late event for a canceled subscription must
+ * not overwrite the one that replaced it, and a stale "active" must not
+ * bring a canceled one back. Asking for the current list makes every
+ * delivery, in any order, write the same answer (plan Pre-mortem 2). With
+ * several subscriptions on one customer, the best-placed wins (statusRank),
+ * then the newest. Null when the customer has none, or is gone from Stripe.
+ */
+async function currentSubscription(
+  customerId: string,
+): Promise<Stripe.Subscription | null> {
+  let subscriptions: Stripe.Subscription[];
+  try {
+    const list = await stripeClient().subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 20,
+    });
+    subscriptions = list.data;
+  } catch (error) {
+    // A deleted account's customer (api/account.ts) still gets its
+    // subscription's final events.
+    if ((error as { code?: unknown } | null)?.code === "resource_missing") return null;
+    throw error;
+  }
+  return (
+    [...subscriptions].sort(
+      (a, b) => statusRank(a.status) - statusRank(b.status) || b.created - a.created,
+    )[0] ?? null
+  );
+}
+
+/** Brings the customer's row in line with Stripe; returns a log summary. */
+async function syncCustomer(
+  customerId: string,
+  eventSubscriptionId: string,
+): Promise<string> {
+  const subscription = await currentSubscription(customerId);
+  if (!subscription) {
+    // Nothing left in Stripe to read: the subscription the event is about
+    // has ended along with everything else.
+    await writeState(customerId, {
+      subscription_status: "canceled",
+      stripe_subscription_id: eventSubscriptionId,
+    });
+    return "no subscriptions in stripe -> canceled";
+  }
+  const status = mapStatus(subscription.status);
+  await writeState(customerId, {
+    subscription_status: status,
+    stripe_subscription_id: subscription.id,
+    current_period_end: periodEnd(subscription),
+  });
+  return `${subscription.id} stripe status ${subscription.status} -> ${status}, period_end ${periodEnd(subscription)}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -108,59 +158,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? req.headers["Stripe-Signature"]
         : null;
   if (!signature) {
-    console.error("stripe webhook missing signature header", req.headers);
+    console.error("stripe webhook missing signature header");
     return res.status(400).json({ error: "Missing stripe-signature header" });
   }
 
   let event: Stripe.Event;
   try {
     const rawBody = await readRawBody(req);
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = stripeClient().webhooks.constructEvent(rawBody, signature, webhookSecret);
   } catch (error) {
     console.error("stripe webhook signature verification failed:", error);
-    return res
-      .status(400)
-      .json({
-        error: `Invalid signature: ${error instanceof Error ? error.message : String(error)}`,
-      });
+    return res.status(400).json({ error: "Invalid signature" });
   }
 
   try {
     switch (event.type) {
-      // A subscription created via a Checkout Session (api/billing.ts
-      // createSubscription) only exists once the session is confirmed, but
-      // still fires "created" and "updated" in close succession as the
-      // subscription's PaymentIntent settles. Both are handled identically —
-      // state is always derived fresh from the subscription object, so it
-      // doesn't matter which event lands last.
+      // Every subscription and invoice event is handled the same way: the
+      // event says which customer changed, and the row is then written from
+      // what Stripe holds for that customer right now (syncCustomer) — never
+      // from the event's own snapshot, so it doesn't matter which of
+      // "created", "updated" and "deleted" lands last, or how late.
       case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const subscription = event.data.object;
-        const customerId = idOf(subscription.customer);
-        if (!customerId) break;
-        const status = mapStatus(subscription.status);
-        await writeState(customerId, {
-          subscription_status: status,
-          stripe_subscription_id: subscription.id,
-          current_period_end: periodEnd(subscription),
-        });
-        console.log(
-          `webhook ${event.type} ${event.id}: customer ${customerId} stripe status ${subscription.status} -> ${status}, period_end ${periodEnd(subscription)}`,
-        );
-        break;
-      }
-
+      case "customer.subscription.updated":
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
         const customerId = idOf(subscription.customer);
         if (!customerId) break;
-        await writeState(customerId, {
-          subscription_status: "canceled",
-          stripe_subscription_id: subscription.id,
-          current_period_end: periodEnd(subscription),
-        });
+        // A trial that has started is used, for this email, for good — see
+        // api/_trial.ts. trial_start and the metadata are both set when the
+        // subscription is created, so the snapshot is enough here.
+        const trialEmailHash = subscription.metadata?.trial_email_hash;
+        if (
+          event.type === "customer.subscription.created" &&
+          subscription.trial_start &&
+          isTrialEmailHash(trialEmailHash)
+        ) {
+          await recordTrialUse(trialEmailHash);
+        }
+        const summary = await syncCustomer(customerId, subscription.id);
         console.log(
-          `webhook ${event.type} ${event.id}: customer ${customerId} -> canceled`,
+          `webhook ${event.type} ${event.id}: customer ${customerId} ${summary}`,
         );
         break;
       }
@@ -177,16 +214,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           break;
         }
-        const subscription =
-          await stripe.subscriptions.retrieve(subscriptionId);
-        const status = mapStatus(subscription.status);
-        await writeState(customerId, {
-          subscription_status: status,
-          stripe_subscription_id: subscription.id,
-          current_period_end: periodEnd(subscription),
-        });
+        const summary = await syncCustomer(customerId, subscriptionId);
         console.log(
-          `webhook ${event.type} ${event.id}: customer ${customerId} -> ${status}, period_end ${periodEnd(subscription)}`,
+          `webhook ${event.type} ${event.id}: customer ${customerId} ${summary}`,
         );
         break;
       }
@@ -209,7 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // The session payload doesn't expand setup_intent by default —
         // retrieve it to get the confirmed payment method.
-        const retrieved = await stripe.checkout.sessions.retrieve(session.id, {
+        const retrieved = await stripeClient().checkout.sessions.retrieve(session.id, {
           expand: ["setup_intent"],
         });
         const setupIntent = retrieved.setup_intent;
@@ -224,7 +254,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
 
-        await stripe.customers.update(customerId, {
+        await stripeClient().customers.update(customerId, {
           invoice_settings: { default_payment_method: paymentMethodId },
         });
 
@@ -238,7 +268,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const subscriptionId = row?.stripe_subscription_id ?? null;
         if (subscriptionId) {
           try {
-            await stripe.subscriptions.update(subscriptionId, {
+            await stripeClient().subscriptions.update(subscriptionId, {
               default_payment_method: paymentMethodId,
             });
           } catch (err) {
@@ -260,11 +290,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       case "invoice.payment_failed": {
-        // No status change here — access persists through Stripe's dunning
-        // grace period; only a terminal subscription event revokes it.
+        // Nothing is written here, but access does not carry on through
+        // Stripe's retries: the failure moves the subscription to past_due,
+        // the customer.subscription.updated that follows caches that
+        // (mapStatus), and hasPlanAccess (src/lib/plan.ts) accepts only
+        // "active". So access stops at the first failed payment and returns
+        // when a retry succeeds (invoice.payment_succeeded).
         const invoice = event.data.object;
         console.log(
-          `webhook ${event.type} ${event.id}: customer ${idOf(invoice.customer)} -> no change (grace period)`,
+          `webhook ${event.type} ${event.id}: customer ${idOf(invoice.customer)} -> nothing written here`,
         );
         break;
       }

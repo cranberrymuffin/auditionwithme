@@ -298,7 +298,12 @@ async function loadStoredAudio(key: string): Promise<Blob | null> {
     timer = setTimeout(() => resolve(null), STORED_AUDIO_TIMEOUT_MS);
   });
   try {
-    return await Promise.race([loadReaderAudio(key).catch(() => null), timeout]);
+    const stored = loadReaderAudio(key).catch((err) => {
+      // Not the same as "not stored": the line is fetched (and paid for) again.
+      console.warn("Couldn't read stored reader audio; fetching it live:", err);
+      return null;
+    });
+    return await Promise.race([stored, timeout]);
   } finally {
     clearTimeout(timer);
   }

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
   buildSteps,
@@ -15,18 +15,18 @@ import {
 import { applySidesMarkup } from "./_sides.js";
 import { detectLanguage } from "./_language.js";
 import { requireRehearsalGrant } from "./_entitlement.js";
-import { extractJson, isValidCharacters } from "./_response.js";
+import { extractJson, isBodyTooLarge, isValidCharacters } from "./_response.js";
 import { handleCors } from "./_cors.js";
+import { anthropic, modelDeadline, sendModelError } from "./_anthropic.js";
+import { HAIKU_MODEL, SONNET_MODEL } from "./_models.js";
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "20mb",
-    },
-  },
-};
+// One call per upload (the bilingual re-read goes to parse-pages), so this is
+// room for re-uploads and "Try again", not for a loop.
+const RATE_LIMIT = { bucket: "parse-script", maxPerWindow: 40, windowSeconds: 60 * 60 };
 
-const client = new Anthropic();
+// Shared by the classifier and the full parse that may follow it, and kept
+// under this route's maxDuration (vercel.json).
+const MODEL_DEADLINE_MS = 105_000;
 
 // ── Fast path: deterministic segmentation + a small classification call ──
 // The old approach asked the model to regenerate the whole script as JSON, so
@@ -82,6 +82,7 @@ export type ModelUsage = { inputTokens: number; outputTokens: number };
 
 export async function parseTextFast(
   scriptText: string,
+  signal?: AbortSignal,
 ): Promise<{ payload: ParsePayload; usage: ModelUsage } | null> {
   const lines = scriptText.split("\n").map((line) => line.trim());
   const candidates = collectSpeakerCandidates(lines);
@@ -94,20 +95,38 @@ export async function parseTextFast(
   const numbered = lines.map((line, i) => `${i}| ${line}`).join("\n");
 
   const modelStartedAt = performance.now();
-  const stream = client.messages.stream({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 8000,
-    system: CLASSIFIER_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Candidate speaker labels found by regex (confirm which are real characters):\n${candidateList}\n\nNumbered script text:\n${numbered}`,
-      },
-    ],
-  });
+  const stream = anthropic.messages.stream(
+    {
+      model: HAIKU_MODEL,
+      max_tokens: 8000,
+      // Haiku 5.5 thinks by default, and thinking counts toward max_tokens.
+      // This call was built and measured without it; effort is this model's
+      // default, written out.
+      thinking: { type: "disabled" },
+      output_config: { effort: "medium" },
+      // The prompt is identical on every call; the script follows it.
+      system: [
+        { type: "text", text: CLASSIFIER_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `Candidate speaker labels found by regex (confirm which are real characters):\n${candidateList}\n\nNumbered script text:\n${numbered}`,
+        },
+      ],
+    },
+    { signal },
+  );
   const response = await stream.finalMessage();
   const modelDurationMs = performance.now() - modelStartedAt;
 
+  if (response.stop_reason === "refusal") {
+    console.warn(
+      "parse-script: classifier declined; falling back to full parse",
+      response.stop_details,
+    );
+    return null;
+  }
   if (response.stop_reason === "max_tokens") {
     console.warn(
       "parse-script: classifier hit max_tokens; falling back to full parse",
@@ -270,17 +289,22 @@ Output format: return ONLY valid JSON, no prose, no markdown fences:
   ]
 }`;
 
+const THINKING_OFF = {
+  type: "between_tools",
+} as unknown as Anthropic.Beta.BetaThinkingConfigParam;
+
 /**
  * Full model parse: Sonnet reads the whole script (extracted text, or the PDF
  * itself) and returns every step. The last strategy in the chain.
  */
 export async function parseFull(
   input: { scriptText: string } | { pdfData: string },
+  signal?: AbortSignal,
 ): Promise<
   | { ok: true; payload: ParsePayload; usage: ModelUsage }
   | { ok: false; error: string }
 > {
-  const userContent: Anthropic.MessageCreateParams["messages"][number]["content"] =
+  const userContent: Anthropic.Beta.BetaMessageParam["content"] =
     "scriptText" in input
       ? `Process the extracted script text below as instructed and return the JSON result. Page breaks are marked explicitly.\n\n<SCRIPT>\n${input.scriptText}\n</SCRIPT>`
       : [
@@ -298,28 +322,47 @@ export async function parseFull(
           },
         ];
   const modelStartedAt = performance.now();
-  const stream = client.messages.stream({
-    model: "claude-sonnet-5",
-    // Sonnet 5's streamed output ceiling — long scripts need the headroom
-    // since the full parse echoes every line back as JSON.
-    max_tokens: 64000,
-    // Sonnet 5 runs adaptive thinking by default, which roughly triples output
-    // tokens and latency on this task (measured: ~53s/6.4K tokens with thinking
-    // vs ~16s/2K tokens without, for near-identical visible output) with no
-    // measurable quality gain on this well-specified extraction/formatting task.
-    thinking: { type: "disabled" },
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
-  });
+  const stream = anthropic.beta.messages.stream(
+    {
+      model: SONNET_MODEL,
+      // Same server-side refusal fallback as the director (casting.ts): a
+      // request Sonnet 5.5's classifiers decline in a category the fallback
+      // covers is re-run inside this call.
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      // Long scripts need the headroom since the full parse echoes every
+      // line back as JSON.
+      max_tokens: 64000,
+      // Adaptive thinking roughly tripled output tokens and latency on this
+      // task (measured on Sonnet 5: ~53s/6.4K tokens with thinking vs
+      // ~16s/2K tokens without, for near-identical visible output) with no
+      // measurable quality gain on this well-specified extraction/formatting
+      // task. Sonnet 5.5 rejects "disabled"; "between_tools" is its
+      // thinking-off setting, and the SDK's types don't know it yet. Effort
+      // is the model's default, written out.
+      thinking: THINKING_OFF,
+      output_config: { effort: "high" },
+      // The prompt is identical on every call; the script follows it.
+      system: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
+      messages: [
+        {
+          role: "user",
+          content: userContent,
+        },
+      ],
+    },
+    { signal },
+  );
 
   const response = await stream.finalMessage();
   const modelDurationMs = performance.now() - modelStartedAt;
 
+  if (response.stop_reason === "refusal") {
+    console.error("parse-script: full parse declined:", response.stop_details);
+    return { ok: false, error: "Script parsing failed" };
+  }
   if (response.stop_reason === "max_tokens") {
     console.error(
       `parse-script: output truncated at max_tokens (input=${response.usage.input_tokens}, output=${response.usage.output_tokens})`,
@@ -413,11 +456,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const auth = await requireRehearsalGrant(req, res);
+  if (isBodyTooLarge(req.headers["content-length"])) {
+    return res.status(413).json({
+      error: "This script is too large to upload. Try uploading only the pages you need.",
+    });
+  }
+
+  const auth = await requireRehearsalGrant(req, res, RATE_LIMIT);
   if (!auth) return;
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
+    console.error("ANTHROPIC_API_KEY is not set");
+    return res.status(500).json({ error: "Script parsing is not configured" });
   }
 
   const { pdfData, scriptText, layout } = (req.body ?? {}) as {
@@ -471,6 +521,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ error: "Extracted script text is too large" });
   }
 
+  const deadline = modelDeadline(MODEL_DEADLINE_MS);
   try {
     // Strategy 1: deterministic indent-based screenplay parsing — no model
     // call at all, so it's instant and reproducible.
@@ -503,7 +554,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // format doesn't segment cleanly.
     if (effectiveText) {
       try {
-        const fast = await parseTextFast(effectiveText);
+        const fast = await parseTextFast(effectiveText, deadline);
         if (fast) {
           res.setHeader(
             "Server-Timing",
@@ -514,6 +565,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .json({ ...fast.payload, unreadableOriginalLanguage });
         }
       } catch (fastError) {
+        // Out of time: the full parse can't run either.
+        if (deadline.aborted) throw fastError;
         console.warn(
           "parse-script: fast path failed; falling back to full parse",
           fastError,
@@ -523,6 +576,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const full = await parseFull(
       effectiveText ? { scriptText: effectiveText } : { pdfData: pdfData! },
+      deadline,
     );
     if (!full.ok) {
       return res.status(500).json({ error: full.error });
@@ -533,8 +587,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
     return res.status(200).json(full.payload);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Claude API error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "parse-script", err, "Script parsing failed", deadline);
   }
 }

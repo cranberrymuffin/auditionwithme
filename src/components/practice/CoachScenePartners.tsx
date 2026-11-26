@@ -13,6 +13,8 @@ import SetupStep from "./SetupStep";
 export const MAX_COACH_TAKE_SECONDS = 60;
 // Shorter than this is a mis-tap, not a read.
 const MIN_TAKE_MS = 400;
+// How often the Stop button's elapsed time is refreshed while recording.
+const ELAPSED_TICK_MS = 250;
 
 type Busy = {
   index: number;
@@ -119,7 +121,7 @@ export default function CoachScenePartners({
     if (busy?.phase !== "recording") return;
     const timer = setInterval(
       () => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)),
-      250,
+      ELAPSED_TICK_MS,
     );
     return () => clearInterval(timer);
   }, [busy]);
@@ -201,19 +203,29 @@ export default function CoachScenePartners({
     setActiveIndex(index);
     // Can wait on the browser's microphone prompt (the first take).
     setBusy({ index, phase: "requesting" });
-    try {
-      streamRef.current ??= await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-    } catch (err) {
-      setBusy(null);
-      setError({ index, message: micErrorMessage(err) });
-      return;
+    let media = streamRef.current;
+    if (!media) {
+      try {
+        media = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+      } catch (err) {
+        if (unmountedRef.current) return;
+        setBusy(null);
+        setError({ index, message: micErrorMessage(err) });
+        return;
+      }
+      // Left while the browser's prompt was up: the unmount cleanup has
+      // already run, so nothing else would turn this microphone off.
+      if (unmountedRef.current) {
+        media.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = media;
     }
-    if (unmountedRef.current) return;
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(streamRef.current);
+      recorder = new MediaRecorder(media);
       chunksRef.current = [];
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunksRef.current.push(event.data);
@@ -304,11 +316,22 @@ export default function CoachScenePartners({
   const switchLocked = busy !== null && busy.phase !== "playing";
 
   return (
-    <SetupStep className="processing-page coaching-page" step={3} scriptName={scriptName} onGoToStep={switchLocked ? undefined : onGoToStep}>
-      <header className="coach-intro">
-        <h1>Coach your scene partners</h1>
-        <p>Read each of your scene partners’ lines the way you want to hear it. We’ll turn your read into that character’s voice, keeping your timing, emphasis and emotion. Any line you skip keeps its AI read.</p>
-      </header>
+    <SetupStep
+      className="coaching-page"
+      step={3}
+      scriptName={scriptName}
+      onGoToStep={switchLocked ? undefined : onGoToStep}
+      intro={
+        <>
+          <h1 className="title">Coach your scene partners</h1>
+          <p className="lead">Read each of your scene partners’ lines the way you want to hear it. We’ll turn your read into that character’s voice, keeping your timing, emphasis and emotion. Any line you skip keeps its AI read.</p>
+          <details className="coach-help">
+            <summary>About your recordings</summary>
+            <p>Takes are saved on this device and sent to ElevenLabs for voice conversion when played. Pace and Volume still apply; your delivery sets the emotion.</p>
+          </details>
+        </>
+      }
+    >
 
       <ol className="coach-script" aria-label="Scene dialogue">
         {steps.map((step, index) => {
@@ -318,7 +341,7 @@ export default function CoachScenePartners({
           if (!partnerSet.has(index)) {
             return (
               <li key={index} className="coach-line coach-line--yours">
-                <span className="coach-speaker">{name}<span className="coach-you-label">you</span></span>
+                <span className="sides-cue coach-speaker">{name}<span className="tag">You</span></span>
                 <span className="coach-text">{step.verbalLine}</span>
               </li>
             );
@@ -336,13 +359,13 @@ export default function CoachScenePartners({
               }}
               className={`coach-line ${active ? "is-active" : ""} ${takeId ? "is-coached" : ""}`}
             >
-              <div className="coach-speaker">
+              <div className="sides-cue coach-speaker">
                 {name}
                 {takeId && (
                   <>
                     <button
                       type="button"
-                      className="coach-hear"
+                      className="btn-ghost coach-hear"
                       disabled={switchLocked}
                       onClick={() => {
                         selectLine(index);
@@ -371,7 +394,7 @@ export default function CoachScenePartners({
                   {lineBusy === "recording" ? (
                     <button
                       type="button"
-                      className="coach-record is-recording"
+                      className="btn-danger coach-record is-recording"
                       onClick={stopRecording}
                     >
                       <span aria-hidden="true">■</span> Stop · {formatElapsed(elapsed)}
@@ -383,7 +406,7 @@ export default function CoachScenePartners({
                     busy === null && (
                       <button
                         type="button"
-                        className="coach-record"
+                        className="btn-primary coach-record"
                         onClick={() => void startRecording(index)}
                       >
                         <span aria-hidden="true">●</span> {takeId ? "Record again" : "Record"}
@@ -402,10 +425,10 @@ export default function CoachScenePartners({
                           : ""}
                   </span>
                   {lineBusy === "playing" && (
-                    <button type="button" className="coach-text-button" onClick={() => { stop(); setBusy(null); }}>Stop playback</button>
+                    <button type="button" className="btn-ghost" onClick={() => { stop(); setBusy(null); }}>Stop playback</button>
                   )}
                   {!switchLocked && partnerLines.indexOf(index) < partnerLines.length - 1 && (
-                    <button type="button" className="coach-next-line" onClick={() => selectLine(partnerLines[partnerLines.indexOf(index) + 1])}>Next line <span aria-hidden="true">↓</span></button>
+                    <button type="button" className="btn-ghost coach-next-line" onClick={() => selectLine(partnerLines[partnerLines.indexOf(index) + 1])}>Next line <span aria-hidden="true">↓</span></button>
                   )}
                   {error?.index === index && (
                     <p className="coach-error" role="alert">
@@ -419,23 +442,19 @@ export default function CoachScenePartners({
         })}
       </ol>
 
-      <details className="coach-help">
-        <summary>About your recordings</summary>
-        <p>Takes are saved on this device and sent to ElevenLabs for voice conversion when played. Pace and Volume still apply; your delivery sets the emotion.</p>
-      </details>
       {partnerLines.length === 0 && <p className="coach-empty">There are no scene partner lines to coach. Head back to choose your voices.</p>}
       <footer className="coach-footer">
         <span className="coach-count" role="status">{coachedCount ? `${coachedCount} of ${partnerLines.length} lines coached` : "Coaching is optional"}</span>
         <button
           type="button"
-          className="setup-next"
+          className="btn-secondary btn-lg"
           disabled={switchLocked}
           onClick={() => {
             stop();
             onDone();
           }}
         >
-          Done <span aria-hidden="true">→</span>
+          Done
         </button>
       </footer>
     </SetupStep>

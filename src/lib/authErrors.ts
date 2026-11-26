@@ -1,3 +1,4 @@
+import { PASSWORD_MIN_LENGTH } from "./passwordRules";
 // Supabase auth errors come back as backend wording ("Invalid login
 // credentials", "Legacy API keys are disabled") — fine for logs, not for an
 // actor at a login form. This maps every code the email/password flows we use
@@ -54,7 +55,7 @@ export function friendlyAuthError(error: AuthErrorLike, action: AuthAction): str
     if (reasons.includes("characters")) {
       return "Choose a stronger password: mix upper- and lowercase letters, numbers, and symbols.";
     }
-    return "Choose a stronger password: at least 6 characters.";
+    return `Choose a stronger password: at least ${PASSWORD_MIN_LENGTH} characters.`;
   }
   if (code === "reauthentication_needed" || code === "reauthentication_not_valid") {
     return "For security, log in again before changing your password.";

@@ -5,6 +5,7 @@ import {
   fetchElevenLabs,
   holdPregenIfBusy,
   relayConcurrency,
+  sendVoiceServiceError,
   type ConcurrencyReading,
 } from "./_elevenlabs.js";
 
@@ -44,7 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
+    console.error("ELEVENLABS_API_KEY is not set");
+    return res.status(500).json({ error: "Coached lines are not configured" });
   }
 
   const { voiceId, audio } = (req.body ?? {}) as {
@@ -92,23 +94,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     relayConcurrency(upstream, res, lastSeenConcurrency);
 
     if (!upstream.ok) {
-      const err = await upstream.text();
-      console.error("ElevenLabs speech-to-speech error:", err);
-      const retryAfter = upstream.headers.get("retry-after");
-      if (retryAfter) res.setHeader("Retry-After", retryAfter);
-      let message = err;
-      try {
-        message =
-          (JSON.parse(err) as { detail?: { message?: string } }).detail?.message ?? err;
-      } catch {
-        // not JSON: pass the text along as is
-      }
-      // A rejected key (say, one without the speech_to_speech permission) is
-      // our misconfiguration, not the actor's session: don't send it back as
-      // a 401 the client could take for their own sign-in.
-      const status =
-        upstream.status === 401 || upstream.status === 403 ? 502 : upstream.status;
-      return res.status(status).json({ error: message });
+      console.error(
+        `ElevenLabs speech-to-speech error (${upstream.status}):`,
+        await upstream.text(),
+      );
+      return sendVoiceServiceError(upstream, res, "This coached line couldn't be voiced");
     }
 
     const converted = await upstream.arrayBuffer();
@@ -117,8 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("X-TTS-Model", STS_MODEL);
     return res.status(200).send(Buffer.from(converted));
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Speech-to-speech error:", message);
-    return res.status(500).json({ error: message });
+    console.error("Speech-to-speech error:", err);
+    return res.status(500).json({ error: "This coached line couldn't be voiced" });
   }
 }

@@ -29,10 +29,15 @@ export default function RolePicker({
       step={2}
       scriptName={fileName}
       onGoToStep={onGoToStep}
+      intro={
+        <>
+          <h1 className="title">Choose your role</h1>
+          <p className="lead">
+            Pick the character you’re reading. Their lines become yours to say.
+          </p>
+        </>
+      }
     >
-      <div className="role-intro">
-        <h1>Choose your role</h1>
-      </div>
       <CastGrid
         items={characters}
         label="Choose your role"
@@ -46,7 +51,8 @@ export default function RolePicker({
               role="radio"
               aria-checked={isSelected}
               active={isSelected}
-              mark={isSelected ? "✓" : ""}
+              mark=""
+              tag={isSelected && <span className="tag tag-accent">You</span>}
               name={displayCharacterName(character)}
               detail={dialogueTurnsLabel(lines.length)}
               quote={lines[0]?.verbalLine ?? "No spoken dialogue detected."}
@@ -76,13 +82,11 @@ export default function RolePicker({
           );
         }}
       />
-      <div className="role-intro">
-        <div className="role-secondary">
-          <span>Not reading a part?</span>
-          <button type="button" className="btn-secondary" onClick={() => onChoose("")}>
-            Just listen to the scene
-          </button>
-        </div>
+      <div className="setup-alt">
+        <p>Not reading a part?</p>
+        <button type="button" className="btn-secondary" onClick={() => onChoose("")}>
+          Just listen to the scene
+        </button>
       </div>
       <SetupActions
         onBack={() => onGoToStep(1)}

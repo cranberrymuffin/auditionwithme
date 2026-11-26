@@ -1,101 +1,30 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import type { Step } from "../types";
-import { normalizeSpeaker, type Voice } from "../lib/script";
+import { useLocation } from "react-router-dom";
+import type { ReplayScript, Step } from "../types";
 import ParsingScreen from "../components/practice/ParsingScreen";
+import ParseErrorScreen from "../components/practice/ParseErrorScreen";
+import LanguageChoiceScreen from "../components/practice/LanguageChoiceScreen";
 import RolePicker from "../components/practice/RolePicker";
 import VoiceCasting from "../components/practice/VoiceCasting";
 import CoachScenePartners from "../components/practice/CoachScenePartners";
 import Rehearsal from "../components/practice/Rehearsal";
-import StageShell from "../components/practice/StageShell";
-import { extractPdfLayout, loadPdf, type LayoutLineTuple } from "../lib/pdf";
-import { parseScannedPdf } from "../lib/scannedScript";
-import { useToast } from "../lib/toast";
-import { apiFetch } from "../lib/api";
-import { ApiError } from "../lib/apiError";
 import { useAuth } from "../contexts/AuthContext";
-import {
-  findSavedScript,
-  saveScript,
-  toReplayScript,
-  updateScript,
-} from "../lib/scriptStore";
-import { hashFile } from "../lib/scriptHash";
-import { createParseCache, type CachedParseFields } from "../lib/parseCache";
+import { findSavedScript, updateScript } from "../lib/scriptStore";
 import { DIRECTOR_VERSION } from "../lib/director";
-import { leadingDirections } from "../lib/delivery";
-import { useSeo } from "../components/Seo";
+import { useSeo } from "../lib/seo";
 import { useReaderAudioPregen } from "../hooks/useReaderAudioPregen";
 import { coachTakeMap, loadCoachTakes } from "../lib/coachTakeStore";
 import { readerLineIndices } from "../lib/readerLines";
 import { loadUpload, peekUpload } from "../lib/pendingUpload";
-import {
-  hasScriptPdf,
-  loadScriptPdf,
-  saveScriptPdf,
-} from "../lib/scriptPdfStore";
+import { loadScriptPdf } from "../lib/scriptPdfStore";
 import { useStartRehearsal } from "../hooks/useStartRehearsal";
-
-// Passed via navigate("/practice", { state: { replayScript } }) from My
-// Account — re-launches practice from a script that's already been parsed,
-// so no parse-script AI call happens for this session.
-type ReplayScript = {
-  /** Saved row id — present so casting/direction updates land on the row. */
-  id?: string;
-  title: string;
-  steps: Step[];
-  characters: string[];
-  languageCode: string;
-  languageName: string;
-  /** Casting confirmed in a past rehearsal, speaker → voice id. */
-  characterVoices?: Record<string, string> | null;
-  /** Scene partner levels from a past rehearsal, speaker → gain. */
-  characterVolumes?: Record<string, number> | null;
-  characterEmotions?: Record<string, number> | null;
-  characterPaces?: Record<string, number> | null;
-  /** AI-director delivery tags from a past parse, aligned with steps. */
-  deliveryTags?: (string | null)[] | null;
-  /** DIRECTOR_VERSION those tags were generated under (null/absent = stale). */
-  directorVersion?: number | null;
-  /** Characters previously rehearsed as, from the saved script row. */
-  rolesRead?: string[] | null;
-  /** Bilingual edition saved before its language was picked: ask again. */
-  needsLanguageChoice?: boolean;
-};
-
-type ParseData = {
-  steps?: Step[];
-  characters?: string[];
-  languageCode?: string;
-  languageName?: string;
-  /** Bilingual edition whose original-language text couldn't be extracted */
-  unreadableOriginalLanguage?: boolean;
-};
-
-// In production the raw "run `vercel dev`" hint is developer noise; keep it dev-only.
-// A parse with no spoken lines means the PDF isn't a script (a resume, a
-// headshot, a contract…) — caught right after upload, before it's saved.
-const hasSpokenLines = (data: ParseData) =>
-  (data.steps ?? []).some((step) => step.verbalLine?.trim());
-const NOT_A_SCRIPT_MESSAGE =
-  "We didn't find any spoken lines in this PDF. Upload a script or sides with character names and dialogue.";
-
-const SERVICE_DOWN_MESSAGE = import.meta.env.DEV
-  ? "The local script service isn't running. Start it with `vercel dev --listen 3000`."
-  : "We couldn't reach the script service. Check your connection and try again.";
-
-// Each wizard step has its own URL, so Back/Forward, reloads and the
-// address bar all agree on where the actor is (MDN, History API).
-const STEP_PATHS = [
-  "/practice",
-  "/practice/role",
-  "/practice/voices",
-  "/practice/rehearse",
-];
-const stepFromPath = (pathname: string) => {
-  const index = STEP_PATHS.indexOf(pathname.replace(/\/+$/, ""));
-  return index === -1 ? 0 : index;
-};
+import { useScriptPersistence, type ParseData } from "../hooks/useScriptPersistence";
+import { NOT_A_SCRIPT_MESSAGE, useScriptParse } from "../hooks/useScriptParse";
+import { useAutoCasting } from "../hooks/useAutoCasting";
+import { useVoiceCatalog } from "../hooks/useVoiceCatalog";
+import { useDirectorTags } from "../hooks/useDirectorTags";
+import { stepFromPath, useWizardHistory } from "../hooks/useWizardHistory";
+import { STEP_NAMES } from "../components/practice/stepNames";
 
 export default function Practice() {
   const location = useLocation();
@@ -140,7 +69,11 @@ function PracticeSession() {
     const load = uploadId
       ? loadUpload(uploadId)
       : savedScriptId
-        ? loadScriptPdf(savedScriptId).catch(() => null)
+        ? loadScriptPdf(savedScriptId).catch((err) => {
+            // The script still opens, just without its PDF to show.
+            console.warn("Couldn't load the script's stored PDF:", err);
+            return null;
+          })
         : Promise.resolve(null);
     void load.then((file) => {
       if (active) setUpload({ file });
@@ -153,9 +86,14 @@ function PracticeSession() {
     if (saved !== undefined || !user) return;
     let active = true;
     void findSavedScript(user.id, { id: savedScriptId, contentHash })
-      .catch(() => null)
+      .catch((err) => {
+        // Not the same as "not saved": the session carries on from history
+        // state alone, and a fresh upload is parsed again.
+        console.warn("Couldn't look up the saved script:", err);
+        return null;
+      })
       .then((script) => {
-        if (active) setSaved(script ? toReplayScript(script) : null);
+        if (active) setSaved(script);
       });
     return () => {
       active = false;
@@ -166,14 +104,6 @@ function PracticeSession() {
     return <div className="cinematic-page" aria-busy="true" />;
   return <PracticeFlow file={upload.file} saved={saved} />;
 }
-
-// The steps' names, as the step counters show them.
-const STEP_TITLES = [
-  "Rehearsal setup",
-  "Cast yourself",
-  "Direct your scene partners",
-  "Get ready",
-];
 
 function PracticeFlow({
   file,
@@ -189,27 +119,24 @@ function PracticeFlow({
   const replaceScript = (next: File) =>
     void startRehearsal(next, { replace: true });
   const location = useLocation();
-  const navigate = useNavigate();
   const { user } = useAuth();
   // Read once: each wizard step below gets its own history entry, and the
   // router hands back a fresh copy of this state on every Back — reading it
   // live would make the file and replayScript look new and re-run setup.
   const [entryState] = useState(() => location.state);
   // Issued once by Home.tsx's start-rehearsal call; reused read-only by every
-  // parse call below (including retries and the bilingual re-parse) — never
+  // parse call (including retries and the bilingual re-parse) — never
   // re-requested here. See api/_entitlement.ts and the auth-subscriptions plan.
   const rehearsalGrant: string | null = entryState?.rehearsalGrant ?? null;
   const replayScript: ReplayScript | null =
     saved ?? entryState?.replayScript ?? null;
   // A reload mid-flow lands back on the step its URL names: the role picked
-  // then rides along in history state (see goToStepUrl).
+  // then rides along in history state (see useWizardHistory's goToStepUrl).
   const [resumeStep] = useState(() =>
     replayScript ? stepFromPath(location.pathname) : 0,
   );
   const resumeRole: string | null =
     typeof entryState?.chosenRole === "string" ? entryState.chosenRole : null;
-  // Home.tsx already hashed this upload for its saved-script lookup.
-  const uploadContentHash: string | null = entryState?.contentHash ?? null;
   // Set by MyAccount's "Practice as X" button to jump straight to Rehearsal
   // with a previously-confirmed cast, skipping RolePicker/VoiceCasting.
   // Undefined (not just falsy — "" is a valid role, "listen to the full
@@ -217,15 +144,8 @@ function PracticeFlow({
   // screens.
   const presetRoleRaw: unknown = entryState?.selectedRole;
   const hasPresetRole = typeof presetRoleRaw === "string";
-  const presetRole = hasPresetRole ? (presetRoleRaw as string) : "";
+  const presetRole = typeof presetRoleRaw === "string" ? presetRoleRaw : "";
 
-  const [loading, setLoading] = useState(false);
-  const [processingPhase, setProcessingPhase] = useState<
-    "extracting" | "analyzing"
-  >("extracting");
-  const [error, setError] = useState("");
-  // The upload parsed fine but holds no dialogue: retrying won't help.
-  const [notScript, setNotScript] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [characters, setCharacters] = useState<string[]>([]);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
@@ -252,20 +172,6 @@ function PracticeFlow({
   // under it from the start. The saved row with this id only exists once
   // scriptSaved: signed in, and the parse has been written.
   const [scriptId] = useState(() => replayScript?.id ?? crypto.randomUUID());
-  // Casting and delivery tags are written back to the row as they settle.
-  const [scriptSaved, setScriptSaved] = useState(() => Boolean(replayScript?.id));
-  // Set when the actor renames the script (ScriptName on step 1).
-  const [scriptTitle, setScriptTitle] = useState<string | null>(null);
-  // Per-line direction from the AI director (api/casting?action=direct-lines), aligned
-  // by index with steps: performance markup on new parses, single-word tags on
-  // rows saved before the markup upgrade. null until the pass finishes (or fails silently).
-  const [deliveryTags, setDeliveryTags] = useState<(string | null)[] | null>(
-    null,
-  );
-  const [voices, setVoices] = useState<Voice[]>([]);
-  // Auto-casting has answered (or failed): anyone it left uncast gets a
-  // default voice of their own from here on.
-  const [castingSettled, setCastingSettled] = useState(false);
   const [voicesConfirmed, setVoicesConfirmed] = useState(false);
   // Characters the user has confirmed a full cast for and rehearsed as, this
   // script's saved row plus anything newly confirmed this session.
@@ -274,17 +180,40 @@ function PracticeFlow({
     code: "en",
     name: "English",
   });
-  const [parseAttempt, setParseAttempt] = useState(0);
-  // Bilingual editions: holds the translated parse until the user picks a language.
-  const [languageChoice, setLanguageChoice] = useState<ParseData | null>(null);
-  // Finished parse waiting on the user's "Continue" click — the parsing screen
-  // (with the PDF preview) stays up until they choose to proceed.
-  const [pendingParse, setPendingParse] = useState<ParseData | null>(null);
-  const toast = useToast();
-  const ranAttempt = useRef(-1);
-  // Grant taken here for an original-language read on a re-upload that was
-  // served from its saved parse (Home.tsx takes none on a hash hit).
-  const lateGrantRef = useRef<string | null>(null);
+
+  const { scriptSaved, scriptTitle, setScriptTitle, cacheParse } =
+    useScriptPersistence({
+      user,
+      file,
+      scriptId,
+      existingId: replayScript?.id,
+      uploadContentHash: entryState?.contentHash ?? null,
+    });
+  const {
+    loading,
+    processingPhase,
+    error,
+    notScript,
+    tooLarge,
+    retry: retryParse,
+    languageChoice,
+    setLanguageChoice,
+    pendingParse,
+    parseSource,
+    setPendingParse,
+    rehearseOriginalLanguage,
+  } = useScriptParse({
+    file,
+    rehearsalGrant,
+    skip: Boolean(replayScript),
+    cacheParse,
+  });
+  const [deliveryTags, setDeliveryTags] = useDirectorTags({
+    steps,
+    canSave: Boolean(user) && scriptSaved,
+    scriptId,
+    replayScript,
+  });
 
   const applyParseResult = (data: ParseData) => {
     const parsedSteps: Step[] = data.steps ?? [];
@@ -298,61 +227,19 @@ function PracticeFlow({
     if (parsedCharacters.length === 0) setSelectedRole("");
   };
 
-  // Hashed once per upload, so re-uploading the same PDF later (Home.tsx's
-  // handleFile) finds the saved row instead of paying for another parse.
-  const contentHashRef = useRef<Promise<string | null> | null>(null);
-  const getContentHash = () =>
-    (contentHashRef.current ??= uploadContentHash
-      ? Promise.resolve(uploadContentHash)
-      : file
-        ? hashFile(file).catch(() => null)
-        : Promise.resolve(null));
-
-  // Saves the parse to the account the moment it arrives — before Continue
-  // or the language pick — so a reload or back-out can't lose it. The first
-  // write creates the row; Continue, the language pick and an original-
-  // language re-parse all update that same row (a replay's row from the
-  // start). Unconfirmed parses show on My Account like any other script.
-  const parseCacheRef = useRef<
-    ((fields: CachedParseFields) => Promise<void>) | null
-  >(null);
-  const cacheParse = (data: ParseData, needsLanguageChoice: boolean) => {
-    if (!user) return;
-    const userId = user.id;
-    parseCacheRef.current ??= createParseCache({
-      existingId: replayScript?.id,
-      newId: () => scriptId,
-      create: async (id, fields) =>
-        saveScript(userId, {
-          id,
-          // The PDF's own name, extension and all, until the actor renames it.
-          title: file?.name ?? "Untitled script",
-          ...fields,
-          contentHash: await getContentHash(),
-        }),
-      update: (id, fields) => updateScript(id, fields),
-      onCreated: () => setScriptSaved(true),
-      onError: (err) => console.error("Failed to save script to account:", err),
-    });
-    void parseCacheRef.current({
-      steps: data.steps ?? [],
-      characters: data.characters ?? [],
-      languageCode: data.languageCode ?? "en",
-      languageName: data.languageName ?? "English",
-      needsLanguageChoice,
-    });
-  };
-
   const finalizeParse = (data: ParseData) => {
     applyParseResult(data);
     cacheParse(data, false);
   };
 
   const voiceableSpeakers = characters.filter((s) => s !== selectedRole);
+  // The role last picked, so Forward can re-pick it ("" — listen to the
+  // whole scene — is a real choice, unlike roleDraft's null).
+  const chosenRoleRef = useRef<string | null>(null);
 
   // Replay path: launch straight from a previously saved parse, no AI call.
   // Saved casting and delivery tags seed state so the auto-cast and director
-  // effects below can skip their model calls.
+  // hooks can skip their model calls.
   useEffect(() => {
     if (!replayScript) return;
     // Saved before its language was picked: ask again rather than rehearse
@@ -389,9 +276,9 @@ function PracticeFlow({
       setCharacterPaces(replayScript.characterPaces);
     }
     // Tags from an older director prompt are dropped rather than seeded, so
-    // the director effect below re-runs with the current prompt (and the
-    // persist effect overwrites the row). The scene reads unadorned until
-    // the new tags land, exactly as on a fresh parse.
+    // the director pass re-runs with the current prompt (and overwrites the
+    // row). The scene reads unadorned until the new tags land, exactly as on
+    // a fresh parse.
     if (
       replayScript.deliveryTags &&
       replayScript.directorVersion === DIRECTOR_VERSION
@@ -419,250 +306,14 @@ function PracticeFlow({
     }
   }, [replayScript, hasPresetRole, presetRole]); // eslint-disable-line react-hooks/exhaustive-deps -- resume is read once
 
-  useEffect(() => {
-    if (replayScript) return;
-    if (!file || !rehearsalGrant) {
-      navigate("/", { replace: true });
-      return;
-    }
-    // Guard against StrictMode's dev-mode double-invoke while still allowing
-    // the "Try again" button to re-run by bumping parseAttempt.
-    if (ranAttempt.current === parseAttempt) return;
-    ranAttempt.current = parseAttempt;
-
-    // No AbortController here on purpose: this fetch is a single, non-restartable
-    // ~30-60s call. Wiring an abort signal in before the fetch starts means React
-    // StrictMode's dev-mode double-invoke (mount -> cleanup -> mount again) aborts
-    // it within the same tick, and the didRun guard then blocks any retry — the
-    // request silently dies before it can ever complete.
-    const run = async () => {
-      setLoading(true);
-      setError("");
-      setNotScript(false);
-      setPendingParse(null);
-      setProcessingPhase("extracting");
-
-      try {
-        const pdfDocument = await loadPdf(file);
-        let extractedLines: LayoutLineTuple[] | null = null;
-        try {
-          const extracted = await extractPdfLayout(file, pdfDocument);
-          // Sides with a raster markup overlay (X-boxes, START/END cues drawn
-          // as an image) can't be honored from the text layer — the vision
-          // path sees and applies the markup instead.
-          if (extracted.usable && !extracted.sides.visionRecommended) {
-            extractedLines = extracted.lines;
-          }
-        } catch (extractionError) {
-          console.warn(
-            "PDF text extraction failed; using scanned-page parsing.",
-            extractionError,
-          );
-        }
-        setProcessingPhase("analyzing");
-
-        let data: ParseData;
-        if (extractedLines !== null) {
-          const res = await apiFetch("/api/parse-script", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-rehearsal-grant": rehearsalGrant,
-            },
-            body: JSON.stringify({ layout: { lines: extractedLines } }),
-          });
-
-          if (res.status === 401 || res.status === 403) {
-            const body = await res
-              .json()
-              .catch(() => ({}) as { error?: string });
-            throw new ApiError(
-              res.status,
-              body.error ?? "Session or rehearsal grant is no longer valid",
-            );
-          }
-
-          const responseText = await res.text();
-          let payload: { error?: string } & typeof data = {};
-          if (responseText) {
-            try {
-              payload = JSON.parse(responseText) as typeof payload;
-            } catch {
-              throw new Error(
-                res.ok
-                  ? "The script service returned an invalid response."
-                  : SERVICE_DOWN_MESSAGE,
-              );
-            }
-          }
-          if (!res.ok) {
-            throw new Error(payload.error || SERVICE_DOWN_MESSAGE);
-          }
-          if (!responseText)
-            throw new Error("The script service returned an empty response.");
-          data = payload;
-        } else {
-          // Image-only PDF (scan) — render pages and parse chunks with vision.
-          data = await parseScannedPdf(
-            file,
-            rehearsalGrant,
-            undefined,
-            pdfDocument,
-          );
-        }
-
-        if (!hasSpokenLines(data)) {
-          // Not a script: stop here, before it's saved to the account or
-          // the actor can continue into casting.
-          setNotScript(true);
-          setError(NOT_A_SCRIPT_MESSAGE);
-          return;
-        }
-        if (data.unreadableOriginalLanguage) {
-          // Bilingual edition — let the user pick a language before rehearsing.
-          cacheParse(data, true);
-          setLanguageChoice(data);
-        } else {
-          // Hold on the parsing screen (PDF preview visible) until the user
-          // clicks Continue — never auto-advance into casting.
-          cacheParse(data, false);
-          setPendingParse(data);
-        }
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) {
-          navigate("/login", { replace: true });
-          return;
-        }
-        if (err instanceof ApiError && err.status === 403) {
-          toast(
-            "Your rehearsal session expired — please re-upload your script.",
-          );
-          navigate("/", { replace: true });
-          return;
-        }
-        console.error("Script parsing failed:", err);
-        setError(err instanceof Error ? err.message : "An error occurred");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, [parseAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-cast: fetch a fitting voice for each character when steps first load
-  useEffect(() => {
-    if (!steps.length) return;
-    let cancelled = false;
-    const uniqueSpeakers = [
-      ...new Set(steps.map((s) => normalizeSpeaker(s.speaker)).filter(Boolean)),
-    ];
-    // Replays with a complete saved casting keep their scene partners —
-    // don't re-run auto-casting and risk recasting voices.
-    const savedVoices = replayScript?.characterVoices;
-    if (savedVoices && uniqueSpeakers.every((name) => savedVoices[name])) {
-      setCastingSettled(true);
-      return;
-    }
-    setCastingSettled(false);
-    const characterList = uniqueSpeakers.map((name) => ({
-      name,
-      sampleLines: steps
-        .filter((s) => normalizeSpeaker(s.speaker) === name)
-        .slice(0, 3)
-        .map((s) => s.verbalLine)
-        .filter(Boolean),
-    }));
-    if (!characterList.length) return;
-
-    void (async () => {
-      try {
-        const response = await apiFetch("/api/casting?action=voices", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            characters: characterList,
-            languageCode: scriptLanguage.code,
-          }),
-        });
-        const data = (await response.json()) as {
-          voices?: Record<string, string>;
-          error?: string;
-        };
-        if (!response.ok)
-          throw new Error(data.error || "Voice matching failed");
-        // Merge under any manual picks the user already made while this was in flight.
-        if (!cancelled && data.voices) {
-          setCharacterVoices((previous) => ({ ...data.voices, ...previous }));
-        }
-      } catch (err) {
-        console.error("Character voice matching error:", err);
-        if (!cancelled)
-          toast("Automatic voice casting didn't work, so we picked voices for you. Change them under Customize voices.");
-      } finally {
-        if (!cancelled) setCastingSettled(true);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [steps, scriptLanguage.code, replayScript, toast]);
-
-  // AI director pass: annotate each line with performance markup (inline v3
-  // audio tags + pacing punctuation — how the scene partner should read it)
-  // once steps load. Purely an enhancement — failures are silent and the
-  // rehearsal reads lines unadorned.
-  useEffect(() => {
-    if (!steps.length || deliveryTags) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await apiFetch("/api/casting?action=direct-lines", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lines: steps.map((step) => ({
-              speaker: normalizeSpeaker(step.speaker),
-              text: step.verbalLine,
-              direction: leadingDirections(step.content) || undefined,
-            })),
-          }),
-        });
-        const data = (await response.json()) as {
-          tags?: (string | null)[];
-          error?: string;
-        };
-        if (!response.ok)
-          throw new Error(data.error || "Line direction failed");
-        if (!cancelled && Array.isArray(data.tags)) setDeliveryTags(data.tags);
-      } catch (err) {
-        console.error("Line direction error:", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [steps, deliveryTags]);
-
-  // Write freshly generated delivery tags back to the saved row so replays
-  // skip the director call. Guarded so it fires once per session. Stamped
-  // with DIRECTOR_VERSION so a later prompt change knows to re-direct them.
-  const persistedTagsRef = useRef(false);
-  useEffect(() => {
-    if (!user || !scriptSaved || !deliveryTags || persistedTagsRef.current) return;
-    persistedTagsRef.current = true;
-    if (
-      replayScript?.deliveryTags &&
-      replayScript.directorVersion === DIRECTOR_VERSION
-    ) {
-      return; // current tags already stored on the row
-    }
-    void updateScript(scriptId, {
-      deliveryTags,
-      directorVersion: DIRECTOR_VERSION,
-    }).catch((err) => console.error("Failed to save delivery tags:", err));
-  }, [user, scriptId, scriptSaved, deliveryTags, replayScript]);
+  // Auto-casting has answered (or failed): anyone it left uncast gets a
+  // default voice of their own from here on.
+  const castingSettled = useAutoCasting({
+    steps,
+    languageCode: scriptLanguage.code,
+    savedVoices: replayScript?.characterVoices,
+    setCharacterVoices,
+  });
 
   // Coached takes kept on-device from earlier sessions. Only those whose
   // line still reads as recorded apply (a re-parse can change the lines).
@@ -679,35 +330,7 @@ function PracticeFlow({
     };
   }, [scriptId, steps]);
 
-  // Full voice catalog, so the user can override auto-assigned voices
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await apiFetch("/api/eleven-account");
-        if (response.status === 401) {
-          if (!cancelled) navigate("/login", { replace: true });
-          return;
-        }
-        const data = (await response.json()) as {
-          voices?: Voice[];
-          error?: string;
-        };
-        if (!response.ok)
-          throw new Error(data.error || "Voice list fetch failed");
-        if (!cancelled && Array.isArray(data.voices)) setVoices(data.voices);
-      } catch (err) {
-        console.error("Voice list fetch error:", err);
-        if (!cancelled)
-          toast(
-            "The voice catalog couldn't be loaded. Voice options may be limited.",
-          );
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [toast, navigate]);
+  const voices = useVoiceCatalog();
 
   // Fills anyone still uncast — each with a different voice in the script's
   // language, so a failed auto-cast never leaves the whole scene sounding
@@ -774,61 +397,6 @@ function PracticeFlow({
     }
   };
 
-  const rehearseOriginalLanguage = async () => {
-    if (!file || !languageChoice) return;
-    const translation = languageChoice;
-    setLanguageChoice(null);
-    setLoading(true);
-    setProcessingPhase("analyzing");
-    try {
-      // Reuses the same grant as the initial parse — this is a re-parse of
-      // the same upload, not a new billable session. A re-upload served from
-      // its saved parse never took one, so it takes one now.
-      let grant = rehearsalGrant ?? lateGrantRef.current;
-      if (!grant) {
-        const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
-        if (res.status === 402) {
-          toast("Start your free trial or subscribe to keep rehearsing.");
-          navigate("/pricing");
-          return;
-        }
-        const body = (await res.json().catch(() => ({}))) as { grant?: string };
-        if (!res.ok || !body.grant) {
-          throw new Error("Couldn't start a new rehearsal. Please try again.");
-        }
-        grant = lateGrantRef.current = body.grant;
-      }
-      const result = await parseScannedPdf(file, grant, undefined, undefined, {
-        preferOriginalLanguage: true,
-      });
-      if (!hasSpokenLines(result)) {
-        throw new Error(
-          "We couldn't read the original language from the printed pages.",
-        );
-      }
-      cacheParse(result, false);
-      // Same continue-gate as the initial parse — this path takes minutes, so
-      // the user may have stepped away; don't jump into casting unprompted.
-      setPendingParse(result);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        navigate("/login", { replace: true });
-        return;
-      }
-      if (err instanceof ApiError && err.status === 403) {
-        toast("Your rehearsal session expired — please re-upload your script.");
-        navigate("/", { replace: true });
-        return;
-      }
-      // Back to the choice with the translation still in hand — the error
-      // screen's "Try again" would re-run the whole first parse instead.
-      toast(err instanceof Error ? err.message : "An error occurred");
-      setLanguageChoice(translation);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Pre-generate the scene partner's lines from step 4 on (never while just
   // browsing voices on step 3 — every line costs credits), and keep going
   // through the take so it makes no ElevenLabs round trips. The cast is
@@ -860,31 +428,6 @@ function PracticeFlow({
   // the saved title, else the uploaded file's name.
   const scriptName =
     scriptTitle ?? replayScript?.title ?? file?.name ?? "Rehearsal";
-  // Saved once the script has its record (the parse saves it as it lands,
-  // so a rename made just before still gets there).
-  useEffect(() => {
-    if (!user || !scriptSaved || scriptTitle === null) return;
-    void updateScript(scriptId, { title: scriptTitle }).catch((err) => {
-      console.error("Failed to rename script:", err);
-      toast("Couldn't rename that script. Please try again.");
-    });
-  }, [user, scriptId, scriptSaved, scriptTitle, toast]);
-
-  // Keeps this script's PDF with it, so reopening it from My Auditions can
-  // still show it (See script). Once the record exists; skipped if it's
-  // already stored (a re-upload of a script that has one).
-  useEffect(() => {
-    if (!user || !scriptSaved || !file) return;
-    let active = true;
-    void hasScriptPdf(scriptId)
-      .then((stored) =>
-        stored || !active ? undefined : saveScriptPdf(scriptId, file),
-      )
-      .catch((err) => console.warn("Couldn't keep the script's PDF:", err));
-    return () => {
-      active = false;
-    };
-  }, [user, scriptId, scriptSaved, file]);
 
   // Step 1 (upload) revisited: the parse is already applied, so this only
   // shows the finished upload screen again until Continue (or Forward).
@@ -897,12 +440,6 @@ function PracticeFlow({
       !replayScript.needsLanguageChoice &&
       resumeStep === 0,
   );
-  // The role last picked, so Forward can re-pick it ("" — listen to the
-  // whole scene — is a real choice, unlike roleDraft's null).
-  const chosenRoleRef = useRef<string | null>(null);
-  // "Practice as" jumps straight into Rehearsal, so it alone has no step 1
-  // to go back to.
-  const hasUploadStep = !hasPresetRole;
 
   const chooseRole = (role: string) => {
     setCoaching(false);
@@ -937,50 +474,11 @@ function PracticeFlow({
 
   // The tab title names the step, like a page of its own would.
   useSeo({
-    title: STEP_TITLES[wizardStep],
+    title: STEP_NAMES[wizardStep],
     description: "Rehearse your script with every other character read aloud.",
     path: "/practice",
     noindex: true,
   });
-
-  // Each step has its own URL and history entry, so Back and Forward (and a
-  // phone's back swipe) move through the wizard like pages. One effect keeps
-  // the two in step, whichever moved: the app advancing (push a new entry),
-  // or history moving (show that step — back directly, forward by re-making
-  // the choice that led there). A reload restarts at the upload.
-  const historyStep = stepFromPath(location.pathname);
-  const locationStateRef = useRef(location.state);
-  locationStateRef.current = location.state;
-  const prevHistoryStepRef = useRef(historyStep);
-  // Set just before the app navigates, so that move isn't taken for the
-  // user's own Back/Forward.
-  const selfNavRef = useRef(false);
-  // The step history asked for, while the screen catches up to it.
-  const targetStepRef = useRef<number | null>(null);
-  const movedOnceRef = useRef(false);
-  // Reloaded mid-flow: the saved script lands a render after mount, so leave
-  // the URL alone until it has, rather than rewinding it to the upload.
-  const resumingRef = useRef(resumeStep > 0);
-  // A take in progress, reported by Rehearsal. Leaving through history
-  // can't be cancelled (beforeunload doesn't fire for it), so it's
-  // confirmed by hand below.
-  const recordingActiveRef = useRef(false);
-  // Set when the leave was already confirmed (Rehearsal's own Back button).
-  const leaveConfirmedRef = useRef(false);
-
-  // practiceIndex counts this flow's entries below the current one, so the
-  // in-app Back only goes through history when there's a step to return to.
-  const goToStepUrl = (step: number, replace: boolean) => {
-    selfNavRef.current = true;
-    const state = locationStateRef.current;
-    const practiceIndex = (state?.practiceIndex ?? 0) + (replace ? 0 : 1);
-    // Steps past the role picker remember it, for a reload to resume with.
-    const chosenRole = step >= 2 ? selectedRole : undefined;
-    navigate(STEP_PATHS[step], {
-      replace,
-      state: { ...state, practiceIndex, chosenRole },
-    });
-  };
 
   const showEarlierStep = (target: number) => {
     setCoaching(false);
@@ -993,6 +491,28 @@ function PracticeFlow({
     }
   };
 
+  const continueFromParse = (data: ParseData) => {
+    finalizeParse(data);
+    setPendingParse(null);
+  };
+
+  // A clean first read goes straight on to choosing a role: there's nothing
+  // on the finished-upload screen the actor has to do. It's still there
+  // behind Back (showEarlierStep(0) → reviewingUpload) to check or rename
+  // the script. Held for the cases that do want a look first: the long
+  // original-language re-read (the actor may have stepped away), and a
+  // parse with no named characters, which would skip past every setup step.
+  const autoContinuedRef = useRef(false);
+  const continueFromParseRef = useRef(continueFromParse);
+  continueFromParseRef.current = continueFromParse;
+  useEffect(() => {
+    if (!pendingParse || autoContinuedRef.current) return;
+    // Only the first parse to land; a later one waits for Continue.
+    autoContinuedRef.current = true;
+    if (parseSource !== "upload" || !(pendingParse.characters?.length)) return;
+    continueFromParseRef.current(pendingParse);
+  }, [pendingParse, parseSource]);
+
   /** Re-makes the choice that leads past the current step; false if
    * there's none to re-make (still parsing, no role picked yet). */
   const advanceStep = (): boolean => {
@@ -1002,8 +522,7 @@ function PracticeFlow({
         return true;
       }
       if (pendingParse) {
-        finalizeParse(pendingParse);
-        setPendingParse(null);
+        continueFromParse(pendingParse);
         return true;
       }
       return false;
@@ -1020,86 +539,17 @@ function PracticeFlow({
     return false;
   };
 
-  useEffect(() => {
-    if (resumingRef.current) {
-      if (steps.length === 0) return;
-      resumingRef.current = false;
-    }
-    const historyMoved = prevHistoryStepRef.current !== historyStep;
-    prevHistoryStepRef.current = historyStep;
-    if (historyMoved) {
-      if (selfNavRef.current) selfNavRef.current = false;
-      else targetStepRef.current = historyStep;
-    }
-
-    const target = targetStepRef.current;
-    if (target !== null) {
-      if (target === wizardStep) {
-        targetStepRef.current = null;
-        return;
-      }
-      if (target < wizardStep) {
-        const confirmed = leaveConfirmedRef.current;
-        leaveConfirmedRef.current = false;
-        if (
-          wizardStep === 3 &&
-          recordingActiveRef.current &&
-          !confirmed &&
-          !window.confirm(
-            "You have unsaved changes. Are you sure you want to leave?",
-          )
-        ) {
-          // Stay on the take: put its entry back.
-          targetStepRef.current = null;
-          goToStepUrl(3, false);
-          return;
-        }
-        if (target === 0 && !hasUploadStep) {
-          // Nothing of this flow before the role: keep going back, out.
-          targetStepRef.current = null;
-          navigate(-1);
-          return;
-        }
-        showEarlierStep(target);
-        return;
-      }
-      // Forward: one step at a time; this effect runs again as each lands.
-      if (!advanceStep()) {
-        targetStepRef.current = null;
-        goToStepUrl(wizardStep, true);
-      }
-      return;
-    }
-
-    // The app moved the wizard. Without an upload step, the first step
-    // reached takes over /practice's entry rather than stacking on it.
-    if (wizardStep === historyStep) return;
-    const first = !movedOnceRef.current;
-    movedOnceRef.current = true;
-    if (wizardStep > historyStep)
-      goToStepUrl(wizardStep, first && !hasUploadStep);
-    else goToStepUrl(wizardStep, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to step moves only
-  }, [wizardStep, historyStep, steps.length]);
-
-  /** The header's step bars: back to an earlier setup step (1-based).
-   * Through history when the entries are there (so Back/Forward stay in
-   * step: setup steps are always reached in order), else directly. */
-  const goToStep = (step: number) => {
-    const back = wizardStep - (step - 1);
-    if (back <= 0) return;
-    if ((location.state?.practiceIndex ?? 0) >= back) navigate(-back);
-    else showEarlierStep(step - 1);
-  };
-
-  /** In-app Back: through history when there's an earlier step entry (so
-   * browser Back/Forward stay in step), else `fallback`. */
-  const stepBack = (fallback: () => void) => {
-    if ((location.state?.practiceIndex ?? 0) > 0) {
-      leaveConfirmedRef.current = true;
-      navigate(-1);
-    } else fallback();
-  };
+  const { goToStep, stepBack, setRecordingActive } = useWizardHistory({
+    wizardStep,
+    stepCount: steps.length,
+    selectedRole,
+    resumeStep,
+    // "Practice as" jumps straight into Rehearsal, so it alone has no step 1
+    // to go back to.
+    hasUploadStep: !hasPresetRole,
+    showEarlierStep,
+    advanceStep,
+  });
 
   if (loading)
     return (
@@ -1118,10 +568,7 @@ function PracticeFlow({
         phase="done"
         onReplace={replaceScript}
         steps={pendingParse.steps}
-        onContinue={() => {
-          finalizeParse(pendingParse);
-          setPendingParse(null);
-        }}
+        onContinue={() => continueFromParse(pendingParse)}
       />
     );
   }
@@ -1141,103 +588,36 @@ function PracticeFlow({
 
   if (error) {
     return (
-      <StageShell>
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="eyebrow mb-4">
-            {notScript ? "No dialogue found" : "Something went wrong"}
-          </p>
-          <h1 className="stage-error-title">
-            {notScript
-              ? "This doesn’t look like a script."
-              : "We couldn’t read that script."}
-          </h1>
-          <p className="stage-error-detail">{error}</p>
-          <div className="stage-error-actions">
-            {!notScript && (
-              <button
-                type="button"
-                className="stage-error-retry"
-                onClick={() => setParseAttempt((attempt) => attempt + 1)}
-              >
-                Try again
-              </button>
-            )}
-            <button
-              type="button"
-              className={
-                notScript ? "stage-error-retry" : "stage-error-secondary"
-              }
-              onClick={() => navigate("/")}
-            >
-              Upload a different script
-            </button>
-          </div>
-        </div>
-      </StageShell>
+      <ParseErrorScreen
+        notScript={notScript}
+        tooLarge={tooLarge}
+        detail={error}
+        onRetry={retryParse}
+        onUploadAnother={replaceScript}
+      />
     );
   }
 
   if (languageChoice) {
     return (
-      <StageShell>
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="eyebrow mb-4">Bilingual edition</p>
-          <h1 className="stage-error-title">
-            Which version do you want to rehearse?
-          </h1>
-          <p className="stage-error-detail">
-            This script prints its dialogue in two languages, and only the
-            translation is readable as text. Rehearse the translation now, or
-            have the original language read from the printed pages — that takes
-            a few minutes.
-            {!file && " Re-upload the PDF to have the original language read."}
-          </p>
-          <div className="stage-error-actions">
-            <button
-              type="button"
-              className="stage-error-retry"
-              onClick={() => {
-                finalizeParse(languageChoice);
-                setLanguageChoice(null);
-              }}
-            >
-              Rehearse in {languageChoice.languageName ?? "the translation"}
-            </button>
-            {file && (
-              <button
-                type="button"
-                className="stage-error-secondary"
-                onClick={rehearseOriginalLanguage}
-              >
-                Read the original language (takes a few minutes)
-              </button>
-            )}
-          </div>
-        </div>
-      </StageShell>
+      <LanguageChoiceScreen
+        translationName={languageChoice.languageName}
+        onRehearseTranslation={() => {
+          finalizeParse(languageChoice);
+          setLanguageChoice(null);
+        }}
+        onReadOriginal={file ? () => void rehearseOriginalLanguage() : undefined}
+      />
     );
   }
 
   if (steps.length === 0) {
     return (
-      <StageShell>
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <p className="eyebrow mb-4">No dialogue found</p>
-          <h1 className="stage-error-title">
-            This doesn’t look like a script.
-          </h1>
-          <p className="stage-error-detail">{NOT_A_SCRIPT_MESSAGE}</p>
-          <div className="stage-error-actions">
-            <button
-              type="button"
-              className="stage-error-retry"
-              onClick={() => navigate("/")}
-            >
-              Upload a different script
-            </button>
-          </div>
-        </div>
-      </StageShell>
+      <ParseErrorScreen
+        notScript
+        detail={NOT_A_SCRIPT_MESSAGE}
+        onUploadAnother={replaceScript}
+      />
     );
   }
 
@@ -1343,9 +723,7 @@ function PracticeFlow({
       scriptId={scriptId}
       scriptSaved={scriptSaved}
       pregen={pregen}
-      onRecordingActiveChange={(active) => {
-        recordingActiveRef.current = active;
-      }}
+      onRecordingActiveChange={setRecordingActive}
     />
   );
 }

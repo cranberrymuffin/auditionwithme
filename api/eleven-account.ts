@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { fetchElevenLabs, fetchVoices } from "./_elevenlabs.js";
+import { fetchElevenLabs, fetchVoices, sendVoiceServiceError } from "./_elevenlabs.js";
 import { requireAuth, requireAuthRateLimited } from "./_entitlement.js";
 import { handleCors } from "./_cors.js";
 
@@ -8,9 +8,8 @@ async function listVoices(res: VercelResponse, apiKey: string) {
     const voices = await fetchVoices(apiKey);
     return res.status(200).json({ voices });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Voices fetch error:", message);
-    return res.status(500).json({ error: message });
+    console.error("Voices fetch error:", err);
+    return res.status(500).json({ error: "Could not load voices" });
   }
 }
 
@@ -27,9 +26,8 @@ async function mintScribeToken(res: VercelResponse, apiKey: string) {
     );
 
     if (!upstream.ok) {
-      const err = await upstream.text();
-      console.error("Scribe token error:", err);
-      return res.status(upstream.status).json({ error: err });
+      console.error(`Scribe token error (${upstream.status}):`, await upstream.text());
+      return sendVoiceServiceError(upstream, res, "Could not start line tracking");
     }
 
     // Response may be a JSON object or a bare token string — handle both
@@ -46,9 +44,8 @@ async function mintScribeToken(res: VercelResponse, apiKey: string) {
     }
     return res.status(200).json({ token });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Scribe token error:", message);
-    return res.status(500).json({ error: message });
+    console.error("Scribe token error:", err);
+    return res.status(500).json({ error: "Could not start line tracking" });
   }
 }
 
@@ -76,7 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
+    console.error("ELEVENLABS_API_KEY is not set");
+    return res.status(500).json({ error: "Voices are not configured" });
   }
 
   if (req.method === "GET") return listVoices(res, apiKey);

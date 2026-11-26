@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import SiteFooter from "../components/SiteFooter";
+import AuthAside from "../components/marketing/AuthAside";
 import ConsentCheckbox from "../components/ConsentCheckbox";
 import ExternalLink from "../components/ExternalLink";
 import PasswordField from "../components/PasswordField";
@@ -11,6 +13,8 @@ import { TRIAL_DAYS } from "../lib/plan";
 import { TERMS_VERSION } from "../lib/termsText";
 import { supabase } from "../lib/supabase";
 import { authRedirectOrigin } from "../lib/platform";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from "../lib/passwordRules";
+import { rememberSignupIntent, type AuthRedirect } from "../lib/signupIntent";
 
 export default function Signup() {
   // Carries the visitor's original destination/intent (e.g. the home upload
@@ -22,6 +26,8 @@ export default function Signup() {
   const [submitting, setSubmitting] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const consentRef = useRef<HTMLInputElement>(null);
   // Resend on the "check your email" screen, rate-limited client-side to
   // match Supabase's own per-address cooldown.
   const [resendIn, setResendIn] = useState(0);
@@ -54,7 +60,13 @@ export default function Signup() {
   // step. Auto-renewal consent waits until checkout (Pricing.tsx).
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!agreed) return;
+    if (!agreed) {
+      setConsentError(
+        `Tick the box to agree to the ${IS_BETA_TESTING ? "Beta Tester NDA" : "Terms and Conditions"} before signing up.`,
+      );
+      consentRef.current?.focus();
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -93,12 +105,15 @@ export default function Signup() {
       return;
     }
 
+    // The confirmation link signs them in on /login, which picks this up
+    // and carries on to where they were going (Login.tsx).
+    rememberSignupIntent(location.state as AuthRedirect);
     setAccountCreated(true);
     setResendIn(60);
   }
 
   return (
-    <main className="cinematic-page auth-page">
+    <main className="page auth-page">
       <Seo
         title="Sign Up"
         description={
@@ -108,29 +123,26 @@ export default function Signup() {
         }
         path="/signup"
       />
-      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 
-      <section className="auth-layout">
-        <form className="auth-card" onSubmit={handleSubmit}>
+      <section className="wrap grid auth-layout">
+        <form className="form auth-form span-5" onSubmit={handleSubmit}>
           {accountCreated ? (
             <div className="auth-success" role="status">
-              <h1>Check your email to confirm your account.</h1>
+              <h1 className="title">Check your email to confirm your account.</h1>
               <p>
                 We sent a confirmation link to{" "}
-                <span className="auth-email">{email}</span>. Click it, then{" "}
-                <Link to="/login" state={location.state}>
-                  log in
-                </Link>{" "}
-                to continue.
+                <span className="auth-email">{email}</span>. Open it on this
+                device and you’ll be signed in and taken straight back to
+                where you left off.
               </p>
               <div className="auth-success-actions">
-                <Link to="/login" state={location.state} className="btn-primary-link">
-                  Go to log in
+                <Link to="/login" state={location.state} className="btn-primary">
+                  I’ve confirmed — log in
                 </Link>
                 <button
                   type="button"
-                  className="auth-secondary-button"
+                  className="btn-secondary"
                   disabled={resendIn > 0}
                   onClick={() => void resendConfirmation()}
                 >
@@ -138,7 +150,7 @@ export default function Signup() {
                 </button>
                 <button
                   type="button"
-                  className="auth-secondary-button"
+                  className="btn-secondary"
                   onClick={() => {
                     setAccountCreated(false);
                     setResendNotice(null);
@@ -152,13 +164,16 @@ export default function Signup() {
             </div>
           ) : (
             <>
-              <header>
-                {IS_BETA_TESTING && <p>Free during beta</p>}
-                <h1>Create your account</h1>
+              <header className="auth-head">
+                {IS_BETA_TESTING && <p className="slug">Free during beta</p>}
+                <h1 className="title">Create your account</h1>
               </header>
-              <label htmlFor="signup-email">Email</label>
+              <label className="field-label" htmlFor="signup-email">
+                Email
+              </label>
               <input
                 id="signup-email"
+                className="input"
                 type="email"
                 value={email}
                 autoComplete="email"
@@ -171,12 +186,31 @@ export default function Signup() {
                 label="Password"
                 value={password}
                 autoComplete="new-password"
-                minLength={6}
-                hint="At least 6 characters."
+                minLength={PASSWORD_MIN_LENGTH}
+                hint={PASSWORD_HINT}
                 onChange={setPassword}
               />
 
-              <ConsentCheckbox checked={agreed} onChange={setAgreed}>
+              <aside className="notice notice-accent signup-data-note" aria-labelledby="signup-data-note-title">
+                <strong id="signup-data-note-title">What happens to your script</strong>
+                <p>
+                  Your scripts and self-tapes are saved only on your device,
+                  never in our database. To run a rehearsal, your script’s
+                  text is sent to Anthropic and ElevenLabs, and your
+                  microphone audio to ElevenLabs, to be processed.{" "}
+                  <ExternalLink href="/faq#your-script">Read the details</ExternalLink>
+                </p>
+              </aside>
+
+              <ConsentCheckbox
+                checked={agreed}
+                onChange={(checked) => {
+                  setAgreed(checked);
+                  if (checked) setConsentError(null);
+                }}
+                error={consentError}
+                inputRef={consentRef}
+              >
                 I agree to the{" "}
                 {IS_BETA_TESTING ? (
                   <ExternalLink href="/nda">Beta Tester NDA</ExternalLink>
@@ -196,26 +230,22 @@ export default function Signup() {
 
           {!accountCreated && (
             <>
-              <button type="submit" disabled={submitting || !agreed}>
-                {submitting ? (
-                  "Creating account…"
-                ) : (
-                  <>
-                    Sign up <span aria-hidden="true">→</span>
-                  </>
-                )}
+              <button type="submit" className="btn-primary btn-lg auth-submit" disabled={submitting}>
+                {submitting ? "Creating account…" : "Sign up"}
               </button>
 
-              <footer>
+              <p className="auth-alt">
                 Already have an account?{" "}
-                <Link to="/login" state={location.state}>
+                <Link className="link" to="/login" state={location.state}>
                   Log in
                 </Link>
-              </footer>
+              </p>
             </>
           )}
         </form>
+        <AuthAside />
       </section>
+      <SiteFooter />
     </main>
   );
 }

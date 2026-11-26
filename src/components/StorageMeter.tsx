@@ -69,7 +69,7 @@ export default function StorageMeter({
   return (
     <div className={low ? "storage-meter storage-meter--low" : "storage-meter"}>
       <div className="storage-meter-row">
-        <span className="storage-meter-label">Storage on this device</span>
+        <span className="storage-meter-label slug">Storage on this device</span>
         <span className="storage-meter-free">{formatBytes(freeBytes)} free</span>
       </div>
       <div
@@ -89,7 +89,7 @@ export default function StorageMeter({
           ` · room for about ${takesLeft.toLocaleString()} more ${takesLeft === 1 ? "take" : "takes"}`}
       </p>
       {low && (
-        <p className="storage-meter-warning">
+        <p className="notice notice-warn storage-meter-warning">
           Running low on space. Download the takes you want to keep, then
           delete them here to make room.
         </p>

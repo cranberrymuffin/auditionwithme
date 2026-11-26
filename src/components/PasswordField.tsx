@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-/** An auth-card password input with a Show/Hide toggle inside its right edge. */
+/** A password input with a Show/Hide toggle inside its right edge. */
 export default function PasswordField({
   id,
   label,
@@ -23,10 +23,13 @@ export default function PasswordField({
   const hintId = hint ? `${id}-hint` : undefined;
   return (
     <>
-      <label htmlFor={id}>{label}</label>
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
       <div className={`password-field ${hint ? "has-hint" : ""}`}>
         <input
           id={id}
+          className="input"
           type={visible ? "text" : "password"}
           value={value}
           autoComplete={autoComplete}
@@ -46,7 +49,7 @@ export default function PasswordField({
         </button>
       </div>
       {hint && (
-        <p id={hintId} className="auth-hint">
+        <p id={hintId} className="auth-hint field-hint">
           {hint}
         </p>
       )}

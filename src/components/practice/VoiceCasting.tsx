@@ -264,7 +264,8 @@ export default function VoiceCasting({
             setPreviewing((playing) => (playing === speaker ? null : playing)),
         },
       );
-    } catch {
+    } catch (err) {
+      console.warn("Voice preview failed:", err);
       setPreviewing((playing) => (playing === speaker ? null : playing));
       toast("That voice preview couldn't be played. Try again.");
     }
@@ -280,7 +281,7 @@ export default function VoiceCasting({
         key={speaker}
         aria-pressed={playing}
         active={playing}
-        className="role-option--play"
+        className="cast-row--play"
         mark={playMark(playing)}
         name={displayCharacter(speaker)}
         detail={`${castVoice(speaker) ? `Voice: ${voiceDisplayName(castVoice(speaker)!.name)}` : "Choosing a voice…"} · ${dialogueTurnsLabel(spokenLines(steps, speaker).length)}`}
@@ -300,17 +301,26 @@ export default function VoiceCasting({
         stop();
         onGoToStep(step);
       }}
+      intro={
+        <>
+          <h1 className="title">Your scene partners</h1>
+          <p className="lead">Tap a part to hear who’s reading it.</p>
+        </>
+      }
     >
-      <div className="role-intro">
-        <h1>Your scene partners</h1>
-        <span>Tap a card to hear who’s reading each part.</span>
-      </div>
       <>
-          {/* Under the title, open or not; the options take the cards'
-              place while open. */}
+          {!advancedOpen && (
+            <CastGrid
+              items={speakers}
+              label="Scene partners"
+              renderCard={playCard}
+            />
+          )}
+
+          {/* Under the cast; while open, the options take the cast's place. */}
           <Accordion
             id="voice-advanced"
-            className="voice-advanced-accordion"
+            className="voice-fold"
             open={advancedOpen}
             onOpenChange={toggleAdvanced}
             showLabel="Customize voices"
@@ -319,7 +329,7 @@ export default function VoiceCasting({
             <div className="voice-advanced-panel">
               {speakers.length > 1 && (
                 <div
-                  className="speaker-tabs"
+                  className="tabs speaker-tabs"
                   role="tablist"
                   aria-label="Scene partners"
                 >
@@ -342,25 +352,23 @@ export default function VoiceCasting({
               <div className="voice-advanced-preview">
                 <button
                   type="button"
-                  className={`role-option--play ${previewing === activeSpeaker ? "is-selected" : ""}`}
+                  className={`cast-play ${previewing === activeSpeaker ? "is-selected" : ""}`}
                   aria-pressed={previewing === activeSpeaker}
                   aria-label={`Play ${displayCharacter(activeSpeaker)}'s voice`}
                   disabled={!currentVoice}
                   onClick={() => preview(activeSpeaker)}
                 >
-                  <span className="role-radio" aria-hidden="true">
+                  <span className="cast-mark" aria-hidden="true">
                     {playMark(previewing === activeSpeaker)}
                   </span>
                 </button>
-                <span className="role-option-copy">
-                  <q>{previewLineFor(activeSpeaker)}</q>
-                </span>
+                <q>{previewLineFor(activeSpeaker)}</q>
               </div>
               <div className="voice-filter-bar">
-                <div>
-                  <strong>Refine voice</strong>
-                </div>
+                <h2>Refine voice</h2>
                 <button
+                  type="button"
+                  className="btn-ghost"
                   disabled={
                     !voiceChanged &&
                     !volumeChanged &&
@@ -377,10 +385,11 @@ export default function VoiceCasting({
                   Restore default
                 </button>
               </div>
-              <label className="voice-volume">
+              <label className="range-row">
                 <span>Volume</span>
                 <input
                   type="range"
+                  className="range"
                   min="0"
                   max={MAX_CHARACTER_VOLUME}
                   step="0.05"
@@ -395,10 +404,11 @@ export default function VoiceCasting({
                 </datalist>
                 <output>{volume === 1 ? "Normal" : `${Math.round(volume * 100)}%`}</output>
               </label>
-              <label className="voice-volume">
+              <label className="range-row">
                 <span>Emotion</span>
                 <input
                   type="range"
+                  className="range"
                   min="-1"
                   max="1"
                   step={CHARACTER_EMOTION_STEP}
@@ -409,10 +419,11 @@ export default function VoiceCasting({
                 />
                 <output>{characterEmotionLabel(emotion)}</output>
               </label>
-              <label className="voice-volume">
+              <label className="range-row">
                 <span>Pace</span>
                 <input
                   type="range"
+                  className="range"
                   min={MIN_CHARACTER_PACE}
                   max={MAX_CHARACTER_PACE}
                   step="0.05"
@@ -427,7 +438,7 @@ export default function VoiceCasting({
                 </datalist>
                 <output>{characterPaceLabel(pace)}</output>
               </label>
-              <p className="voice-filter-note">
+              <p className="field-hint voice-filter-note">
                 Emotion sets how much feeling goes into each line: Reserved
                 keeps it even, Expressive lets it swing. Pace speeds the voice
                 up or slows it down without changing its pitch.
@@ -440,8 +451,9 @@ export default function VoiceCasting({
                       changedFilters.includes(key) ? "is-changed" : undefined
                     }
                   >
-                    <span>{filterLabel(key)}</span>
+                    <span className="field-label">{filterLabel(key)}</span>
                     <select
+                      className="select"
                       value={currentVoice?.[key] ?? ""}
                       onChange={(event) => pickFilter(key, event.target.value)}
                     >
@@ -459,7 +471,7 @@ export default function VoiceCasting({
                   </label>
                 ))}
               </div>
-              <p className="voice-filter-note">
+              <p className="field-hint voice-filter-note">
                 Each choice switches to the closest real voice; anything that
                 changes along with it is highlighted.
               </p>
@@ -467,21 +479,13 @@ export default function VoiceCasting({
                   Done customizing. */}
               <button
                 type="button"
-                className="voice-advanced-save"
+                className="btn-primary btn-lg btn-block voice-advanced-save"
                 onClick={() => toggleAdvanced(false)}
               >
                 Save
               </button>
             </div>
           </Accordion>
-
-          {!advancedOpen && (
-            <CastGrid
-              items={speakers}
-              label="Scene partners"
-              renderCard={playCard}
-            />
-          )}
 
           {!advancedOpen && (
             <div className="coach-offer">

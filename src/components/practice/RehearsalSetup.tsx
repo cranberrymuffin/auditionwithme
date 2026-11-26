@@ -13,6 +13,7 @@ import SetupStep from "./SetupStep";
 import NativeCameraPreview from "./NativeCameraPreview";
 import { NativeMedia } from "../../lib/native/nativeMedia";
 import { IS_NATIVE } from "../../lib/platform";
+import { isStorageNoticeDismissed, rememberStorageNoticeDismissed } from "../../lib/storageNotice";
 
 type RecorderStatus =
   | "idle"
@@ -100,7 +101,7 @@ function useDevices(refreshKey: unknown) {
             speakerFound: outputs.length > 0 || !canChooseSpeaker,
           });
         })
-        .catch(() => {});
+        .catch((err) => console.warn("Couldn't list cameras and microphones:", err));
     read();
     media.addEventListener?.("devicechange", read);
     return () => {
@@ -134,7 +135,7 @@ function useNativeDevices(cameraOn: unknown) {
           speakerFound: true,
         });
       })
-      .catch(() => {});
+      .catch((err) => console.warn("Couldn't list the phone's cameras and microphones:", err));
     return () => {
       active = false;
     };
@@ -164,7 +165,7 @@ function DevicePicker({
 }) {
   return (
     <select
-      className="device-picker"
+      className="select device-picker"
       aria-label={label}
       value={value}
       onChange={(event) =>
@@ -273,7 +274,7 @@ function NativeMicLevel() {
 /**
  * Step 4: the last stop before the take. The scene partner's lines are
  * pre-generated while the camera and microphone are set up beside them;
- * the progress bar becomes Start rehearsal once both are ready.
+ * a status line says what Start rehearsal is still waiting on.
  *
  * Rendered by Rehearsal itself, not as a step of its own, so Start's click
  * unlocks audio on the very player the take then uses.
@@ -323,6 +324,11 @@ export default function RehearsalSetup({
 }) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const [startAnywayOffered, setStartAnywayOffered] = useState(false);
+  const [storageNoticeDismissed, setStorageNoticeDismissed] = useState(isStorageNoticeDismissed);
+  const dismissStorageNotice = () => {
+    rememberStorageNoticeDismissed();
+    setStorageNoticeDismissed(true);
+  };
 
   useEffect(() => {
     if (previewRef.current) previewRef.current.srcObject = cameraStream;
@@ -484,79 +490,101 @@ export default function RehearsalSetup({
         />
       ),
       aside: (
-        <button type="button" className="speaker-test" onClick={testSpeakers}>
+        <button type="button" className="btn-secondary" onClick={testSpeakers}>
           {"Test"}
         </button>
       ),
     },
   ];
 
-  const startLabel = directing
+  // What Start is waiting on, said beside the button — never as its label.
+  const linesStatus = directing
     ? "Directing the scene…"
-    : !cameraReady
-      ? "Waiting for your camera and microphone"
-      : `${
-          linesReady
-            ? "Start rehearsal"
-            : linesStartable
-              ? "Start anyway"
-              : "Preparing your scene partner’s lines"
-        }${pregen.total > 0 ? ` · ${pregen.ready} of ${pregen.total}` : ""}`;
+    : allLinesReady
+      ? "Your scene partners’ lines are ready."
+      : `Preparing your scene partners’ lines${pregen.total > 0 ? ` · ${pregen.ready} of ${pregen.total}` : "…"}`;
+  const blockedStatus = !willRecord
+    ? null
+    : cameraStatus === "error"
+      ? "Recording needs your camera and microphone. Fix them above, or just run lines without recording."
+      : !cameraOn
+        ? "Waiting for your camera and microphone."
+        : !scriptSaved
+          ? "Saving your script to this device…"
+          : null;
+  const linesNote = allLinesReady
+    ? null
+    : pregen.failed > 0
+      ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
+      : linesReady
+        ? "The rest keep loading while you rehearse."
+        : linesStartable
+          ? "This is taking a while. You can start now; lines that aren’t ready load as you go."
+          : "You can start once enough lines are ready.";
 
   return (
-    <SetupStep step={4} scriptName={scriptName} onGoToStep={onGoToStep}>
-      <div className="role-intro">
-        <h1>Ready to rehearse?</h1>
-      </div>
-      <p className="processing-explanation">
-        {willRecord
-          ? "We’ll record a self-tape while you run the scene — or run your lines first without recording. Check your framing while your scene partners get ready."
-          : "Sit back and listen to the full scene while your scene partners get ready."}
-      </p>
-
-      {willRecord && (
-        <div className="rehearsal-setup-camera">
-          <div className={`self-tape-video ${nativePreview ? "is-native-preview" : ""}`}>
-            {nativePreview && cameraOn ? (
-              <NativeCameraPreview className="self-tape-preview" />
-            ) : cameraStream ? (
-              <video
-                className="self-tape-preview"
-                ref={previewRef}
-                muted
-                autoPlay
-                playsInline
-              />
-            ) : (
-              <div className="self-tape-placeholder">
-                {cameraStatus === "error"
-                  ? "Camera not available"
-                  : "Waiting for camera access…"}
+    <SetupStep
+      step={4}
+      scriptName={scriptName}
+      onGoToStep={onGoToStep}
+      intro={
+        <>
+          <h1 className="title">Get ready</h1>
+          <p className="lead">
+            {willRecord
+              ? "We’ll record a self-tape while you run the scene — or run your lines first without recording. Check your framing while your scene partners get ready."
+              : "Sit back and listen to the full scene while your scene partners get ready."}
+          </p>
+          {/* With the title on wide screens, so the checks and Start stay
+              above the fold; in the one column on phones. */}
+          {willRecord && (
+            <div className="rehearsal-setup-camera">
+              <div className={`self-tape-video ${nativePreview ? "is-native-preview" : ""}`}>
+                {nativePreview && cameraOn ? (
+                  <NativeCameraPreview className="self-tape-preview" />
+                ) : cameraStream ? (
+                  <video
+                    className="self-tape-preview"
+                    ref={previewRef}
+                    muted
+                    autoPlay
+                    playsInline
+                  />
+                ) : (
+                  <div className="self-tape-placeholder">
+                    {cameraStatus === "error"
+                      ? "Camera not available"
+                      : "Waiting for camera access…"}
+                  </div>
+                )}
               </div>
-            )}
-            {cameraOn && isIpad() && (
-              <p className="self-tape-hint">
-                Tip: turn off Center Stage in Control Center for steady framing.
-              </p>
-            )}
-          </div>
-          {/* Only where the camera itself zooms: no digital crop. */}
-          {cameraOn && cameraZoom && (
-            <label className="camera-zoom">
-              <span>Zoom</span>
-              <input
-                type="range"
-                min={cameraZoom.range.min}
-                max={cameraZoom.range.max}
-                step={cameraZoom.range.step}
-                value={cameraZoom.value}
-                onChange={(event) => onZoom(Number(event.target.value))}
-              />
-              <output>{cameraZoom.value.toFixed(1)}×</output>
-            </label>
+              {cameraOn && isIpad() && (
+                <p className="field-hint self-tape-hint">
+                  Tip: turn off Center Stage in Control Center for steady framing.
+                </p>
+              )}
+              {/* Only where the camera itself zooms: no digital crop. */}
+              {cameraOn && cameraZoom && (
+                <label className="range-row camera-zoom">
+                  <span>Zoom</span>
+                  <input
+                    type="range"
+                    className="range"
+                    min={cameraZoom.range.min}
+                    max={cameraZoom.range.max}
+                    step={cameraZoom.range.step}
+                    value={cameraZoom.value}
+                    onChange={(event) => onZoom(Number(event.target.value))}
+                  />
+                  <output>{cameraZoom.value.toFixed(1)}×</output>
+                </label>
+              )}
+            </div>
           )}
-        </div>
-      )}
+        </>
+      }
+    >
+
       <ul className="rehearsal-setup-devices" aria-label="Your devices">
         {devices.map((device) => (
           <li
@@ -569,7 +597,7 @@ export default function RehearsalSetup({
                   : undefined
             }
           >
-            <span aria-hidden="true">
+            <span className="device-mark" aria-hidden="true">
               {device.done ? "✓" : device.failed ? "✕" : "○"}
             </span>
             <strong>{device.name}</strong>
@@ -579,11 +607,11 @@ export default function RehearsalSetup({
         ))}
       </ul>
       {willRecord && cameraStatus === "error" && (
-        <div className="device-problem" role="alert">
+        <div className="notice notice-danger device-problem" role="alert">
           <p>{cameraError}</p>
           <button
             type="button"
-            className="speaker-test"
+            className="btn-secondary"
             onClick={onRetryCamera}
           >
             Try again
@@ -591,14 +619,14 @@ export default function RehearsalSetup({
         </div>
       )}
       {willRecord && permissionSlow && (
-        <div className="device-problem" role="status">
+        <div className="notice notice-warn device-problem" role="status">
           <p>
             Look for your browser’s permission prompt near the address bar and
             choose Allow for the camera and microphone.
           </p>
           <button
             type="button"
-            className="speaker-test"
+            className="btn-secondary"
             onClick={onRetryCamera}
           >
             Ask again
@@ -606,32 +634,54 @@ export default function RehearsalSetup({
         </div>
       )}
 
-      {/* The progress bar is the start button: disabled until enough lines
-          are ready (or it's been a while, or some failed, when it offers
-          Start anyway) and the camera is on. */}
+      {willRecord && !storageNoticeDismissed && (
+        <div className="notice device-problem device-storage-notice" role="note">
+          <p>
+            <strong>Your takes stay on this device.</strong> Scripts and
+            recordings are saved only in this {IS_NATIVE ? "app" : "browser"},
+            not on our servers, so they won’t appear on your other devices
+            and are lost if you clear {IS_NATIVE ? "the app’s" : "this site’s"} data.
+            Download a take to keep it.
+          </p>
+          <button type="button" className="btn-ghost" onClick={dismissStorageNotice}>
+            Got it
+          </button>
+        </div>
+      )}
+
+      <div className="setup-start-status">
+        <div className="setup-start-meter" aria-hidden="true">
+          <i
+            style={{
+              width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : pregen.done ? 100 : 0}%`,
+            }}
+          />
+        </div>
+        <p id="setup-start-status" role="status">
+          {linesStatus}
+          {blockedStatus && <span>{blockedStatus}</span>}
+        </p>
+        {linesNote && <p className="setup-start-note">{linesNote}</p>}
+      </div>
       <button
         type="button"
-        className={`preparing-progress ${canStart ? "is-ready" : ""}`}
+        className="btn-primary btn-lg btn-block setup-start"
         disabled={!canStart}
+        aria-describedby="setup-start-status"
         onClick={onStart}
       >
-        <i
-          aria-hidden="true"
-          style={{
-            width: `${pregen.total ? (pregen.ready / pregen.total) * 100 : pregen.done ? 100 : 0}%`,
-          }}
-        />
-        <span role="status">{startLabel}</span>
+        {linesReady || !canStart ? "Start rehearsal" : "Start without waiting"}
       </button>
-      {/* Back, and a run without the tape, beside the start button's row. */}
+      {/* Back, and a run without the tape, under the start button. */}
       <div className="rehearsal-setup-actions">
-        <button type="button" className="btn-secondary" onClick={onBack}>
+        <button type="button" className="btn-ghost" onClick={onBack}>
           Back
         </button>
         {onPracticeRun && (
           <button
             type="button"
             className="btn-secondary"
+            // Needs only the lines: no tape, so no camera to wait for.
             disabled={!linesStartable}
             onClick={onPracticeRun}
           >
@@ -639,18 +689,6 @@ export default function RehearsalSetup({
           </button>
         )}
       </div>
-      {/* Every line loaded: nothing left to explain. */}
-      {!allLinesReady && (
-        <div className="preparing-note">
-          <p>
-            {pregen.failed > 0
-              ? "Some lines couldn’t be pre-loaded; they’ll load as you go."
-              : linesReady
-                ? "The rest keep loading while you rehearse."
-                : "You can start once enough lines are ready."}
-          </p>
-        </div>
-      )}
     </SetupStep>
   );
 }

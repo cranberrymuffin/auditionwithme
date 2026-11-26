@@ -3,7 +3,7 @@ import { BrandMark } from "../SiteNav";
 import StepProgress from "./StepProgress";
 
 /** The header on every practice setup step: the brand, home, on the left;
- * the step bars (the way back to an earlier step) in the middle. */
+ * the numbered steps (the way back to an earlier step) on the right. */
 export default function SetupHeader({
   step,
   onGoToStep,
@@ -14,10 +14,15 @@ export default function SetupHeader({
 }) {
   return (
     <header className="setup-header">
-      <Link to="/" aria-label="Audition With Me home">
-        <BrandMark />
-      </Link>
-      <StepProgress current={step} onGoToStep={onGoToStep} />
+      <div className="setup-header-inner">
+        <Link to="/" className="site-nav-brand" aria-label="Audition With Me home">
+          <BrandMark />
+          <span className="brand-wordmark" aria-hidden="true">
+            Audition With Me
+          </span>
+        </Link>
+        <StepProgress current={step} onGoToStep={onGoToStep} />
+      </div>
     </header>
   );
 }

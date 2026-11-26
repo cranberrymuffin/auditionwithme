@@ -31,3 +31,8 @@ test_data/*
 benchmarks/out/
 # Supabase CLI link state (per machine, changes with `supabase link`)
 supabase/.temp/
+# Env files hold secrets; only the name-only template is tracked.
+.env*
+!.env.example
+# Local scratch previews
+.coach-preview.*

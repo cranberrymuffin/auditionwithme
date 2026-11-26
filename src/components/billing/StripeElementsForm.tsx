@@ -7,36 +7,89 @@ import {
 import type { Appearance } from "@stripe/stripe-js";
 import { stripePromise } from "../../lib/stripe";
 
-// Matches the app's night palette (index.css .modal-content) so the card
-// fields read as part of the modal rather than a white box dropped into it.
+// Stripe draws the card fields in its own iframe, which can't read the
+// page's CSS variables: these are the values of the tokens in
+// src/styles/tokens.css, written out. Change one there, change it here.
+const TOKENS = {
+  surface1: "#151f2e",
+  ink: "#f4eee4",
+  inkSoft: "#c5bfb4",
+  inkMuted: "#969188",
+  line: "#283344",
+  lineStrong: "#606e85",
+  accent: "#ef8f6f",
+  accentLine: "rgba(239, 143, 111, 0.55)",
+  danger: "#f2646a",
+};
+
+// The fields are drawn like .input (components.css) on the modal's surface:
+// same height, border, radius and focus ring, so the card form reads as
+// part of the dialog rather than a box dropped into it.
 const appearance: Appearance = {
   theme: "night",
   variables: {
-    colorPrimary: "#f4a583",
-    colorBackground: "#0f1b2b",
-    colorText: "#f8f1e6",
-    colorTextSecondary: "rgba(248, 241, 230, 0.68)",
-    colorTextPlaceholder: "rgba(248, 241, 230, 0.38)",
-    colorDanger: "#ffb1a0",
-    fontFamily: '"Britti Sans", ui-sans-serif, system-ui, sans-serif',
-    fontSizeBase: "15px",
-    borderRadius: "9px",
+    colorPrimary: TOKENS.accent,
+    colorBackground: TOKENS.surface1,
+    colorText: TOKENS.ink,
+    colorTextSecondary: TOKENS.inkSoft,
+    colorTextPlaceholder: TOKENS.inkMuted,
+    colorDanger: TOKENS.danger,
+    fontFamily: '"Britti Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
+    // 16px: anything smaller makes iOS zoom the page on focus.
+    fontSizeBase: "16px",
+    fontSizeSm: "14px",
+    borderRadius: "4px",
     spacingUnit: "4px",
+    gridRowSpacing: "20px",
+    gridColumnSpacing: "12px",
   },
   rules: {
+    ".Label": {
+      marginBottom: "6px",
+      color: TOKENS.inkSoft,
+      fontSize: "14px",
+      fontWeight: "600",
+    },
     ".Input": {
-      border: "1px solid rgba(255, 255, 255, 0.17)",
+      padding: "12px 14px",
+      border: `1px solid ${TOKENS.lineStrong}`,
+      backgroundColor: TOKENS.surface1,
       boxShadow: "none",
+      transition: "border-color 160ms",
+    },
+    ".Input:hover": {
+      border: `1px solid ${TOKENS.inkMuted}`,
     },
     ".Input:focus": {
-      border: "1px solid #ef9a78",
-      boxShadow: "0 0 0 3px rgba(239, 154, 120, 0.18)",
+      border: `1px solid ${TOKENS.accent}`,
+      boxShadow: `0 0 0 2px ${TOKENS.accentLine}`,
+      outline: "none",
     },
-    ".Label": { fontWeight: "600" },
-    ".AccordionItem": {
-      border: "1px solid rgba(255, 255, 255, 0.14)",
-      backgroundColor: "rgba(255, 255, 255, 0.02)",
+    ".Input--invalid": {
+      border: `1px solid ${TOKENS.danger}`,
       boxShadow: "none",
+    },
+    ".Error": {
+      marginTop: "6px",
+      color: TOKENS.danger,
+      fontSize: "14px",
+    },
+    // Card is the only method, so its accordion frame is just a box around
+    // the fields: flatten it to nothing.
+    ".AccordionItem": {
+      padding: "0",
+      border: "none",
+      backgroundColor: "transparent",
+      boxShadow: "none",
+    },
+    ".Block": {
+      border: `1px solid ${TOKENS.line}`,
+      backgroundColor: "transparent",
+      boxShadow: "none",
+    },
+    ".TermsText": {
+      color: TOKENS.inkMuted,
+      fontSize: "13px",
     },
   },
 };
@@ -166,11 +219,11 @@ function InnerForm({ submitLabel, onConfirmed, onCancel, showTotal }: Omit<Props
       </div>
       <div className="stripe-elements-form-actions">
         {onCancel && (
-          <button type="button" onClick={onCancel} disabled={submitting}>
+          <button type="button" className="btn-ghost" onClick={onCancel} disabled={submitting}>
             Cancel
           </button>
         )}
-        <button type="submit" disabled={submitting}>
+        <button type="submit" className="btn-primary" disabled={submitting}>
           {submitting ? "Processing…" : submitLabel}
         </button>
       </div>

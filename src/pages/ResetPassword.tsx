@@ -2,11 +2,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
+import SiteFooter from "../components/SiteFooter";
+import AuthAside from "../components/marketing/AuthAside";
 import PasswordField from "../components/PasswordField";
 import { supabase } from "../lib/supabase";
 import { authRedirectOrigin } from "../lib/platform";
 import { friendlyAuthError } from "../lib/authErrors";
 import { useToast } from "../lib/toast";
+import { PASSWORD_HINT, PASSWORD_MIN_LENGTH } from "../lib/passwordRules";
 
 /** /forgot-password: ask for the email a reset link goes to. */
 export function ForgotPassword() {
@@ -34,20 +37,19 @@ export function ForgotPassword() {
   }
 
   return (
-    <main className="cinematic-page auth-page">
+    <main className="page auth-page">
       <Seo
         title="Reset Password"
         description="Reset your AuditionWithMe password."
         path="/forgot-password"
         noindex
       />
-      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
-      <section className="auth-layout">
-        <form className="auth-card" onSubmit={handleSubmit}>
+      <section className="wrap grid auth-layout">
+        <form className="form auth-form span-5" onSubmit={handleSubmit}>
           {sent ? (
             <div className="auth-success" role="status">
-              <h1>Check your email.</h1>
+              <h1 className="title">Check your email.</h1>
               <p>
                 If an account exists for{" "}
                 <span className="auth-email">{email}</span>, a link to reset
@@ -57,25 +59,28 @@ export function ForgotPassword() {
               <div className="auth-success-actions">
                 <button
                   type="button"
-                  className="auth-secondary-button"
+                  className="btn-secondary"
                   onClick={() => setSent(false)}
                 >
                   Use a different email
                 </button>
-                <Link to="/login" className="btn-primary-link">
+                <Link to="/login" className="btn-primary">
                   Back to log in
                 </Link>
               </div>
             </div>
           ) : (
             <>
-              <header>
-                <p>Forgot your password?</p>
-                <h1>Reset it</h1>
+              <header className="auth-head">
+                <p className="slug">Forgot your password?</p>
+                <h1 className="title">Reset it</h1>
               </header>
-              <label htmlFor="reset-email">Email</label>
+              <label className="field-label" htmlFor="reset-email">
+                Email
+              </label>
               <input
                 id="reset-email"
+                className="input"
                 type="email"
                 value={email}
                 autoComplete="email"
@@ -87,16 +92,21 @@ export function ForgotPassword() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={submitting}>
+              <button type="submit" className="btn-primary btn-lg auth-submit" disabled={submitting}>
                 {submitting ? "Sending…" : "Email me a reset link"}
               </button>
-              <footer>
-                Remembered it? <Link to="/login">Log in</Link>
-              </footer>
+              <p className="auth-alt">
+                Remembered it?{" "}
+                <Link className="link" to="/login">
+                  Log in
+                </Link>
+              </p>
             </>
           )}
         </form>
+        <AuthAside />
       </section>
+      <SiteFooter />
     </main>
   );
 }
@@ -146,40 +156,39 @@ export default function ResetPassword() {
   }
 
   return (
-    <main className="cinematic-page auth-page">
+    <main className="page auth-page">
       <Seo
         title="Set a New Password"
         description="Choose a new AuditionWithMe password."
         path="/reset-password"
         noindex
       />
-      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
-      <section className="auth-layout">
-        <form className="auth-card" onSubmit={handleSubmit}>
+      <section className="wrap grid auth-layout">
+        <form className="form auth-form span-5" onSubmit={handleSubmit}>
           {hasSession === false ? (
             <div className="auth-success" role="status">
-              <h1>That link has expired.</h1>
+              <h1 className="title">That link has expired.</h1>
               <p>Reset links work once and only for a short time. Request a new one and use it right away.</p>
               <div className="auth-success-actions">
-                <Link to="/forgot-password" className="auth-secondary-button auth-link-button">
+                <Link to="/forgot-password" className="btn-primary">
                   Send a new link
                 </Link>
               </div>
             </div>
           ) : (
             <>
-              <header>
-                <p>Almost there</p>
-                <h1>Set a new password</h1>
+              <header className="auth-head">
+                <p className="slug">Almost there</p>
+                <h1 className="title">Set a new password</h1>
               </header>
               <PasswordField
                 id="new-password"
                 label="New password"
                 value={password}
                 autoComplete="new-password"
-                minLength={6}
-                hint="At least 6 characters."
+                minLength={PASSWORD_MIN_LENGTH}
+                hint={PASSWORD_HINT}
                 onChange={setPassword}
               />
               {error && (
@@ -187,13 +196,19 @@ export default function ResetPassword() {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={submitting || hasSession === null}>
+              <button
+                type="submit"
+                className="btn-primary btn-lg auth-submit"
+                disabled={submitting || hasSession === null}
+              >
                 {submitting ? "Saving…" : "Save new password"}
               </button>
             </>
           )}
         </form>
+        <AuthAside />
       </section>
+      <SiteFooter />
     </main>
   );
 }

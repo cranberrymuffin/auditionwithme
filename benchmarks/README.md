@@ -8,7 +8,7 @@ that calls the real services and writes its output under `benchmarks/out/`
 
 | Folder | What's in it | Costs money? |
 | --- | --- | --- |
-| `checks/` | Assertions on pure logic (`npm run test:*`) | No |
+| `checks/` | Assertions on pure logic (`npm test`, `npm run test:*`) | No |
 | `parse/` | Script parsing: PDF upload latency, sides-parse comparison | Anthropic |
 | `voice/` | The scene partner's voice: emotiveness benchmark, tone A/B | Anthropic + ElevenLabs |
 
@@ -20,10 +20,15 @@ npm run test:cutoff       # end-of-line cut-off guard (checks/cutoff-guard.ts)
 npm run test:metrics      # per-take rehearsal metrics (checks/take-metrics.ts)
 npm run test:parse-cache  # saving a parse as it arrives (checks/parse-cache.ts)
 npm run test:pregen       # reader-audio cache keys and pre-generation scheduling (checks/pregen.ts)
+npm run test:screenplay   # deterministic screenplay-layout parser (checks/screenplay.ts)
 npm run test:emotion      # emotiveness harness checks and plan, no API calls (voice/emotion.ts --dry-run)
 ```
 
-Run them all before a PR; CI doesn't yet.
+`npm test` runs all of them (`checks/run-all.ts`: every `*.ts` file in
+`checks/`, then the emotion dry run), keeps going after a failure and exits
+non-zero if any suite failed. A new file in `checks/` is picked up without
+touching `package.json`. CI runs `npm test` on every pull request
+(`.github/workflows/ci.yml`).
 
 ## Parsing
 
@@ -37,18 +42,19 @@ Haiku text, Sonnet text, Sonnet reading the PDF) on the same sides and scores
 each against the ground truth in `parse/sides-fixtures.ts`: assertions passed,
 spoken lines copied verbatim, run-to-run stability (`--runs N`), and spoken
 lines that differ from the rules parse. Narrow with `--only rules,sonnet-pdf`
-or `--file CANNED`. Loads `ANTHROPIC_API_KEY` from `.env.development.local`.
+or `--file CANNED`. Loads `ANTHROPIC_API_KEY` from `.env.development.local` (not `.env.local`,
+which `npm run dev` reads); the other benchmarks read it from the shell.
 
-**PDF upload latency** (`parse/pdf-latency.mjs`, `npm run benchmark:pdf`):
+**PDF upload latency** (`parse/pdf-latency.mjs`, `npm run bench:pdf`):
 compares the original binary-PDF model request with the text-first request.
 
 ```sh
 cupsfilter -m application/pdf benchmarks/parse/fixture-script.txt > /tmp/audition-benchmark.pdf
-npm run benchmark:pdf -- /tmp/audition-benchmark.pdf
+npm run bench:pdf -- /tmp/audition-benchmark.pdf
 # end to end, two local servers with the same ANTHROPIC_API_KEY:
 BASELINE_URL=http://127.0.0.1:5174/api/parse-script \
 OPTIMIZED_URL=http://127.0.0.1:5173/api/parse-script \
-BENCHMARK_ROUNDS=6 npm run benchmark:pdf -- /tmp/audition-benchmark.pdf
+BENCHMARK_ROUNDS=6 npm run bench:pdf -- /tmp/audition-benchmark.pdf
 ```
 
 Measured July 25, 2026 on the two-page, 29-line fixture (one model request

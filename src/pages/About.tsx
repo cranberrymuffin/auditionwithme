@@ -1,88 +1,73 @@
-import { useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import SiteNav from "../components/SiteNav";
-import { useAuth } from "../contexts/AuthContext";
-import { IS_BETA_TESTING } from "../lib/beta";
-import { TRIAL_DAYS } from "../lib/plan";
+import SiteFooter from "../components/SiteFooter";
+import HowSteps from "../components/marketing/HowSteps";
+import StartCta from "../components/marketing/StartCta";
 
-const steps = [
-  ["01", "Upload", "Add your PDF sides."],
-  ["02", "Choose your role", "Select the character you’re rehearsing."],
-  [
-    "03",
-    "Rehearse & record",
-    "Hear every other role while your camera records a self-tape of your take.",
-  ],
-  [
-    "04",
-    "Download & submit",
-    "Save your self-tape from My Account and send it in for the audition.",
-  ],
+// What a rehearsal needs, as the FAQ states it (src/pages/Faq.tsx).
+const needs = [
+  ["Your sides", "A PDF of your audition sides or script."],
+  ["A browser or the app", "Chrome or Safari, or the app from the App Store."],
+  ["Camera and microphone", "The microphone follows your lines; the camera records the self-tape."],
 ];
 
 export default function About() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-
   return (
-    <main className="cinematic-page about-page-clean">
+    <main className="page">
       <Seo
         title="How It Works"
         description="Upload your sides, choose your role, and rehearse with every other character read aloud while your lines follow along on screen. Record a self-tape as you go and download it to submit for your audition."
         path="/how-it-works"
       />
-      <div className="cinematic-backdrop" aria-hidden="true" />
       <SiteNav />
 
-      <section className="about-product-layout">
-        <div className="about-product-intro">
-          <p>Built for rehearsal</p>
-          <h1>A better way to get off book</h1>
-          <div>
-            Upload your sides, choose your role, and rehearse with every other
-            character read aloud while your lines follow along on screen.
-            Record a self-tape as you go, then download it to submit for
-            your audition.
-          </div>
-          <button
-            type="button"
-            className="upload-cta about-cta-button"
-            onClick={() => navigate(user ? "/" : "/signup")}
-          >
-            <span className="upload-copy">
-              {user ? (
-                <>
-                  <strong>Upload your script</strong>
-                  <small>Rehearse your next scene</small>
-                </>
-              ) : (
-                <>
-                  <strong>Start rehearsing free</strong>
-                  <small>{IS_BETA_TESTING ? "Free during beta" : `${TRIAL_DAYS} days free`}</small>
-                </>
-              )}
-            </span>
-            <span aria-hidden="true">→</span>
-          </button>
-        </div>
+      <header className="wrap page-head">
+        <p className="slug">How it works</p>
+        <h1 className="title">From your sides to a self-tape, in four steps.</h1>
+        <p className="lead">
+          Upload your sides, choose your role, and rehearse with every other
+          character read aloud while your lines follow along on screen.
+          Record a self-tape as you go, then download it to submit for your
+          audition.
+        </p>
+      </header>
 
-        <section className="about-process-panel" aria-labelledby="how-it-works-title">
-          <header>
-            <h2 id="how-it-works-title">How it works</h2>
-          </header>
-          <ol>
-            {steps.map(([number, title, detail]) => (
-              <li key={number}>
-                <span>{number}</span>
-                <div>
-                  <strong>{title}</strong>
-                  <p>{detail}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
+      <section className="wrap" aria-labelledby="how-it-works-title">
+        <h2 id="how-it-works-title" className="sr-only">
+          The four steps
+        </h2>
+        <HowSteps layout="rows" />
       </section>
+
+      <section className="section" aria-labelledby="how-needs-title">
+        <div className="wrap grid">
+          <header className="section-head span-4">
+            <p className="slug">Before you start</p>
+            <h2 id="how-needs-title" className="title">
+              What you need.
+            </h2>
+          </header>
+          <dl className="spec-list span-7 at-6">
+            {needs.map(([term, detail]) => (
+              <div key={term}>
+                <dt>{term}</dt>
+                <dd>{detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
+      <section className="section closing" aria-labelledby="how-closing-title">
+        <div className="wrap">
+          <h2 id="how-closing-title" className="title">
+            Try it with your own sides.
+          </h2>
+          <StartCta />
+        </div>
+      </section>
+
+      <SiteFooter />
     </main>
   );
 }

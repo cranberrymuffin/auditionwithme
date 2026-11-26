@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 
 /**
- * A setup step's fold-away section (step 1's script, step 3's advanced
- * options): a row with a Show/Hide toggle and any other actions, then the
- * content while it's open.
+ * A setup step's fold-away section (step 3's voice options): a row with a
+ * Show/Hide toggle and any other actions, then the content while it's open.
  */
 export default function Accordion({
   id,
@@ -27,8 +26,8 @@ export default function Accordion({
   children: ReactNode;
 }) {
   return (
-    <div className={`script-accordion ${className ?? ""}`}>
-      <div className="script-accordion-actions">
+    <div className={`fold ${open ? "is-open" : ""} ${className ?? ""}`}>
+      <div className="fold-actions">
         <button
           type="button"
           className="btn-secondary"

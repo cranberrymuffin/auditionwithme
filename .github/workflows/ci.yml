@@ -1,0 +1,46 @@
+name: CI
+
+# Type check, lint, check suites and a production build on every pull
+# request and on pushes to the long-lived branches. Needs no secrets: the
+# checks call no paid API, and the build only needs the public VITE_* values
+# to be present, so placeholders stand in for them below.
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # src/lib/supabase.ts and src/lib/stripe.ts throw at import when these
+      # are missing, which fails the prerender step. The values are never
+      # used to reach a real project.
+      VITE_SUPABASE_URL: https://placeholder.supabase.co
+      VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+      VITE_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+      - run: npm run build

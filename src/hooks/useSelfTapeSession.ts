@@ -4,7 +4,8 @@ import { useSelfTapeRecorder } from "./useSelfTapeRecorder";
 import { extensionForMimeType, saveTape, saveTapeFile } from "../lib/selfTapeStore";
 import { NativeMedia } from "../lib/native/nativeMedia";
 import { deviceClass, type TakeMetrics } from "../lib/takeMetrics";
-import { notifyAuditionClosed } from "../lib/feedbackGate";
+import { notifyFeedbackOwedChanged } from "../lib/feedbackGate";
+import { isStorageFullError } from "../lib/localDb";
 import { useToast } from "../lib/toast";
 
 /**
@@ -72,13 +73,17 @@ export function useSelfTapeSession(scriptId: string | null, role: string) {
         }
       } catch (saveError) {
         console.error("Failed to save self-tape locally:", saveError);
-        toast("Your self-tape couldn't be saved. Please try again.");
+        toast(
+          isStorageFullError(saveError)
+            ? "This device is out of storage, so your self-tape couldn't be saved. Free up space, then try again."
+            : "Your self-tape couldn't be saved. Please try again.",
+        );
         return null;
       }
 
       // Beta: a saved audition owes feedback — see FeedbackGate.tsx, mounted
       // at the app root, and src/lib/beta.ts for the flag that turns it off.
-      notifyAuditionClosed();
+      notifyFeedbackOwedChanged();
       return id;
     } catch (err) {
       console.error("Self-tape finish() failed unexpectedly:", err);

@@ -2,16 +2,14 @@ import type { Step } from "../types";
 import { loadPdf, renderPdfPageToJpeg } from "./pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { apiFetch } from "./api";
-import { throwIfError } from "./apiError";
+import { apiFailure } from "./parseErrors";
+import { PAGES_PER_CHUNK, chunkIsFull } from "./pageChunks";
 
 // Scanned (image-only) PDFs have no text layer, so the fast text parse can't
 // run. Instead: render pages to JPEGs in the browser, send them to
 // /api/parse-pages in page-range chunks — each chunk parses in parallel while
 // later pages are still rendering — then stitch the chunk results together.
-
-// Small chunks keep each response short — long verbatim transcriptions trip
-// the API's content filter, and shorter chunks parallelize better.
-const PAGES_PER_CHUNK = 5;
+// lib/pageChunks.ts decides where one chunk ends and the next begins.
 
 export type ScannedParseResult = {
   steps: Step[];
@@ -64,14 +62,7 @@ export async function parseScannedPdf(
   // chunk's parse request as soon as its pages are ready, so network/model time
   // overlaps with rendering the rest of the document.
   const chunkPromises: Promise<ChunkResult>[] = [];
-  for (let start = 1; start <= totalPages; start += PAGES_PER_CHUNK) {
-    const end = Math.min(start + PAGES_PER_CHUNK - 1, totalPages);
-    const images: string[] = [];
-    for (let pageNumber = start; pageNumber <= end; pageNumber += 1) {
-      images.push(await renderPdfPageToJpeg(document, pageNumber));
-      progress.renderedPages += 1;
-      onProgress?.({ ...progress });
-    }
+  const send = (images: string[]) => {
     chunkPromises.push(
       parseChunk(images, grant, options).then((result) => {
         progress.parsedChunks += 1;
@@ -79,7 +70,26 @@ export async function parseScannedPdf(
         return result;
       }),
     );
+    // Until every page is rendered the chunk count is an estimate (by
+    // page count); heavy pages split into more.
+    progress.totalChunks = Math.max(progress.totalChunks, chunkPromises.length);
+  };
+  let images: string[] = [];
+  let chars = 0;
+  for (let pageNumber = 1; pageNumber <= totalPages; pageNumber += 1) {
+    const image = await renderPdfPageToJpeg(document, pageNumber);
+    if (chunkIsFull(images.length, chars, image.length)) {
+      send(images);
+      images = [];
+      chars = 0;
+    }
+    images.push(image);
+    chars += image.length;
+    progress.renderedPages += 1;
+    onProgress?.({ ...progress });
   }
+  if (images.length) send(images);
+  progress.totalChunks = chunkPromises.length;
 
   const results = await Promise.all(chunkPromises);
   const merged = mergeChunkResults(results);
@@ -146,22 +156,22 @@ async function parseChunk(
       preferOriginalLanguage: options?.preferOriginalLanguage,
     }),
   });
-  // An expired/invalid session or grant won't clear on retry — surface it
-  // immediately so the caller can redirect instead of burning 3 attempts.
-  if (response.status === 401 || response.status === 403) {
-    await throwIfError(response, "A section of the script could not be read.");
-  }
   if (!response.ok) {
-    if (attempt < CHUNK_MAX_ATTEMPTS - 1) {
+    // An expired session or grant, a body over the size limit and a rate
+    // limit won't clear on an immediate retry — surface them at once
+    // instead of burning three attempts. The rest (the upstream content
+    // filter, a timeout) are stochastic, and a retry usually clears them.
+    const retryable = ![401, 403, 413, 429].includes(response.status);
+    if (retryable && attempt < CHUNK_MAX_ATTEMPTS - 1) {
       await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
       return parseChunk(images, grant, options, attempt + 1);
     }
-    await throwIfError(response, "A section of the script could not be read.");
+    throw await apiFailure(response, "A section of the script could not be read.");
   }
   return (await response.json()) as ChunkResult;
 }
 
-export function mergeChunkResults(results: ChunkResult[]): ScannedParseResult {
+function mergeChunkResults(results: ChunkResult[]): ScannedParseResult {
   const steps: Step[] = [];
   const characters: string[] = [];
   // Character casing/spelling can drift between chunks — canonicalize to the
