@@ -1,27 +1,92 @@
-name: Deploy Supabase migrations
+name: Supabase migrations
 
-# Only runs when a migration file actually changes, so ordinary app pushes
-# don't touch the database.
+# Pull requests that touch a migration get a check; a push to main that
+# touches one applies it to the PRODUCTION database. Ordinary app pushes
+# don't run this at all.
+#
+# One-time setup by the repo owner (Settings on GitHub):
+#   1. Environments > New environment > "production". Add yourself under
+#      "Required reviewers" so every production migration waits for an
+#      explicit approval, and restrict "Deployment branches" to main.
+#      Without required reviewers the `environment:` line below gates nothing.
+#   2. Secrets SUPABASE_ACCESS_TOKEN and SUPABASE_DB_PASSWORD. Keeping them
+#      as repository secrets lets the pull-request dry run use them; moving
+#      them to the "production" environment is stricter (only the approved
+#      deploy job can read them) and the dry run then skips itself.
+#   Pull requests from forks never receive secrets, so they only get the
+#   file-name check.
 on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
   push:
     branches: [main]
     paths:
       - "supabase/migrations/**"
 
+permissions:
+  contents: read
+
+env:
+  # Pinned so a new CLI release can't change how production is migrated.
+  # Bump deliberately, and try the new version with --dry-run first.
+  SUPABASE_CLI_VERSION: 3.4.0
+  # Not a secret — this is the project ref embedded in VITE_SUPABASE_URL.
+  SUPABASE_PROJECT_ID: ebahpwiwblxrjtusuxjc
+
 jobs:
-  migrate:
+  check:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      # Not a secret — this is the project ref embedded in VITE_SUPABASE_URL.
-      SUPABASE_PROJECT_ID: ebahpwiwblxrjtusuxjc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # `supabase db push` orders and records migrations by this prefix.
+      - name: Check migration file names
+        run: |
+          bad=$(ls supabase/migrations | grep -vE '^[0-9]{14}_[a-z0-9_]+\.sql$' || true)
+          if [ -n "$bad" ]; then
+            echo "Migrations must be named <YYYYMMDDHHMMSS>_<snake_case>.sql:"
+            echo "$bad"
+            exit 1
+          fi
+
+      # Lists what a merge would apply, without applying it. Skipped when
+      # the secrets aren't available to this run (see the setup notes).
+      - uses: supabase/setup-cli@v1
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_DB_PASSWORD != ''
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Dry run against production
+        if: env.SUPABASE_ACCESS_TOKEN != '' && env.SUPABASE_DB_PASSWORD != ''
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_ID"
+          supabase db push --dry-run
+
+  migrate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Waits for approval once the environment has required reviewers.
+    environment: production
+    # One production migration at a time, and never cancel one mid-run.
+    concurrency:
+      group: supabase-migrations-production
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
       - run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 

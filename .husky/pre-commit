@@ -1,0 +1,4 @@
+# Lint is the fast part; the type check covers src/, vite.config.ts and api/.
+# Skip once with `git commit --no-verify`.
+npm run lint -- --quiet
+npm run typecheck
