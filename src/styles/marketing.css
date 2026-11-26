@@ -121,10 +121,12 @@ html.is-native .hero {
   }
 }
 /* Upright phones and tablets: the sign sits in the top third of the tall
-   crop, so the copy moves to the foot of the hero, over the dark hillside. */
+   crop, so the copy moves to the foot of the hero, over the dark hillside.
+   The floor keeps the copy below the sign in a browser tab, where the
+   toolbars leave far less than a full screen. */
 @media (max-aspect-ratio: 4 / 5) {
   .hero {
-    min-height: min(100svh, 820px);
+    min-height: clamp(680px, 100svh, 820px);
     align-items: flex-end;
     padding-bottom: var(--space-7);
   }
