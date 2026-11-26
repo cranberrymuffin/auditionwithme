@@ -11,31 +11,8 @@
 //
 // Requires SUPABASE_SERVICE_ROLE_KEY, VITE_SUPABASE_URL in the environment or .env.development.local.
 
-import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
-
-async function loadEnvLocal() {
-  try {
-    const text = await readFile(new URL("../.env.development.local", import.meta.url), "utf8");
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eq = trimmed.indexOf("=");
-      if (eq === -1) continue;
-      const key = trimmed.slice(0, eq).trim();
-      let value = trimmed.slice(eq + 1).trim();
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
-      }
-      if (process.env[key] === undefined) process.env[key] = value;
-    }
-  } catch {
-    // no .env.development.local, fall back to whatever is already in process.env
-  }
-}
+import { loadEnvLocal } from "./_env.mjs";
 
 // Bucket contents are one folder per user ("<user_id>/<script_id>.pdf") —
 // list the top-level folders, then list+collect files inside each.

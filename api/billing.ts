@@ -1,30 +1,29 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { requireAuth } from "./_entitlement.js";
 import { TRIAL_DAYS, hasPlanAccess, type Plan } from "../src/lib/plan.js";
 import { handleCors } from "./_cors.js";
 import { TERMS_VERSION } from "../src/lib/termsText.js";
+import { serviceClient } from "./_supabase.js";
+import { stripeClient } from "./_stripe.js";
+import { emailHasUsedTrial, trialEmailHash } from "./_trial.js";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const PRODUCTION_WEB_ORIGIN = "https://www.auditionwithme.com";
 
-// Same service-role client pattern as api/_entitlement.ts — bypasses RLS so we
-// can read/write the caller's entitlements row server-side.
-function serviceClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
-    );
+// Where Stripe sends the browser back after a confirmation that needed a
+// redirect (3-D Secure and the like). In production this is configured
+// (APP_WEB_ORIGIN, else the production site), never taken from the request's
+// Origin header, which the caller controls. Local dev and preview
+// deployments have no fixed address, so only there is the header used.
+function webOrigin(req: VercelRequest): string {
+  const configured = process.env.APP_WEB_ORIGIN?.trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const origin = req.headers.origin;
+  if (process.env.VERCEL_ENV !== "production" && origin && /^https?:\/\//.test(origin)) {
+    return origin;
   }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return PRODUCTION_WEB_ORIGIN;
 }
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2026-07-29.dahlia",
-});
 
 // The price is read from Stripe rather than hardcoded so the pricing page
 // always shows what checkout will actually charge. Cached per instance —
@@ -33,7 +32,7 @@ let cachedPlan: Plan | null = null;
 
 async function loadPlan(): Promise<Plan> {
   if (cachedPlan) return cachedPlan;
-  const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID ?? "");
+  const price = await stripeClient().prices.retrieve(process.env.STRIPE_PRICE_ID ?? "");
   if (price.unit_amount == null || !price.recurring) {
     throw new Error(`price ${price.id} is not a fixed recurring price`);
   }
@@ -66,12 +65,34 @@ async function getPlan(res: VercelResponse) {
 // trial is for a customer's first subscription only — otherwise canceling
 // during the trial and resubscribing would restart it indefinitely.
 async function hasHadSubscription(customerId: string): Promise<boolean> {
-  const previous = await stripe.subscriptions.list({
+  const previous = await stripeClient().subscriptions.list({
     customer: customerId,
     status: "all",
     limit: 1,
   });
   return previous.data.length > 0;
+}
+
+// A trial also counts as used when this email has started one before, on an
+// account since deleted (api/_trial.ts).
+async function isTrialEligible(customerId: string | null, email: string): Promise<boolean> {
+  if (await emailHasUsedTrial(email)) return false;
+  return !customerId || !(await hasHadSubscription(customerId));
+}
+
+// Subscriptions that are still running or could still start: everything but
+// the two ended states. An "incomplete" one counts — its first payment is
+// mid-confirmation, and it turns active without another request.
+async function hasOpenSubscription(customerId: string): Promise<boolean> {
+  const subscriptions = await stripeClient().subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 20,
+  });
+  return subscriptions.data.some(
+    (subscription) =>
+      subscription.status !== "canceled" && subscription.status !== "incomplete_expired",
+  );
 }
 
 // Saved Stripe IDs can belong to a different Stripe account or mode than the
@@ -87,7 +108,7 @@ const CAN_RESET_STALE_BILLING =
 async function customerExists(customerId: string): Promise<boolean> {
   if (!CAN_RESET_STALE_BILLING) return true;
   try {
-    const customer = await stripe.customers.retrieve(customerId);
+    const customer = await stripeClient().customers.retrieve(customerId);
     return !("deleted" in customer && customer.deleted);
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code === "resource_missing") return false;
@@ -119,7 +140,6 @@ async function resetStaleBilling(userId: string, customerId: string) {
 // account/billing page can never drift from what Stripe actually has —
 // nothing here is cached in Supabase.
 async function getBillingSummary(
-  req: VercelRequest,
   res: VercelResponse,
   auth: { userId: string; email: string },
 ) {
@@ -141,22 +161,26 @@ async function getBillingSummary(
 
     const customerId = row?.stripe_customer_id ?? null;
     if (!customerId) {
-      return res
-        .status(200)
-        .json({ subscription: null, invoices: [], trialEligible: true });
+      return res.status(200).json({
+        subscription: null,
+        invoices: [],
+        trialEligible: await isTrialEligible(null, auth.email),
+      });
     }
     if (!(await customerExists(customerId))) {
       await resetStaleBilling(auth.userId, customerId);
-      return res
-        .status(200)
-        .json({ subscription: null, invoices: [], trialEligible: true });
+      return res.status(200).json({
+        subscription: null,
+        invoices: [],
+        trialEligible: await isTrialEligible(null, auth.email),
+      });
     }
 
     const subscriptionId = row?.stripe_subscription_id ?? null;
     let subscription: Stripe.Subscription | null = null;
     if (subscriptionId) {
       try {
-        subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+        subscription = await stripeClient().subscriptions.retrieve(subscriptionId, {
           expand: ["default_payment_method"],
         });
       } catch (err) {
@@ -172,7 +196,7 @@ async function getBillingSummary(
     // their own default_payment_method entirely, so that field can go stale
     // forever — fall back to it only when the customer has never set one
     // (e.g. a day-one subscriber who hasn't used "update payment method" yet).
-    const customer = await stripe.customers.retrieve(customerId, {
+    const customer = await stripeClient().customers.retrieve(customerId, {
       expand: ["invoice_settings.default_payment_method"],
     });
     const customerDefault =
@@ -191,7 +215,7 @@ async function getBillingSummary(
 
     const paymentMethod = customerDefault ?? subscriptionDefault;
 
-    const invoices = await stripe.invoices.list({
+    const invoices = await stripeClient().invoices.list({
       customer: customerId,
       limit: 12,
     });
@@ -201,7 +225,7 @@ async function getBillingSummary(
     return res.status(200).json({
       // A subscription row exists once checkout completes, so a customer
       // with no row may still have had one (e.g. it was deleted in Stripe).
-      trialEligible: !subscription && !(await hasHadSubscription(customerId)),
+      trialEligible: !subscription && (await isTrialEligible(customerId, auth.email)),
       subscription: subscription
         ? {
             status: subscription.status,
@@ -245,6 +269,8 @@ async function getBillingSummary(
     return res.status(500).json({ error: "Could not load billing summary" });
   }
 }
+
+const idempotencyMinute = () => Math.floor(Date.now() / 60_000);
 
 // Starts a subscription checkout for the single Audition Plus plan — with a
 // free trial if this is the customer's first subscription — and returns a
@@ -303,23 +329,40 @@ async function createSubscription(
       status = "free";
     }
     // Stops a double-click, or a second tab, from starting a second
-    // subscription for someone who already has one.
+    // subscription for someone who already has one. The cached status only
+    // turns "active" once the webhook lands, so Stripe is asked as well: a
+    // second checkout confirmed in that gap would otherwise bill twice.
     if (hasPlanAccess(status)) {
       return res
         .status(409)
         .json({ error: "You already have an active subscription." });
     }
+    if (customerId && (await hasOpenSubscription(customerId))) {
+      return res.status(409).json({
+        error: "You already have a subscription. You can manage it from your Billing page.",
+      });
+    }
 
     if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: auth.email,
-        metadata: { supabase_user_id: auth.userId },
-      });
-      customerId = customer.id;
-      const { error: writeError } = await db
+      // Two requests racing here (a double-click) get the same customer back
+      // instead of creating one each. The minute in the key keeps it from
+      // outliving the race: Stripe remembers a key for a day, and a customer
+      // recreated later must not be answered with the old one.
+      const customer = await stripeClient().customers.create(
+        {
+          email: auth.email,
+          metadata: { supabase_user_id: auth.userId },
+        },
+        { idempotencyKey: `customer-${auth.userId}-${idempotencyMinute()}` },
+      );
+      // Only claims the row while it still has no customer, so a request that
+      // lost the race adopts the winner's customer rather than overwriting it.
+      const { data: claimed, error: writeError } = await db
         .from("entitlements")
-        .update({ stripe_customer_id: customerId })
-        .eq("user_id", auth.userId);
+        .update({ stripe_customer_id: customer.id })
+        .eq("user_id", auth.userId)
+        .is("stripe_customer_id", null)
+        .select("stripe_customer_id");
       if (writeError) {
         // The customer exists in Stripe but we couldn't remember it. Fail here
         // rather than proceeding — the webhook matches on stripe_customer_id.
@@ -331,12 +374,42 @@ async function createSubscription(
           .status(500)
           .json({ error: "Could not save billing account" });
       }
-      console.log(
-        `stripe customer created ${customerId} for user ${auth.userId}`,
-      );
+      if (claimed?.length) {
+        customerId = customer.id;
+        console.log(
+          `stripe customer created ${customerId} for user ${auth.userId}`,
+        );
+      } else {
+        const { data: current, error: rereadError } = await db
+          .from("entitlements")
+          .select("stripe_customer_id")
+          .eq("user_id", auth.userId)
+          .maybeSingle();
+        if (rereadError || !current?.stripe_customer_id) {
+          console.error(
+            `entitlements row for user ${auth.userId} could not take stripe customer ${customer.id}:`,
+            rereadError?.message ?? "no row, or no customer on it",
+          );
+          return res
+            .status(500)
+            .json({ error: "Could not save billing account" });
+        }
+        customerId = current.stripe_customer_id as string;
+        if (customerId !== customer.id) {
+          // The other request's customer won; don't leave ours orphaned.
+          await stripeClient().customers
+            .del(customer.id)
+            .catch((error) => console.error(`orphan stripe customer ${customer.id} not deleted:`, error));
+        }
+        if (await hasOpenSubscription(customerId)) {
+          return res.status(409).json({
+            error: "You already have a subscription. You can manage it from your Billing page.",
+          });
+        }
+      }
     }
 
-    const trialEligible = !(await hasHadSubscription(customerId));
+    const trialEligible = await isTrialEligible(customerId, auth.email);
 
     if (acceptingTerms) {
       const now = new Date().toISOString();
@@ -358,23 +431,39 @@ async function createSubscription(
     // itself — opt out so the explicit card-only list below is honored and
     // checkout stays embedded in-app (ui_mode: "elements") rather than
     // redirecting to Stripe-hosted Checkout.
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [{ price: priceId, quantity: 1 }],
-      mode: "subscription",
-      // The card is still collected up front (payment_method_collection
-      // defaults to "always"), so the subscription bills automatically when
-      // the trial ends unless it's canceled first.
-      ...(trialEligible
-        ? { subscription_data: { trial_period_days: TRIAL_DAYS } }
-        : {}),
-      ui_mode: "elements",
-      // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
-      // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
-      payment_method_types: ["card"],
-      managed_payments: { enabled: false },
-      return_url: `${req.headers.origin}/pricing`,
-    });
+    const session = await stripeClient().checkout.sessions.create(
+      {
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: "subscription",
+        // The card is still collected up front (payment_method_collection
+        // defaults to "always"), so the subscription bills automatically when
+        // the trial ends unless it's canceled first.
+        // The email hash rides on the subscription so the webhook can record
+        // the trial as used once it actually starts (api/_trial.ts).
+        ...(trialEligible
+          ? {
+              subscription_data: {
+                trial_period_days: TRIAL_DAYS,
+                metadata: { trial_email_hash: trialEmailHash(auth.email) },
+              },
+            }
+          : {}),
+        ui_mode: "elements",
+        // Only card (which covers Apple Pay/Google Pay as wallet buttons on the
+        // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
+        payment_method_types: ["card"],
+        managed_payments: { enabled: false },
+        return_url: `${webOrigin(req)}/pricing`,
+      },
+      // A double-click sends two identical requests: within the same minute
+      // they share a key, so Stripe hands both the one session rather than
+      // opening two. The minute keeps a later, deliberate retry from being
+      // answered with a session that has since expired or been paid.
+      {
+        idempotencyKey: `checkout-${auth.userId}-${trialEligible ? "trial" : "paid"}-${idempotencyMinute()}`,
+      },
+    );
 
     if (!session.client_secret) {
       console.error(`checkout session ${session.id} created with no client_secret`);
@@ -386,10 +475,7 @@ async function createSubscription(
     return res.status(200).json({ clientSecret: session.client_secret });
   } catch (error) {
     console.error("create-subscription failed:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return res
-      .status(500)
-      .json({ error: `Could not start subscription: ${message}` });
+    return res.status(500).json({ error: "Could not start subscription" });
   }
 }
 
@@ -426,7 +512,7 @@ async function createSetupIntent(
     // Managed Payments (enabled by default on this account) only supports
     // mode: "subscription" and mode: "payment" — opt out for this session so
     // mode: "setup" is accepted.
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripeClient().checkout.sessions.create({
       customer: customerId,
       mode: "setup",
       ui_mode: "elements",
@@ -435,7 +521,7 @@ async function createSetupIntent(
       // Payment Element) — not the full dynamic set (Cash App Pay, Klarna, etc).
       payment_method_types: ["card"],
       managed_payments: { enabled: false },
-      return_url: `${req.headers.origin}/billing`,
+      return_url: `${webOrigin(req)}/billing`,
     });
 
     if (!session.client_secret) {
@@ -486,7 +572,7 @@ async function cancelSubscription(
       return res.status(400).json({ error: "No subscription found" });
     }
 
-    const subscription = await stripe.subscriptions.update(subscriptionId, {
+    const subscription = await stripeClient().subscriptions.update(subscriptionId, {
       cancel_at_period_end: !resume,
     });
 
@@ -515,7 +601,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const auth = await requireAuth(req, res);
   if (!auth) return;
 
-  if (req.method === "GET") return getBillingSummary(req, res, auth);
+  if (req.method === "GET") return getBillingSummary(res, auth);
 
   const action = req.query.action;
   if (action === "create-subscription") return createSubscription(req, res, auth);

@@ -15,11 +15,20 @@ export function handleCors(req: VercelRequest, res: VercelResponse): boolean {
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     // x-rehearsal-grant carries the signed rehearsal grant on parse calls
-    // (parse-script, parse-pages); a header missing here fails the preflight
-    // and WebKit reports the request as "Load failed".
+    // (parse-script, parse-pages) and X-TTS-Purpose marks pre-generation
+    // requests (tts, sts); a header missing here fails the preflight and
+    // WebKit reports the request as "Load failed".
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, x-rehearsal-grant",
+      "Authorization, Content-Type, x-rehearsal-grant, X-TTS-Purpose",
+    );
+    // Cross-origin scripts can only read response headers listed here. The
+    // player waits out Retry-After and pre-generation paces itself on the
+    // concurrency pair (useTtsPlayer.ts, useReaderAudioPregen.ts); without
+    // them the native app falls back to guessing.
+    res.setHeader(
+      "Access-Control-Expose-Headers",
+      "Retry-After, X-TTS-Current-Concurrent, X-TTS-Max-Concurrent, X-TTS-Model, X-TTS-Pregen-Hold, Server-Timing",
     );
     res.setHeader("Access-Control-Max-Age", "86400");
   }

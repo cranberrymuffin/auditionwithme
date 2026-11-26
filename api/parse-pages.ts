@@ -1,9 +1,16 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { requireRehearsalGrant } from "./_entitlement.js";
 import { splitSpeech } from "./_screenplay.js";
-import { extractJson, isValidCharacters } from "./_response.js";
+import {
+  extractJson,
+  imageMediaType,
+  isBodyTooLarge,
+  isValidCharacters,
+} from "./_response.js";
 import { handleCors } from "./_cors.js";
+import { anthropic, modelDeadline, sendModelError } from "./_anthropic.js";
+import { SONNET_MODEL } from "./_models.js";
 
 // Parses a chunk of scanned script pages (rendered to JPEGs client-side) with
 // vision. Scanned PDFs have no text layer, so the fast text path in
@@ -11,17 +18,26 @@ import { handleCors } from "./_cors.js";
 // page-range chunks and calls this endpoint for each chunk in parallel, then
 // merges the results (src/lib/scannedScript.ts).
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "20mb",
-    },
-  },
-};
-
-const client = new Anthropic();
-
 const MAX_IMAGES_PER_CHUNK = 20;
+
+// The client sends 5 pages a chunk, all chunks of a document at once, and
+// tries a failed chunk up to 3 times (src/lib/scannedScript.ts) — so one
+// 200-page scan is 40 calls, 120 if every chunk needed every retry, and
+// reading a bilingual edition in its original language runs it all again.
+// This fits that, and a few such documents an hour, while stopping a client
+// that loops; the daily allowance in _entitlement.ts bounds the rest.
+const RATE_LIMIT = { bucket: "parse-pages", maxPerWindow: 300, windowSeconds: 60 * 60 };
+
+// Kept under this route's maxDuration (vercel.json).
+const MODEL_DEADLINE_MS = 80_000;
+
+// Sonnet 5.5 rejects "disabled"; "between_tools" is its thinking-off
+// setting, and the SDK's types don't know it yet.
+const THINKING_OFF = {
+  type: "between_tools",
+} as unknown as Anthropic.Beta.BetaThinkingConfigParam;
+
+const BILINGUAL_PROMPT = `BILINGUAL EDITIONS: when the pages print the same dialogue in two languages (an original and a translation, often side by side), transcribe the ORIGINAL language for "line" — not the English translation. Set "languageCode"/"languageName" to that original language.`;
 
 const SYSTEM_PROMPT = `You are a script processing assistant for an actor's rehearsal tool. The actor has this script for an audition and needs it split into dialogue steps to practice their lines. You will be given scanned page images from the play or screenplay, in order. They are a CONSECUTIVE EXCERPT from a longer script — earlier and later pages may exist.
 
@@ -62,11 +78,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const auth = await requireRehearsalGrant(req, res);
+  if (isBodyTooLarge(req.headers["content-length"])) {
+    return res.status(413).json({
+      error: "These pages are too large to upload together. Try a smaller or lower-resolution scan.",
+    });
+  }
+
+  const auth = await requireRehearsalGrant(req, res, RATE_LIMIT);
   if (!auth) return;
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
+    console.error("ANTHROPIC_API_KEY is not set");
+    return res.status(500).json({ error: "Script parsing is not configured" });
   }
 
   const { images, preferOriginalLanguage } = (req.body ?? {}) as {
@@ -89,44 +112,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
   }
 
+  // The client renders JPEGs today (src/lib/pdf.ts); the type is read from
+  // the bytes so a different renderer isn't mislabeled to the model.
+  const pages: Anthropic.Beta.BetaImageBlockParam[] = [];
+  for (const data of images) {
+    const mediaType = imageMediaType(data);
+    if (!mediaType) {
+      return res
+        .status(400)
+        .json({ error: "Page images must be JPEG, PNG, WebP or GIF" });
+    }
+    pages.push({
+      type: "image",
+      source: { type: "base64", media_type: mediaType, data },
+    });
+  }
+
+  const deadline = modelDeadline(MODEL_DEADLINE_MS);
   try {
     const modelStartedAt = performance.now();
-    const stream = client.messages.stream({
-      // Sonnet, not Haiku: Haiku's output content filter deterministically
-      // blocks bulk transcription of scanned script pages (copyright
-      // classifier); Sonnet 5 handles the same pages fine. Chunks still run in
-      // parallel client-side to bound wall-clock time.
-      model: "claude-sonnet-5",
-      // Chunks are small (5 pages) and the schema avoids echoing text twice, so
-      // 8K is generous headroom. Keeping responses short matters beyond cost:
-      // very long verbatim transcriptions trip the API's content filter.
-      max_tokens: 8000,
-      // Same rationale as parse-script.ts: thinking adds latency with no gain
-      // on this transcription task.
-      thinking: { type: "disabled" },
-      system: preferOriginalLanguage
-        ? `${SYSTEM_PROMPT}\n\nBILINGUAL EDITIONS: when the pages print the same dialogue in two languages (an original and a translation, often side by side), transcribe the ORIGINAL language for "line" — not the English translation. Set "languageCode"/"languageName" to that original language.`
-        : SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            ...images.map((data): Anthropic.ImageBlockParam => ({
-              type: "image",
-              source: { type: "base64", media_type: "image/jpeg", data },
-            })),
-            {
-              type: "text",
-              text: "Process these consecutive scanned script pages as instructed and return the JSON result.",
-            },
-          ],
-        },
-      ],
-    });
+    const stream = anthropic.beta.messages.stream(
+      {
+        // Sonnet, not Haiku: Haiku's output content filter deterministically
+        // blocked bulk transcription of scanned script pages (copyright
+        // classifier) where Sonnet handled the same pages fine. Chunks still
+        // run in parallel client-side to bound wall-clock time.
+        model: SONNET_MODEL,
+        // Same server-side refusal fallback as the director (casting.ts).
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        // Chunks are small (5 pages) and the schema avoids echoing text twice, so
+        // 8K is generous headroom. Keeping responses short matters beyond cost:
+        // very long verbatim transcriptions trip the API's content filter.
+        max_tokens: 8000,
+        // Same rationale as parse-script.ts: thinking adds latency with no gain
+        // on this transcription task. Effort is the model's default, written out.
+        thinking: THINKING_OFF,
+        output_config: { effort: "high" },
+        // The shared prompt is its own cached block, so every chunk of a
+        // document after the first few reads it back, and the bilingual
+        // note rides after it rather than forking the prefix.
+        system: [
+          { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+          ...(preferOriginalLanguage
+            ? [{ type: "text" as const, text: BILINGUAL_PROMPT }]
+            : []),
+        ],
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...pages,
+              {
+                type: "text",
+                text: "Process these consecutive scanned script pages as instructed and return the JSON result.",
+              },
+            ],
+          },
+        ],
+      },
+      { signal: deadline },
+    );
 
     const response = await stream.finalMessage();
     const modelDurationMs = performance.now() - modelStartedAt;
 
+    if (response.stop_reason === "refusal") {
+      console.error("parse-pages: declined:", response.stop_details);
+      return res.status(500).json({ error: "Script parsing failed" });
+    }
     if (response.stop_reason === "max_tokens") {
       console.error(
         `parse-pages: output truncated at max_tokens (images=${images.length}, output=${response.usage.output_tokens})`,
@@ -227,8 +281,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       modelDurationMs: Math.round(modelDurationMs),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Claude API error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "parse-pages", err, "Script parsing failed", deadline);
   }
 }

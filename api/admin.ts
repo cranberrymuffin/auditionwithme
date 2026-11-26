@@ -1,23 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAuth } from "./_entitlement.js";
 import { handleCors } from "./_cors.js";
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-// Same service-role client pattern as api/_entitlement.ts — needed for
-// auth.admin.listUsers and to read every user's feedback past RLS.
-function serviceClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set",
-    );
-  }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { serviceClient } from "./_supabase.js";
 
 // PostgREST caps a single select at 1000 rows, so page through with range(),
 // ordered by a unique column so no row lands on two pages or on none.
@@ -52,6 +37,36 @@ async function listAllUsers(db: SupabaseClient) {
   }
 }
 
+// Feedback rows carry the comment and a metrics blob each, so unlike the
+// narrow user tables they are not all loaded: the newest FEEDBACK_DEFAULT_LIMIT
+// by default, and a caller can page further back.
+const FEEDBACK_DEFAULT_LIMIT = 500;
+const FEEDBACK_MAX_LIMIT = 1000;
+
+function intParam(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(parsed) ? Math.min(Math.max(parsed, min), max) : fallback;
+}
+
+type FeedbackRow = { id: string; submitted_at: string };
+
+/** One page of feedback, newest first, and how many rows there are in all. */
+async function selectFeedback(
+  db: SupabaseClient,
+  limit: number,
+  offset: number,
+): Promise<{ rows: FeedbackRow[]; total: number }> {
+  const { data, error, count } = await db
+    .from("self_tape_feedback")
+    .select("*", { count: "exact" })
+    .order("submitted_at", { ascending: false })
+    // Ties on the timestamp still need one fixed order to page through.
+    .order("id")
+    .range(offset, offset + limit - 1);
+  if (error) throw new Error(`self_tape_feedback read failed: ${error.message}`);
+  return { rows: data as FeedbackRow[], total: count ?? data.length };
+}
+
 type EntitlementRow = {
   user_id: string;
   subscription_status: string;
@@ -61,9 +76,17 @@ type EntitlementRow = {
 };
 
 // Everything the admin portal (src/pages/Admin.tsx) shows, in one response:
-// every account plus every audition feedback row. Fine at beta scale; split
-// into per-user requests if the feedback table grows large.
-async function adminOverview(res: VercelResponse) {
+// every account plus the most recent audition feedback. ?feedbackLimit and
+// ?feedbackOffset page through older feedback; feedbackTotal says how much
+// there is.
+async function adminOverview(req: VercelRequest, res: VercelResponse) {
+  const feedbackLimit = intParam(
+    req.query.feedbackLimit,
+    FEEDBACK_DEFAULT_LIMIT,
+    1,
+    FEEDBACK_MAX_LIMIT,
+  );
+  const feedbackOffset = intParam(req.query.feedbackOffset, 0, 0, Number.MAX_SAFE_INTEGER);
   const db = serviceClient();
   const [users, entitlements, admins, feedback] = await Promise.all([
     listAllUsers(db),
@@ -74,9 +97,8 @@ async function adminOverview(res: VercelResponse) {
       "user_id",
     ),
     selectAll<{ user_id: string }>(db, "admins", "user_id", "user_id"),
-    selectAll<{ submitted_at: string }>(db, "self_tape_feedback", "*", "id"),
+    selectFeedback(db, feedbackLimit, feedbackOffset),
   ]);
-  feedback.sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
 
   const entitlementByUser = new Map(entitlements.map((row) => [row.user_id, row]));
   const adminIds = new Set(admins.map((row) => row.user_id));
@@ -97,7 +119,10 @@ async function adminOverview(res: VercelResponse) {
         terms_accepted_at: entitlement?.terms_accepted_at ?? null,
       };
     }),
-    feedback,
+    feedback: feedback.rows,
+    feedbackTotal: feedback.total,
+    feedbackLimit,
+    feedbackOffset,
   });
 }
 
@@ -126,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: "Not found" });
     }
 
-    return await adminOverview(res);
+    return await adminOverview(req, res);
   } catch (err) {
     console.error("admin overview failed:", err);
     return res.status(500).json({ error: "Could not load admin data" });

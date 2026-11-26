@@ -1,10 +1,55 @@
 {
   "functions": {
     "api/parse-script.ts": {
+      "maxDuration": 120
+    },
+    "api/parse-pages.ts": {
+      "maxDuration": 90
+    },
+    "api/casting.ts": {
+      "maxDuration": 120
+    },
+    "api/tts.ts": {
+      "maxDuration": 30
+    },
+    "api/sts.ts": {
       "maxDuration": 60
+    },
+    "api/eleven-account.ts": {
+      "maxDuration": 15
     }
   },
   "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(self), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
     {
       "source": "/sw.js",
       "headers": [

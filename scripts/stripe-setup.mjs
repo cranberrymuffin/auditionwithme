@@ -19,7 +19,7 @@ const PRODUCT_NAME = "Audition Plus";
 const LOOKUP_KEY = "audition_plus_monthly_999";
 const UNIT_AMOUNT = 999; // $9.99
 const CURRENCY = "usd";
-const API_VERSION = "2026-07-29.dahlia"; // keep in sync with api/billing.ts
+const API_VERSION = "2026-07-29.dahlia"; // keep in sync with api/_stripe.ts
 
 // Every event api/stripe-webhook.ts handles.
 const WEBHOOK_EVENTS = [

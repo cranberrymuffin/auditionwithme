@@ -1,23 +1,35 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import type { Entitlement } from "../src/types.js";
 import { IS_BETA_TESTING } from "../src/lib/beta.js";
 import { hasPlanAccess } from "../src/lib/plan.js";
+import { serviceClient } from "./_supabase.js";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const grantSecret = process.env.REHEARSAL_GRANT_SECRET;
 
-// Service-role client: bypasses RLS, used for every server-side entitlement
-// read/write. Never expose serviceRoleKey to the client.
-function serviceClient() {
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error("VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set");
+// Users whose entitlements row this warm instance has already confirmed.
+// The row only ever goes away with the account itself, so one confirmation
+// per instance saves a write on every later request. Bounded so a
+// long-lived instance can't grow it without limit.
+const ensuredEntitlements = new Set<string>();
+const MAX_ENSURED_ENTITLEMENTS = 5000;
+
+// Fail-closed fallback: the DB trigger normally seeds this row on signup,
+// but if it didn't fire, create it now rather than permanently locking
+// the user out (plan Risks table: "DB trigger silently fails").
+async function ensureEntitlementRow(userId: string): Promise<void> {
+  if (ensuredEntitlements.has(userId)) return;
+  const { error } = await serviceClient().from("entitlements").upsert(
+    { user_id: userId },
+    { onConflict: "user_id", ignoreDuplicates: true }
+  );
+  if (error) {
+    // Not fatal here: routes that need the row fail closed on their own read.
+    console.error("entitlements seed upsert failed:", error.message);
+    return;
   }
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  if (ensuredEntitlements.size >= MAX_ENSURED_ENTITLEMENTS) ensuredEntitlements.clear();
+  ensuredEntitlements.add(userId);
 }
 
 /**
@@ -40,21 +52,49 @@ export async function requireAuth(
     res.status(401).json({ error: "Invalid or expired session" });
     return null;
   }
-  // Fail-closed fallback: the DB trigger normally seeds this row on signup,
-  // but if it didn't fire, create it now rather than permanently locking
-  // the user out (plan Risks table: "DB trigger silently fails").
-  await serviceClient().from("entitlements").upsert(
-    { user_id: data.user.id },
-    { onConflict: "user_id", ignoreDuplicates: true }
-  );
+  await ensureEntitlementRow(data.user.id);
   return { userId: data.user.id, email: data.user.email };
 }
 
-const DEFAULT_RATE_LIMIT = {
+export type RateLimit = { bucket: string; maxPerWindow: number; windowSeconds: number };
+
+const DEFAULT_RATE_LIMIT: RateLimit = {
   bucket: "default",
   maxPerWindow: 200,
   windowSeconds: 60 * 60,
 };
+
+/**
+ * Counts this call against the user's bucket (check_rate_limit: a fixed
+ * window that restarts once it has run out, not a sliding one). Sends
+ * 429/500 and returns false when the call must not go ahead.
+ */
+async function enforceRateLimit(
+  userId: string,
+  res: VercelResponse,
+  { bucket, maxPerWindow, windowSeconds }: RateLimit
+): Promise<boolean> {
+  const { data: allowed, error } = await serviceClient().rpc("check_rate_limit", {
+    p_user_id: userId,
+    p_bucket: bucket,
+    p_window_seconds: windowSeconds,
+    p_max_calls: maxPerWindow,
+  });
+
+  if (error) {
+    console.error("check_rate_limit RPC failed:", error.message);
+    // Fail closed (Principle 4): if we can't verify the rate limit, block.
+    res.status(500).json({ error: "Could not verify rate limit" });
+    return false;
+  }
+  if (!allowed) {
+    console.warn(`rate limit hit: user ${userId} bucket ${bucket}`);
+    res.setHeader("Retry-After", String(windowSeconds));
+    res.status(429).json({ error: "Rate limit exceeded. Please slow down.", retryAfterSeconds: windowSeconds });
+    return false;
+  }
+  return true;
+}
 
 /**
  * Outside beta, sends 402 and returns false unless the user has an active
@@ -86,7 +126,7 @@ async function requirePlan(userId: string, res: VercelResponse): Promise<boolean
 
 /**
  * requireAuth, plus — outside beta — an active subscription or trial, plus a
- * per-user, per-feature sliding-window rate limit. Every caller is a paid
+ * per-user, per-feature fixed-window rate limit. Every caller is a paid
  * rehearsal API (TTS, STS, casting, Scribe), and rehearsing a saved script
  * never goes through issueRehearsalGrant, so this is what keeps a lapsed
  * user from rehearsing old scripts. Keeping buckets separate prevents normal
@@ -103,30 +143,29 @@ export async function requireAuthRateLimited(
   // Before the rate limit, so a rejected call doesn't use up the bucket.
   if (!(await requirePlan(auth.userId, res))) return null;
 
-  const bucket = options.bucket ?? DEFAULT_RATE_LIMIT.bucket;
-  const maxPerWindow = options.maxPerWindow ?? DEFAULT_RATE_LIMIT.maxPerWindow;
-  const windowSeconds = options.windowSeconds ?? DEFAULT_RATE_LIMIT.windowSeconds;
-
-  const { data: allowed, error } = await serviceClient().rpc("check_rate_limit", {
-    p_user_id: auth.userId,
-    p_bucket: bucket,
-    p_window_seconds: windowSeconds,
-    p_max_calls: maxPerWindow,
-  });
-
-  if (error) {
-    console.error("check_rate_limit RPC failed:", error.message);
-    // Fail closed (Principle 4): if we can't verify the rate limit, block.
-    res.status(500).json({ error: "Could not verify rate limit" });
-    return null;
-  }
-  if (!allowed) {
-    res.setHeader("Retry-After", String(windowSeconds));
-    res.status(429).json({ error: "Rate limit exceeded. Please slow down.", retryAfterSeconds: windowSeconds });
+  if (!(await enforceRateLimit(auth.userId, res, { ...DEFAULT_RATE_LIMIT, ...options }))) {
     return null;
   }
   return auth;
 }
+
+// Grants are cheap to sign, but each one unlocks an hour of parse calls, so
+// a script looping on this route shouldn't be able to mint them freely. An
+// upload takes one; 60 an hour is far past any real use.
+const GRANT_RATE_LIMIT: RateLimit = {
+  bucket: "start-rehearsal",
+  maxPerWindow: 60,
+  windowSeconds: 60 * 60,
+};
+
+// Every parse call (parse-script and parse-pages alike) also counts against
+// one daily allowance, so a client that stays just under the hourly limits
+// still can't run model parses around the clock.
+const PARSE_DAILY_RATE_LIMIT: RateLimit = {
+  bucket: "parse-daily",
+  maxPerWindow: 1000,
+  windowSeconds: 24 * 60 * 60,
+};
 
 const GRANT_TTL_SECONDS = 60 * 60; // 1 hour — see plan for reasoning
 
@@ -144,7 +183,11 @@ function verifyGrant(token: string): GrantPayload | null {
   const [body, signature] = token.split(".");
   if (!body || !signature) return null;
   const expected = crypto.createHmac("sha256", grantSecret).update(body).digest("base64url");
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  const given = Buffer.from(signature);
+  const wanted = Buffer.from(expected);
+  // timingSafeEqual throws on a length mismatch; a malformed grant is just
+  // an invalid one.
+  if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) return null;
   let payload: GrantPayload;
   try {
     payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
@@ -160,8 +203,9 @@ function verifyGrant(token: string): GrantPayload | null {
  * The single point of subscription enforcement. Called once per upload
  * (api/start-rehearsal.ts), never per API call — see plan Decision 2.
  * Returns a signed grant on success, or null (with 402 already sent) if the
- * user has no active subscription. A free trial counts as active — the
- * webhook caches Stripe's "trialing" as "active".
+ * user has no active subscription, or (429 sent) if they're requesting
+ * grants in a loop. A free trial counts as active — the webhook caches
+ * Stripe's "trialing" as "active".
  */
 export async function issueRehearsalGrant(
   userId: string,
@@ -170,18 +214,23 @@ export async function issueRehearsalGrant(
   // Beta: requirePlan lets everyone through — see src/lib/beta.ts and
   // FeedbackGate.tsx for what replaces the paywall.
   if (!(await requirePlan(userId, res))) return null;
+  if (!(await enforceRateLimit(userId, res, GRANT_RATE_LIMIT))) return null;
   return signGrant({ userId, exp: Math.floor(Date.now() / 1000) + GRANT_TTL_SECONDS });
 }
 
 /**
- * Verify-only check for parse-script/parse-pages: confirms the caller holds
- * a valid, unexpired grant issued to them. Never increments anything — every
- * parallel chunk call, retry, and bilingual re-parse for the same upload
- * reuses the same grant (plan Decision 2 / Principle 5).
+ * Check for parse-script/parse-pages: confirms the caller holds a valid,
+ * unexpired grant issued to them — every parallel chunk call, retry, and
+ * bilingual re-parse for the same upload reuses the same grant (plan
+ * Decision 2 / Principle 5). The grant is never used up, so what bounds the
+ * model spend behind it is `rateLimit` (the route's own hourly bucket) plus
+ * the daily allowance all parse calls share. Sends 401/403/429 and returns
+ * null on rejection.
  */
 export async function requireRehearsalGrant(
   req: VercelRequest,
-  res: VercelResponse
+  res: VercelResponse,
+  rateLimit: RateLimit
 ): Promise<{ userId: string } | null> {
   const auth = await requireAuth(req, res);
   if (!auth) return null;
@@ -202,5 +251,8 @@ export async function requireRehearsalGrant(
     res.status(403).json({ error: "Rehearsal grant does not belong to this user", reason: "grant_invalid" });
     return null;
   }
+  // The hourly bucket first, so a call it rejects doesn't use up the day's.
+  if (!(await enforceRateLimit(auth.userId, res, rateLimit))) return null;
+  if (!(await enforceRateLimit(auth.userId, res, PARSE_DAILY_RATE_LIMIT))) return null;
   return auth;
 }

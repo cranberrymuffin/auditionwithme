@@ -6,6 +6,7 @@ import {
   fetchElevenLabs,
   holdPregenIfBusy,
   relayConcurrency,
+  sendVoiceServiceError,
   type ConcurrencyReading,
 } from "./_elevenlabs.js";
 
@@ -35,8 +36,9 @@ const FALLBACK_MODEL = "eleven_v3";
 // Account-level refusals: a bad key or exhausted quota (401/402) and a full
 // concurrency slot or rate limit (429). v3 runs on the same account, so
 // retrying there would only spend another request — and under a 429 add load
-// at the worst moment, or render the line on v3 and cache it as v4. These go
-// straight back to the client, which honors Retry-After.
+// at the worst moment, or render the line on v3 and cache it as v4. A 429
+// goes straight back to the client, which honors Retry-After; the others
+// are our problem and go back as a 502.
 const ACCOUNT_LEVEL_STATUSES = new Set([401, 402, 429]);
 
 /** Whether a failed v4 request is worth retrying on the v3 fallback. */
@@ -57,6 +59,14 @@ export function shouldFallBack(status: number): boolean {
 // bounds the request whatever ElevenLabs counts. Not sent to v3, which
 // rejects both (unsupported_model).
 const LINE_CONTEXT_CHARS = 300;
+
+// One speech, sent whole (the client doesn't split lines). ElevenLabs bills
+// by the character, so an unbounded `text` is an unbounded charge; this is
+// about twice a five-minute monologue, past anything a script holds. The
+// neighbouring lines need no limit of their own — lineContext clips them
+// before anything is sent — and they can legitimately be long: the line
+// before may be the actor's own monologue.
+export const MAX_TEXT_CHARS = 10_000;
 
 /** A neighbouring line made safe to send: trimmed, clipped to the end nearest
  * this line (`keep: "end"` for the line before, "start" for the line after),
@@ -134,7 +144,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
+    console.error("ELEVENLABS_API_KEY is not set");
+    return res.status(500).json({ error: "Voice playback is not configured" });
   }
 
   const {
@@ -164,8 +175,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const languageCode = parseLanguageCode(rawLanguageCode);
   const previousText = lineContext(rawPreviousText, "end");
   const nextText = lineContext(rawNextText, "start");
-  if (!text?.trim()) {
+  if (typeof text !== "string" || !text.trim()) {
     return res.status(400).json({ error: "No text provided" });
+  }
+  if (text.length > MAX_TEXT_CHARS) {
+    return res
+      .status(400)
+      .json({ error: `This line is too long to voice (max ${MAX_TEXT_CHARS} characters)` });
+  }
+  if (voiceId != null && (typeof voiceId !== "string" || voiceId.length > 64)) {
+    return res.status(400).json({ error: "Invalid voice" });
   }
 
   if (holdPregenIfBusy(req, res, lastSeenConcurrency)) return;
@@ -179,7 +198,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // rejected — the line still reads fine unadorned. An explicit deliveryTag
   // (script parenthetical) outranks director markup; the client already
   // enforces that, so treat a request carrying both as tag-only.
-  const markup = tag ? null : sanitizePerformance(performance, text);
+  // Markup is the line plus a few tags, so anything much longer isn't it.
+  const markup =
+    tag || (typeof performance === "string" && performance.length > MAX_TEXT_CHARS * 2)
+      ? null
+      : sanitizePerformance(performance, text);
   const expressiveText = markup ?? (tag ? `[${tag}] ${text}` : text);
   // `tag` is the explicit deliveryTag (script parenthetical) only — director
   // markup never makes a line "big".
@@ -226,11 +249,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     relayConcurrency(upstream, res, lastSeenConcurrency);
 
     if (!upstream.ok) {
-      const err = await upstream.text();
-      console.error("ElevenLabs error:", err);
-      const retryAfter = upstream.headers.get("retry-after");
-      if (retryAfter) res.setHeader("Retry-After", retryAfter);
-      return res.status(upstream.status).json({ error: err });
+      console.error(`ElevenLabs error (${upstream.status}):`, await upstream.text());
+      return sendVoiceServiceError(upstream, res, "Voice playback failed");
     }
 
     const audio = await upstream.arrayBuffer();
@@ -241,8 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("X-TTS-Model", servedModel);
     return res.status(200).send(Buffer.from(audio));
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("TTS error:", message);
-    return res.status(500).json({ error: message });
+    console.error("TTS error:", err);
+    return res.status(500).json({ error: "Voice playback failed" });
   }
 }

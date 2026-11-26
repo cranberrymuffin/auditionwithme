@@ -1,12 +1,30 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { sanitizePerformance } from "./_direction.js";
 import { fetchVoices } from "./_elevenlabs.js";
 import { requireAuthRateLimited } from "./_entitlement.js";
 import { handleCors } from "./_cors.js";
+import { anthropic, modelDeadline, sendModelError } from "./_anthropic.js";
+import { HAIKU_MODEL, SONNET_MODEL } from "./_models.js";
+import { extractJson } from "./_response.js";
 
-const client = new Anthropic();
+// Kept under this route's maxDuration (vercel.json). The three Haiku calls
+// answer in a few seconds; the director echoes a whole script back.
+const SHORT_CALL_DEADLINE_MS = 25_000;
+const DIRECTOR_DEADLINE_MS = 105_000;
+
+// Haiku 5.5 thinks by default, and thinking counts toward max_tokens. These
+// calls were built and sized without it; effort is the model's default,
+// written out.
+const HAIKU_SETTINGS = {
+  thinking: { type: "disabled" },
+  effort: "medium",
+} as const;
+
+function notConfigured(res: VercelResponse, name: string) {
+  console.error(`${name} is not set`);
+  return res.status(500).json({ error: "This feature is not configured" });
+}
 
 const VOICE_CAST_SCHEMA = {
   type: "object",
@@ -46,9 +64,7 @@ Rules:
 - Every input name must appear exactly once as a key.`;
 
 async function canonicalizeCharacters(req: VercelRequest, res: VercelResponse) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return notConfigured(res, "ANTHROPIC_API_KEY");
 
   const { characters } = (req.body ?? {}) as { characters?: string[] };
   if (!Array.isArray(characters) || characters.length === 0 || characters.length > 200 ||
@@ -56,25 +72,33 @@ async function canonicalizeCharacters(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "No character names provided" });
   }
 
+  const deadline = modelDeadline(SHORT_CALL_DEADLINE_MS);
   try {
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2000,
-      system: CANONICALIZE_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: JSON.stringify(characters) }],
-    });
+    const response = await anthropic.messages.create(
+      {
+        model: HAIKU_MODEL,
+        // Every name comes back twice (key and value), and Haiku 5.5 counts
+        // about 30% more tokens for the same text than the model this was
+        // sized on.
+        max_tokens: 4000,
+        thinking: HAIKU_SETTINGS.thinking,
+        output_config: { effort: HAIKU_SETTINGS.effort },
+        system: CANONICALIZE_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: JSON.stringify(characters) }],
+      },
+      { signal: deadline },
+    );
 
+    // A declined request (stop_reason "refusal") has no text, and fails here.
     const textBlock = response.content.find((b) => b.type === "text");
-    const raw = textBlock?.type === "text" ? textBlock.text : "";
-    const start = raw.indexOf("{");
-    const end = raw.lastIndexOf("}");
-    if (start === -1 || end === -1) {
+    const json = extractJson(textBlock?.type === "text" ? textBlock.text : "");
+    if (!json) {
       return res.status(500).json({ error: "Character matching failed" });
     }
 
     let parsed: { canonical?: Record<string, string> };
     try {
-      parsed = JSON.parse(raw.slice(start, end + 1)) as typeof parsed;
+      parsed = JSON.parse(json) as typeof parsed;
     } catch {
       return res.status(500).json({ error: "Character matching failed" });
     }
@@ -87,9 +111,7 @@ async function canonicalizeCharacters(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ canonical });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Claude API error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "canonicalize", err, "Character matching failed", deadline);
   }
 }
 
@@ -117,9 +139,7 @@ Say match:false if the transcript is empty, unrelated, a clearly different line,
 Return ONLY {"match": true} or {"match": false}.`;
 
 async function semanticLineMatch(req: VercelRequest, res: VercelResponse) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return notConfigured(res, "ANTHROPIC_API_KEY");
 
   const { line, transcript } = (req.body ?? {}) as { line?: string; transcript?: string };
   if (typeof line !== "string" || !line.trim() || line.length > 2000) {
@@ -129,34 +149,42 @@ async function semanticLineMatch(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Invalid transcript" });
   }
 
+  const deadline = modelDeadline(SHORT_CALL_DEADLINE_MS);
   try {
-    const response = await client.messages.parse({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 100,
-      system: SEMANTIC_MATCH_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: `Script line: "${line}"\nTranscript: "${transcript}"` }],
-      output_config: {
-        format: jsonSchemaOutputFormat(SEMANTIC_MATCH_SCHEMA),
+    const response = await anthropic.messages.parse(
+      {
+        model: HAIKU_MODEL,
+        max_tokens: 100,
+        thinking: HAIKU_SETTINGS.thinking,
+        system: SEMANTIC_MATCH_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: `Script line: "${line}"\nTranscript: "${transcript}"` }],
+        output_config: {
+          effort: HAIKU_SETTINGS.effort,
+          format: jsonSchemaOutputFormat(SEMANTIC_MATCH_SCHEMA),
+        },
       },
-    });
+      { signal: deadline },
+    );
 
+    // A declined request (stop_reason "refusal") has no parsed output: no match.
     const match = response.parsed_output?.match;
     return res.status(200).json({ match: typeof match === "boolean" ? match : false });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Semantic line match error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "semantic-match", err, "Line matching failed", deadline);
   }
 }
 
+// The same ceiling canonicalize puts on a cast. The client sends up to three
+// whole lines per character (Practice.tsx); two are used.
+const MAX_CAST = 200;
+const MAX_CHARACTER_NAME_CHARS = 200;
+const MAX_SAMPLE_LINES = 10;
+const MAX_SAMPLE_LINE_CHARS = 300;
+
 async function characterVoices(req: VercelRequest, res: VercelResponse) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return notConfigured(res, "ANTHROPIC_API_KEY");
   const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
-  if (!elevenLabsKey) {
-    return res.status(500).json({ error: "ELEVENLABS_API_KEY is not set" });
-  }
+  if (!elevenLabsKey) return notConfigured(res, "ELEVENLABS_API_KEY");
 
   const { characters, languageCode = "en" } = (req.body ?? {}) as {
     characters: Array<{ name: string; sampleLines: string[] }>;
@@ -167,6 +195,24 @@ async function characterVoices(req: VercelRequest, res: VercelResponse) {
     (character) => !character || typeof character.name !== "string" || !Array.isArray(character.sampleLines)
   )) {
     return res.status(400).json({ error: "No characters provided" });
+  }
+  if (characters.length > MAX_CAST) {
+    return res
+      .status(400)
+      .json({ error: `Too many characters to cast at once (max ${MAX_CAST})` });
+  }
+  if (characters.some(
+    (character) =>
+      character.name.length > MAX_CHARACTER_NAME_CHARS ||
+      character.sampleLines.length > MAX_SAMPLE_LINES ||
+      character.sampleLines.some((line) => typeof line !== "string"),
+  )) {
+    return res.status(400).json({
+      error: `Each character needs a name of at most ${MAX_CHARACTER_NAME_CHARS} characters and at most ${MAX_SAMPLE_LINES} sample lines`,
+    });
+  }
+  if (typeof languageCode !== "string" || languageCode.length > 16) {
+    return res.status(400).json({ error: "Invalid language code" });
   }
 
   let allVoices;
@@ -190,8 +236,16 @@ async function characterVoices(req: VercelRequest, res: VercelResponse) {
       `- ${v.name} (${[v.gender, v.age, v.accent, v.tone, v.description].filter(Boolean).join(", ")}) [id: ${v.id}]`
   ).join("\n");
 
+  // A sample is there to suggest who the character is; a long speech is
+  // clipped rather than refused, since the client sends whole lines.
   const characterList = characters
-    .map((c) => `- ${c.name}: "${c.sampleLines.slice(0, 2).join(" / ")}"`)
+    .map(
+      (c) =>
+        `- ${c.name}: "${c.sampleLines
+          .slice(0, 2)
+          .map((line) => line.slice(0, MAX_SAMPLE_LINE_CHARS))
+          .join(" / ")}"`,
+    )
     .join("\n");
 
   const prompt = `You are casting voices for a script reading app. Match each character to the most fitting voice based on their name, apparent gender, age, and dialogue style.
@@ -211,17 +265,23 @@ Rules:
 
 Example output: {"assignments":[{"character":"HAMLET","voiceId":"pNInz6obpgDQGcFmaJgB"},{"character":"OPHELIA","voiceId":"pFZP5JQG7iQjIQuC4Bku"}]}`;
 
+  const deadline = modelDeadline(SHORT_CALL_DEADLINE_MS);
   try {
-    const response = await client.messages.parse({
-      model: "claude-haiku-4-5-20251001",
-      // Each assignment repeats a character name and voice ID. Scale the
-      // allowance so a large cast cannot leave the JSON response unfinished.
-      max_tokens: Math.min(8192, Math.max(1024, characters.length * 64)),
-      messages: [{ role: "user", content: prompt }],
-      output_config: {
-        format: jsonSchemaOutputFormat(VOICE_CAST_SCHEMA),
+    const response = await anthropic.messages.parse(
+      {
+        model: HAIKU_MODEL,
+        // Each assignment repeats a character name and voice ID. Scale the
+        // allowance so a large cast cannot leave the JSON response unfinished.
+        max_tokens: Math.min(16000, Math.max(1024, characters.length * 80)),
+        thinking: HAIKU_SETTINGS.thinking,
+        messages: [{ role: "user", content: prompt }],
+        output_config: {
+          effort: HAIKU_SETTINGS.effort,
+          format: jsonSchemaOutputFormat(VOICE_CAST_SCHEMA),
+        },
       },
-    });
+      { signal: deadline },
+    );
 
     const assignments = response.parsed_output?.assignments;
     if (!assignments) throw new Error("No structured voice assignments in response");
@@ -235,9 +295,7 @@ Example output: {"assignments":[{"character":"HAMLET","voiceId":"pNInz6obpgDQGcF
     );
     return res.status(200).json({ voices });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Character voice matching error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "character-voices", err, "Voice matching failed", deadline);
   }
 }
 
@@ -247,6 +305,13 @@ const MAX_LINES = 400;
 // Stage directions ride along per line for timing judgment only; long action
 // paragraphs are clipped so they can't dominate the prompt.
 const MAX_DIRECTION_CHARS = 200;
+// One speech. Far past any real one (a five-minute monologue is about 5,000
+// characters), and the director echoes every line back, so an unbounded one
+// would spend the whole output budget.
+const MAX_LINE_CHARS = 10_000;
+// A script's worth of lines; only the first MAX_LINES are directed.
+const MAX_SUBMITTED_LINES = 5000;
+const MAX_SPEAKER_CHARS = 80;
 
 // Emotional tags Eleven v3 and v4 handle well, offered to the director as the core
 // palette (validation no longer requires them — sanitizePerformance keeps any
@@ -323,9 +388,7 @@ const DIRECTOR_OUTPUT_SCHEMA = {
 } as const;
 
 async function directLines(req: VercelRequest, res: VercelResponse) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: "ANTHROPIC_API_KEY is not set" });
-  }
+  if (!process.env.ANTHROPIC_API_KEY) return notConfigured(res, "ANTHROPIC_API_KEY");
 
   const { lines } = (req.body ?? {}) as {
     /** `direction`: the step's stage directions/parentheticals before its
@@ -338,6 +401,16 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     lines.some((line) => !line || typeof line !== "object")
   ) {
     return res.status(400).json({ error: "No lines provided" });
+  }
+  if (lines.length > MAX_SUBMITTED_LINES) {
+    return res
+      .status(400)
+      .json({ error: `Too many lines (max ${MAX_SUBMITTED_LINES})` });
+  }
+  if (lines.some((line) => typeof line.text === "string" && line.text.length > MAX_LINE_CHARS)) {
+    return res
+      .status(400)
+      .json({ error: `A line is too long to direct (max ${MAX_LINE_CHARS} characters)` });
   }
 
   const capped = lines.slice(0, MAX_LINES);
@@ -356,10 +429,11 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
               .trim()
               .slice(0, MAX_DIRECTION_CHARS)
           : "";
-      return `${index}| ${direction ? `{stage: ${direction}} ` : ""}${typeof line.speaker === "string" && line.speaker ? line.speaker : "—"}: ${typeof line.text === "string" ? line.text : ""}`;
+      return `${index}| ${direction ? `{stage: ${direction}} ` : ""}${typeof line.speaker === "string" && line.speaker ? line.speaker.slice(0, MAX_SPEAKER_CHARS) : "—"}: ${typeof line.text === "string" ? line.text : ""}`;
     })
     .join("\n");
 
+  const deadline = modelDeadline(DIRECTOR_DEADLINE_MS);
   try {
     // Sonnet 5.5: half Opus 5.5's price per token ($2/$10 vs $4/$20 per
     // MTok). In a blind listen against Opus 5.5 and Opus 5 (benchmarks/voice/
@@ -372,8 +446,8 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
     // Anthropic recommends for that category, inside the same call; it
     // covers only some of Sonnet 5.5's categories, and a script still
     // declined reads unadorned (the refusal check after the call).
-    const stream = client.beta.messages.stream({
-      model: "claude-sonnet-5-5",
+    const stream = anthropic.beta.messages.stream({
+      model: SONNET_MODEL,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       // The model echoes each directed line back with markup, so the output
@@ -385,14 +459,17 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
         effort: "low",
         format: jsonSchemaOutputFormat(DIRECTOR_OUTPUT_SCHEMA),
       },
-      system: DIRECTOR_PROMPT,
+      // The prompt is identical on every call; the scene follows it.
+      system: [
+        { type: "text", text: DIRECTOR_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       messages: [
         {
           role: "user",
           content: `Scene dialogue, one line per row:\n${numbered}`,
         },
       ],
-    });
+    }, { signal: deadline });
     const response = await stream.finalMessage();
 
     if (response.stop_reason === "refusal") {
@@ -424,9 +501,7 @@ async function directLines(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ tags });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Line direction error:", message);
-    return res.status(500).json({ error: message });
+    return sendModelError(res, "direct-lines", err, "Line direction failed", deadline);
   }
 }
 
