@@ -69,30 +69,10 @@ async function applyInitialZoom(
 
 export { isIpad } from "../lib/mediaDevices";
 
-/**
- * Camera + mic capture for rehearsal self-tapes, split into two steps so the
- * camera can be live (and previewed) during the start countdown while actual
- * capture only begins once it ends:
- *
- * `requestCamera()` opens the camera and exposes the live `stream` for a
- * preview <video>. `startRecording(ttsStream, sharedContext)` begins
- * capturing from that stream; if `ttsStream` is given (the scene partner's
- * TTS audio, tapped directly rather than picked up acoustically off the mic
- * — see useTtsPlayer's getTapStream), it's mixed with the mic track into the
- * recording's single audio track using `sharedContext` — the caller's own
- * AudioContext (from useTtsPlayer), not one of our own. Sharing it means
- * there's a single context for the whole rehearsal to keep resumed on
- * mobile, rather than a second one liable to start (or end up) suspended
- * this deep into an async chain, silently recording with no audio.
- * `pause()`/`resume()` pause and resume capture without releasing the
- * camera. `stop()` resolves with the finished recording as a Blob and
- * releases the camera. Permission failures land in `error` rather than
- * throwing.
- */
 /** What went wrong opening the camera and mic, and how the actor fixes it.
  * A blocked site never gets a permission prompt again, so retrying alone
  * can't help there: they have to allow it in the browser first. */
-export function cameraErrorMessage(err: unknown): string {
+function cameraErrorMessage(err: unknown): string {
   const name = err instanceof DOMException ? err.name : "";
   switch (name) {
     case "NotAllowedError":
@@ -138,6 +118,26 @@ function openCameraAndMic(cameraId: string | null, micId: string | null): Promis
   });
 }
 
+/**
+ * Camera + mic capture for rehearsal self-tapes, split into two steps so the
+ * camera can be live (and previewed) during the start countdown while actual
+ * capture only begins once it ends:
+ *
+ * `requestCamera()` opens the camera and exposes the live `stream` for a
+ * preview <video>. `startRecording(ttsStream, sharedContext)` begins
+ * capturing from that stream; if `ttsStream` is given (the scene partner's
+ * TTS audio, tapped directly rather than picked up acoustically off the mic
+ * — see useTtsPlayer's getTapStream), it's mixed with the mic track into the
+ * recording's single audio track using `sharedContext` — the caller's own
+ * AudioContext (from useTtsPlayer), not one of our own. Sharing it means
+ * there's a single context for the whole rehearsal to keep resumed on
+ * mobile, rather than a second one liable to start (or end up) suspended
+ * this deep into an async chain, silently recording with no audio.
+ * `pause()`/`resume()` pause and resume capture without releasing the
+ * camera. `stop()` resolves with the finished recording as a Blob and
+ * releases the camera. Permission failures land in `error` rather than
+ * throwing.
+ */
 function useWebSelfTapeRecorderCore() {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   // The camera's zoom range and current level; null where it has none.
@@ -155,6 +155,9 @@ function useWebSelfTapeRecorderCore() {
   // the tape comes out with a frozen picture over continuing sound.
   const [cameraInterrupted, setCameraInterrupted] = useState(false);
   const unwatchCameraRef = useRef<(() => void) | null>(null);
+  // Bumped by every requestCamera/stop and on unmount, so a camera that
+  // opens after it's no longer wanted is turned straight back off.
+  const generationRef = useRef(0);
 
   const disconnectMix = () => {
     mixNodesRef.current.forEach((node) => node.disconnect());
@@ -163,6 +166,7 @@ function useWebSelfTapeRecorderCore() {
 
   useEffect(() => {
     const cleanup = () => {
+      generationRef.current += 1;
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       }
@@ -178,6 +182,8 @@ function useWebSelfTapeRecorderCore() {
     setError(null);
     setStatus("requesting");
     setZoomState(null);
+    const generation = ++generationRef.current;
+    const superseded = () => generation !== generationRef.current;
     // Switching devices: some cameras (and iOS) can't be open twice, so the
     // old one goes before the new one is asked for.
     if (releaseFirst) {
@@ -201,9 +207,14 @@ function useWebSelfTapeRecorderCore() {
         return openCameraAndMic(null, null);
       });
     } catch (err) {
+      if (superseded()) return;
       console.error("Self-tape camera unavailable:", err);
       setStatus("error");
       setError(cameraErrorMessage(err));
+      return;
+    }
+    if (superseded()) {
+      media.getTracks().forEach((track) => track.stop());
       return;
     }
     const videoTrack = media.getVideoTracks()[0];
@@ -216,7 +227,12 @@ function useWebSelfTapeRecorderCore() {
         "camera",
         `opened ${settings.width}x${settings.height}, aspectRatio=${settings.aspectRatio?.toFixed(3) ?? "?"}, facingMode=${settings.facingMode ?? "?"}`,
       );
-      setZoomState(await applyInitialZoom(videoTrack));
+      const initialZoom = await applyInitialZoom(videoTrack);
+      if (superseded()) {
+        media.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      setZoomState(initialZoom);
     }
     const audioTrack = media.getAudioTracks()[0];
     if (audioTrack) {
@@ -227,7 +243,7 @@ function useWebSelfTapeRecorderCore() {
         `opened echoCancellation=${settings.echoCancellation ?? "?"}, noiseSuppression=${settings.noiseSuppression ?? "?"}, autoGainControl=${settings.autoGainControl ?? "?"}`,
       );
     }
-    // Asked again (Try again, or StrictMode's double mount): one camera at a time.
+    // Asked again (Try again): one camera at a time.
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = media;
     setStream(media);
@@ -346,6 +362,7 @@ function useWebSelfTapeRecorderCore() {
   };
 
   const stop = async (): Promise<Blob | null> => {
+    generationRef.current += 1;
     const recorder = recorderRef.current;
     let blob: Blob | null = null;
     if (recorder && recorder.state !== "inactive") {

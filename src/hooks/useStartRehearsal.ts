@@ -2,8 +2,9 @@ import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../lib/toast";
-import { apiFetch } from "../lib/api";
-import { findScriptByContentHash, toReplayScript } from "../lib/scriptStore";
+import { ApiError } from "../lib/apiError";
+import { requestRehearsalGrant } from "../lib/parseErrors";
+import { findScriptByContentHash } from "../lib/scriptStore";
 import { hashFile } from "../lib/scriptHash";
 import { stashUpload } from "../lib/pendingUpload";
 
@@ -51,7 +52,7 @@ export function useStartRehearsal() {
             // Previewed on step 1; and if it was saved before its language
             // was picked, the original language can still be read from it.
             uploadId: await stashUpload(file),
-            replayScript: toReplayScript(existing),
+            replayScript: existing,
           },
         });
         return;
@@ -61,18 +62,21 @@ export function useStartRehearsal() {
       // read-only — see api/_entitlement.ts and the auth-subscriptions plan.
       let grant: string;
       try {
-        const res = await apiFetch("/api/start-rehearsal", { method: "POST" });
-        if (res.status === 402) {
+        const issued = await requestRehearsalGrant();
+        if (issued === null) {
           toast("Start your free trial or subscribe to keep rehearsing.");
           navigate("/pricing");
           return;
         }
-        if (!res.ok) throw new Error("start-rehearsal failed");
-        const data = (await res.json()) as { grant?: string };
-        if (!data.grant) throw new Error("No grant returned");
-        grant = data.grant;
-      } catch {
-        toast("Couldn't start a new rehearsal. Please try again.");
+        grant = issued;
+      } catch (err) {
+        console.error("Couldn't start a rehearsal:", err);
+        // A rate limit says when to come back; anything else, just retry.
+        toast(
+          err instanceof ApiError && err.reason === "rate_limited"
+            ? err.message
+            : "Couldn't start a new rehearsal. Please try again.",
+        );
         return;
       }
 

@@ -47,24 +47,26 @@ export type NewScript = {
   needsLanguageChoice?: boolean;
 };
 
+/** The stored row as the app reads it: the owner dropped, and the fields
+ * older rows lack filled in. */
 function toSavedScript(record: ScriptRecord): SavedScript {
   return {
     id: record.id,
     title: record.title,
-    language_code: record.languageCode,
-    language_name: record.languageName,
+    languageCode: record.languageCode,
+    languageName: record.languageName,
     characters: record.characters,
     steps: record.steps,
-    content_hash: record.contentHash,
-    character_voices: record.characterVoices,
-    character_volumes: record.characterVolumes ?? null,
-    character_emotions: record.characterEmotions ?? null,
-    character_paces: record.characterPaces ?? null,
-    delivery_tags: record.deliveryTags,
-    director_version: record.directorVersion ?? null,
-    roles_read: record.rolesRead ?? [],
-    needs_language_choice: record.needsLanguageChoice ?? false,
-    created_at: record.createdAt,
+    contentHash: record.contentHash,
+    characterVoices: record.characterVoices,
+    characterVolumes: record.characterVolumes ?? null,
+    characterEmotions: record.characterEmotions ?? null,
+    characterPaces: record.characterPaces ?? null,
+    deliveryTags: record.deliveryTags,
+    directorVersion: record.directorVersion ?? null,
+    rolesRead: record.rolesRead ?? [],
+    needsLanguageChoice: record.needsLanguageChoice ?? false,
+    createdAt: record.createdAt,
   };
 }
 
@@ -98,28 +100,7 @@ export async function findScriptByContentHash(
   contentHash: string,
 ): Promise<SavedScript | null> {
   const scripts = await listScripts(userId); // already newest-first
-  return scripts.find((script) => script.content_hash === contentHash) ?? null;
-}
-
-/** A saved script as Practice's replayScript: everything a session needs
- * to pick it up again without re-parsing, re-casting or re-directing. */
-export function toReplayScript(script: SavedScript) {
-  return {
-    id: script.id,
-    title: script.title,
-    steps: script.steps,
-    characters: script.characters,
-    languageCode: script.language_code,
-    languageName: script.language_name,
-    characterVoices: script.character_voices,
-    characterVolumes: script.character_volumes,
-    characterEmotions: script.character_emotions,
-    characterPaces: script.character_paces,
-    deliveryTags: script.delivery_tags,
-    directorVersion: script.director_version,
-    rolesRead: script.roles_read,
-    needsLanguageChoice: script.needs_language_choice,
-  };
+  return scripts.find((script) => script.contentHash === contentHash) ?? null;
 }
 
 /** The user's saved script by id, else by its PDF's content hash. */
@@ -131,7 +112,7 @@ export async function findSavedScript(
   const scripts = await listScripts(userId);
   return (
     (id && scripts.find((script) => script.id === id)) ||
-    (contentHash && scripts.find((script) => script.content_hash === contentHash)) ||
+    (contentHash && scripts.find((script) => script.contentHash === contentHash)) ||
     null
   );
 }

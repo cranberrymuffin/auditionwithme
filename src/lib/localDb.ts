@@ -93,6 +93,12 @@ export function openDb(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+/**
+ * Runs one request in its own transaction and resolves with its result once
+ * the transaction has committed. A request's own success isn't enough: a
+ * write can succeed and its transaction still abort (the disk is full, most
+ * often), leaving nothing saved.
+ */
 export async function withStore<T>(
   storeName: string,
   mode: IDBTransactionMode,
@@ -102,9 +108,16 @@ export async function withStore<T>(
   return new Promise<T>((resolve, reject) => {
     const tx = db.transaction(storeName, mode);
     const request = run(tx.objectStore(storeName));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve(request.result);
+    tx.onerror = () => reject(tx.error ?? request.error);
+    tx.onabort = () => reject(tx.error ?? request.error ?? new Error("IndexedDB transaction aborted"));
   });
+}
+
+/** Whether a failed write ran out of room: the browser's quota for this
+ * site, or the device's own disk. */
+export function isStorageFullError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "QuotaExceededError";
 }
 
 /**

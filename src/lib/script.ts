@@ -14,10 +14,6 @@ export type Voice = {
   tone: string;
 };
 
-export function describeVoice(v: Voice): string {
-  return [v.accent, v.gender, v.age, v.tone].filter(Boolean).map(humanizeVoiceLabel).join(" · ");
-}
-
 export function voiceDisplayName(name: string): string {
   return name.split(/\s+-\s+/)[0].trim();
 }
@@ -42,12 +38,12 @@ export function spokenLines(steps: Step[], speaker: string): Step[] {
 // Upper case only, so prose that happens to start "Int..." never matches.
 const SCENE_HEADING = /^(?:\d+[A-Z]?\s+)?(?:INT|EXT|INT\.?\s*\/\s*EXT|EXT\.?\s*\/\s*INT|I\/E)[.\s]/;
 
-export function isSceneHeading(text: string): boolean {
+function isSceneHeading(text: string): boolean {
   return SCENE_HEADING.test(text.trim());
 }
 
 /** A scene heading without its margin scene numbers. */
-export function cleanSceneHeading(text: string): string {
+function cleanSceneHeading(text: string): string {
   return text.trim().replace(/^\d+[A-Z]?\s+/, "").replace(/\s+\d+[A-Z]?$/, "");
 }
 
@@ -105,7 +101,8 @@ export async function checkSemanticLineMatch(line: string, transcript: string): 
     if (!response.ok) return false;
     const data = (await response.json()) as { match?: boolean };
     return data.match === true;
-  } catch {
+  } catch (err) {
+    console.warn("Semantic line match unavailable:", err);
     return false;
   }
 }

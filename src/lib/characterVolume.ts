@@ -3,7 +3,7 @@
 // changing it costs no regeneration; the self-tape records exactly what the
 // actor heard. 1 = unity; up to 2 lets a quiet voice be lifted above the
 // actor's own level.
-export const DEFAULT_CHARACTER_VOLUME = 1;
+const DEFAULT_CHARACTER_VOLUME = 1;
 export const MAX_CHARACTER_VOLUME = 2;
 
 /** A stored or entered level, made safe to use (missing → default). */

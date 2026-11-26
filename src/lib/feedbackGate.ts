@@ -1,17 +1,32 @@
-// Tiny pub/sub so any component can tell FeedbackGate.tsx "an audition just
-// closed, re-check for pending feedback" without plumbing state through
-// App.tsx. MyAccount.tsx's closeExpanded() is the main caller — see
-// src/lib/beta.ts for the flag that turns the whole gate on/off.
+// Tiny pub/sub between the takes that owe feedback and FeedbackGate.tsx,
+// without plumbing state through App.tsx. See src/lib/beta.ts for the flag
+// that turns the whole gate on/off.
 type Listener = () => void;
-const listeners = new Set<Listener>();
+const owedListeners = new Set<Listener>();
+const requestListeners = new Set<Listener>();
 
-export function notifyAuditionClosed() {
-  listeners.forEach((listener) => listener());
+/** A take was saved, rated or skipped: whoever tracks "is feedback owed"
+ * should look again. */
+export function notifyFeedbackOwedChanged() {
+  owedListeners.forEach((listener) => listener());
 }
 
-export function onAuditionClosed(listener: Listener) {
-  listeners.add(listener);
+export function onFeedbackOwedChanged(listener: Listener) {
+  owedListeners.add(listener);
   return () => {
-    listeners.delete(listener);
+    owedListeners.delete(listener);
+  };
+}
+
+/** Brings the gate back after "Not now": the actor tried to record another
+ * take while one still owes feedback. */
+export function requestFeedbackGate() {
+  requestListeners.forEach((listener) => listener());
+}
+
+export function onFeedbackGateRequested(listener: Listener) {
+  requestListeners.add(listener);
+  return () => {
+    requestListeners.delete(listener);
   };
 }

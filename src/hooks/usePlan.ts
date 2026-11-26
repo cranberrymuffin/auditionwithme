@@ -9,7 +9,10 @@ let planRequest: Promise<Plan | null> | null = null;
 function fetchPlan(): Promise<Plan | null> {
   planRequest ??= fetch(apiUrl("/api/billing?action=plan"))
     .then((response) => (response.ok ? (response.json() as Promise<Plan>) : null))
-    .catch(() => null)
+    .catch((err) => {
+      console.warn("Couldn't load the plan's price:", err);
+      return null;
+    })
     .then((plan) => {
       // Let a later mount retry instead of caching a failure for the session.
       if (!plan) planRequest = null;

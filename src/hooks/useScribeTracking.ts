@@ -29,6 +29,14 @@ const CHUNK_SAMPLES = 2048;
 // Audio captured before the socket opens is held and sent once it does. A
 // socket that takes this long isn't coming; past it, the oldest chunks go.
 const MAX_BUFFERED_CHUNKS = Math.ceil((10 * SAMPLE_RATE) / CHUNK_SAMPLES);
+// Browser autoGainControl still leaves quiet mic input under Scribe's VAD
+// threshold, so the signal is boosted before it's sent.
+const MIC_BOOST_GAIN = 3;
+// A loud line at that boost runs past full scale, and the 16-bit conversion
+// would square off every peak — distortion Scribe then has to read through.
+// A hard limiter just under full scale catches those peaks and leaves
+// ordinary speech, well under the threshold, untouched.
+const LIMITER = { thresholdDb: -6, kneeDb: 0, ratio: 20, attackS: 0.003, releaseS: 0.1 };
 
 // Each line opens its own Scribe socket, and each socket needs a fresh
 // single-use token — a round trip through /api/eleven-account to ElevenLabs.
@@ -65,13 +73,15 @@ function prefetchScribeToken(): void {
 
 const TRANSCRIPT_MESSAGES = new Set(["partial_transcript", "committed_transcript"]);
 
+type ScribeMessage = { message_type?: string; text?: unknown; [field: string]: unknown };
+
 /** Everything Scribe sends that isn't a transcript — session_started, and
  * the errors and warnings it sends just before closing the socket
  * (quota_exceeded, rate_limited, insufficient_audio_activity,
  * session_time_limit_exceeded, …) — goes to the audio log, so a line that
  * fell back to manual advance says why. The error payload's fields aren't
  * documented, so it's logged by type plus whatever detail it carries. */
-function logScribeMessage(msg: { message_type?: string; [field: string]: unknown }) {
+function logScribeMessage(msg: ScribeMessage) {
   const type = msg.message_type ?? "unknown message";
   if (type === "session_started") {
     logAudioEvent("scribe", "session started");
@@ -290,20 +300,14 @@ export function useScribeTracking(
         (err) => logAudioEvent("scribe", `mic ctx resume() rejected: ${err}`),
       );
       const source = audioContext.createMediaStreamSource(micStream);
-      // Browser autoGainControl still leaves quiet mic input under Scribe's
-      // VAD threshold, so boost the signal ourselves before sending it.
       const gain = audioContext.createGain();
-      gain.gain.value = 3;
-      // A loud line at 3x runs past full scale, and the 16-bit conversion
-      // would square off every peak — distortion Scribe then has to read
-      // through. A hard limiter just under full scale catches those peaks
-      // and leaves ordinary speech, well under the threshold, untouched.
+      gain.gain.value = MIC_BOOST_GAIN;
       const limiter = audioContext.createDynamicsCompressor();
-      limiter.threshold.value = -6;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 20;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.1;
+      limiter.threshold.value = LIMITER.thresholdDb;
+      limiter.knee.value = LIMITER.kneeDb;
+      limiter.ratio.value = LIMITER.ratio;
+      limiter.attack.value = LIMITER.attackS;
+      limiter.release.value = LIMITER.releaseS;
       processor = audioContext.createScriptProcessor(CHUNK_SAMPLES, 1, 1);
       processor.onaudioprocess = (e) => {
         if (state.closed) return;
@@ -378,12 +382,22 @@ export function useScribeTracking(
         ws = new WebSocket(`${SCRIBE_WS_BASE}?${params}`);
 
         ws.onmessage = (event) => {
-          const msg = JSON.parse(event.data);
-          if (!TRANSCRIPT_MESSAGES.has(msg.message_type)) {
+          let msg: ScribeMessage | null = null;
+          try {
+            const parsed: unknown = JSON.parse(event.data);
+            if (parsed && typeof parsed === "object") msg = parsed as ScribeMessage;
+          } catch {
+            // Not JSON (a binary or truncated frame); handled just below.
+          }
+          if (!msg) {
+            logAudioEvent("scribe", "unreadable message ignored");
+            return;
+          }
+          if (!msg.message_type || !TRANSCRIPT_MESSAGES.has(msg.message_type)) {
             logScribeMessage(msg);
             return;
           }
-          const text: string = msg.text ?? "";
+          const text = typeof msg.text === "string" ? msg.text : "";
           if (msg.message_type === "committed_transcript") {
             // A commit restating the in-progress partial isn't new speech.
             if (text.trim() && text !== state.partial) state.lastTextChangeAt = Date.now();
@@ -447,7 +461,9 @@ export function useScribeTracking(
       cleanup();
       return;
     }
-    start();
+    // start() reports its own failures; this only keeps one thrown while
+    // doing so from going unhandled.
+    start().catch((err) => console.error("Scribe tracking failed to start:", err));
     return cleanup;
   }, [active, line, languageCode, mic]);
 

@@ -157,9 +157,18 @@ export async function getTapeFile(id: string): Promise<{ path: string; mimeType:
 
 export async function deleteTape(id: string): Promise<void> {
   // A native take's video is a file of its own; remove it with the row.
-  const file = await getTapeFile(id).catch(() => null);
+  // Failing to find or remove the file doesn't keep the take: the row still
+  // goes, and pruneOrphanTakeFiles picks the file up later.
+  const file = await getTapeFile(id).catch((err) => {
+    console.warn("Couldn't look up the take's video file:", err);
+    return null;
+  });
   await withStore(SELF_TAPES_STORE, "readwrite", (store) => store.delete(id));
-  if (file) await NativeMedia.deleteTakeFile({ path: file.path }).catch(() => {});
+  if (file) {
+    await NativeMedia.deleteTakeFile({ path: file.path }).catch((err) =>
+      console.warn("Couldn't delete the take's video file:", err),
+    );
+  }
 }
 
 // A file this new may belong to a take whose row is still being saved
@@ -262,6 +271,15 @@ export async function submitFeedback(
   await withStoreReadModifyWrite<TapeRecord>(SELF_TAPES_STORE, id, (current) => ({
     ...current,
     feedbackSubmittedAt: new Date().toISOString(),
+  }));
+}
+
+/** "This was just a test — skip": the take stops owing feedback. Recorded
+ * on this device only; nothing is sent. */
+export async function skipFeedback(id: string): Promise<void> {
+  await withStoreReadModifyWrite<TapeRecord>(SELF_TAPES_STORE, id, (current) => ({
+    ...current,
+    feedbackRequired: false,
   }));
 }
 

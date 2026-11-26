@@ -8,32 +8,56 @@ export type Step = {
   content: ContentLine[];
 };
 
+/** A script as the app reads it back from the on-device store
+ * (lib/scriptStore.ts), with the fields older rows lack filled in. */
 export type SavedScript = {
   id: string;
   title: string;
-  language_code: string;
-  language_name: string;
+  languageCode: string;
+  languageName: string;
   characters: string[];
   steps: Step[];
-  content_hash: string | null;
+  contentHash: string | null;
   /** Confirmed casting from a past rehearsal, speaker → ElevenLabs voice id */
-  character_voices: Record<string, string> | null;
+  characterVoices: Record<string, string> | null;
   /** Scene partner levels from a past rehearsal, speaker → gain (1 = unity) */
-  character_volumes: Record<string, number> | null;
-  character_emotions: Record<string, number> | null;
-  character_paces: Record<string, number> | null;
+  characterVolumes: Record<string, number> | null;
+  characterEmotions: Record<string, number> | null;
+  characterPaces: Record<string, number> | null;
   /** AI-director delivery tags, aligned by index with steps */
-  delivery_tags: (string | null)[] | null;
+  deliveryTags: (string | null)[] | null;
   /** DIRECTOR_VERSION the delivery tags were generated under; null on rows
    * saved before versioning (treated as stale). */
-  director_version: number | null;
+  directorVersion: number | null;
   /** Characters the user has rehearsed as (read the human part for), so My
    * Auditions can offer "Practice as X" without re-casting every time. */
-  roles_read: string[];
+  rolesRead: string[];
   /** Bilingual edition parsed but its language not yet picked — replaying it
    * asks again instead of rehearsing the translation unasked. */
-  needs_language_choice: boolean;
-  created_at: string;
+  needsLanguageChoice: boolean;
+  createdAt: string;
+};
+
+/** A script Practice opens without parsing it again: a SavedScript, passed
+ * in history state as navigate("/practice", { state: { replayScript } }).
+ * Looser than SavedScript because history entries outlive the code that
+ * wrote them. */
+export type ReplayScript = {
+  /** Saved row id — present so casting/direction updates land on the row. */
+  id?: string;
+  title: string;
+  steps: Step[];
+  characters: string[];
+  languageCode: string;
+  languageName: string;
+  characterVoices?: Record<string, string> | null;
+  characterVolumes?: Record<string, number> | null;
+  characterEmotions?: Record<string, number> | null;
+  characterPaces?: Record<string, number> | null;
+  deliveryTags?: (string | null)[] | null;
+  directorVersion?: number | null;
+  rolesRead?: string[] | null;
+  needsLanguageChoice?: boolean;
 };
 
 export type SelfTape = {

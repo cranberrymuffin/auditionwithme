@@ -75,8 +75,8 @@ export function deleteReaderAudioForScript(scriptId: string): Promise<number> {
 // iOS Safari can evict a whole origin's storage under pressure, so keep the
 // footprint modest: ~50MB is ~300 v3 lines for one script, and 200MB across
 // all of them before the least recently generated scripts' audio goes.
-export const PER_SCRIPT_CAP_BYTES = 50 * 1024 * 1024;
-export const TOTAL_CAP_BYTES = 200 * 1024 * 1024;
+const PER_SCRIPT_CAP_BYTES = 50 * 1024 * 1024;
+const TOTAL_CAP_BYTES = 200 * 1024 * 1024;
 
 type SizedRecord = Pick<ReaderAudioRecord, "cacheKey" | "scriptId" | "size" | "createdAt">;
 
