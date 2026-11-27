@@ -22,7 +22,20 @@ const faqs = [
   ],
   [
     "What happens to my script and my self-tapes?",
-    "Your scripts and your self-tape videos are saved only on your device, in this browser or the app. They are never stored in our database. To make a rehearsal work, though, some of your material does leave your device to be processed. The text of your script (or images of its pages, if it's a scanned PDF) is sent to Anthropic, whose AI reads it into characters and lines. Your scene partners' lines, with a little of the dialogue around them, are sent to ElevenLabs to be turned into speech. While you rehearse, your microphone audio is streamed to ElevenLabs' speech recognition so the app can follow where you are in the scene. If you record a coaching take to show a scene partner how to say a line, that recording is sent to ElevenLabs too. We don't keep a copy of any of this; what Anthropic and ElevenLabs retain is governed by their own terms. Your self-tape video itself is not sent to us or to them: it stays on your device until you download or share it.",
+    [
+      {
+        title: "Stored locally",
+        text: "Your scripts and self-tape videos are saved in this browser or the app, never in our database. Your self-tape video isn’t sent to us or our providers; it stays on your device until you download or share it.",
+      },
+      {
+        title: "Processed externally",
+        text: "Anthropic receives your script’s text, or page images for a scanned PDF, to read it into characters and lines. ElevenLabs receives scene partners’ lines with nearby dialogue to generate speech, and your live microphone audio to follow your performance. Any coaching take you record to demonstrate a line is also sent to ElevenLabs.",
+      },
+      {
+        title: "Retention",
+        text: "We don’t retain copies of the scripts or audio sent for processing. Anthropic and ElevenLabs have their own data retention policies.",
+      },
+    ],
   ],
   [
     "What do you store on your servers?",
@@ -62,7 +75,9 @@ const faqSchema = {
     name: question,
     acceptedAnswer: {
       "@type": "Answer",
-      text: answer,
+      text: typeof answer === "string"
+        ? answer
+        : answer.map(({ title, text }) => `${title}: ${text}`).join("\n\n"),
     },
   })),
 };
@@ -122,7 +137,7 @@ export default function Faq() {
           <h2 id="faq-questions" className="sr-only">
             Questions and answers
           </h2>
-          <div className="qa">
+          <div className="qa faq-answers">
             {faqs.map(([question, answer], index) => (
               <details
                 key={question}
@@ -133,7 +148,18 @@ export default function Faq() {
                   {question}
                   <span className="qa-icon" aria-hidden="true" />
                 </summary>
-                <p>{renderAnswer(answer)}</p>
+                {typeof answer === "string" ? (
+                  <p>{renderAnswer(answer)}</p>
+                ) : (
+                  <div className="qa-answer-blocks">
+                    {answer.map(({ title, text }) => (
+                      <section key={title}>
+                        <h3>{title}</h3>
+                        <p>{text}</p>
+                      </section>
+                    ))}
+                  </div>
+                )}
               </details>
             ))}
           </div>

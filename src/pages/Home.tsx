@@ -235,20 +235,18 @@ export default function Home() {
       </section>
 
       <section className="section" aria-labelledby="home-data-title">
-        <div className="wrap grid">
-          <header className="section-head span-4">
+        <div className="wrap material-summary">
+          <header className="section-head">
             <p className="slug">Your material</p>
             <h2 id="home-data-title" className="title">
-              Where your script and takes go.
+              Your material. Your control.
             </h2>
             <p className="lead">
-              Sides are often confidential. Here is what stays with you, what
-              leaves your device to make a rehearsal work, and what we keep.
+              Your work deserves discretion. We’ve designed the rehearsal
+              experience with that in mind.
             </p>
           </header>
-          <div className="span-7 at-6">
-            <DataLedger />
-          </div>
+          <DataLedger />
         </div>
       </section>
 
